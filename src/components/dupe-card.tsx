@@ -105,7 +105,7 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
                     <ShoppingBag className="h-3 w-3" />
                     Also search
                   </span>
-                  {alternates.map((alt) => (
+                  {alternates.map((alt: RetailerLink) => (
                     <a
                       key={alt.label}
                       href={alt.url}
