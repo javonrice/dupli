@@ -97,6 +97,14 @@ function isUsableUrl(url: string | undefined | null): url is string {
  * - Otherwise build a retailer search URL from `whereToBuy` + brand + product name.
  * - Falls back to a generic Google Shopping search.
  */
+export function googleShoppingLink(brand: string, productName: string): RetailerLink {
+  const query = buildQuery(brand, productName);
+  return {
+    label: "Google Shopping",
+    url: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(query)}`,
+  };
+}
+
 export function resolveBuyLink(args: {
   brand: string;
   productName: string;
@@ -111,18 +119,19 @@ export function resolveBuyLink(args: {
   }
 
   const retailer = whereToBuy?.trim() ?? "";
-  const template = RETAILER_TEMPLATES.find((r) => r.match.test(retailer));
+  const template = retailer ? RETAILER_TEMPLATES.find((r) => r.match.test(retailer)) : undefined;
   if (template) {
     return { label: template.label, url: template.build(query) };
   }
 
-  // Unknown retailer (or none provided): use Google Shopping for the best matches.
-  const googleUrl = `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(query)}`;
-  return { label: retailer || "Google Shopping", url: googleUrl };
+  // Retailer label didn't match any known template (or none provided):
+  // fall back to Google Shopping, which aggregates results across retailers.
+  return googleShoppingLink(brand, productName);
 }
 
 /**
  * Build a small set of alternate retailer search links so the user can shop around.
+ * Always includes Google Shopping as a safety-net fallback.
  * Excludes the primary retailer to avoid duplication.
  */
 export function buildAlternateRetailerLinks(args: {
@@ -133,8 +142,14 @@ export function buildAlternateRetailerLinks(args: {
   const query = buildQuery(args.brand, args.productName);
   const exclude = args.excludeLabel?.toLowerCase() ?? "";
   const preferred = ["Amazon", "Target", "Walmart", "Ulta"];
-  return RETAILER_TEMPLATES.filter((r) => preferred.includes(r.label))
+  const retailerLinks = RETAILER_TEMPLATES.filter((r) => preferred.includes(r.label))
     .filter((r) => r.label.toLowerCase() !== exclude)
     .slice(0, 3)
     .map((r) => ({ label: r.label, url: r.build(query) }));
+
+  const google = googleShoppingLink(args.brand, args.productName);
+  const links = exclude === google.label.toLowerCase()
+    ? retailerLinks
+    : [...retailerLinks, google];
+  return links;
 }
