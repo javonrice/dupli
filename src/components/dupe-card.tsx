@@ -15,7 +15,7 @@ const verdictStyles: Record<DupeAnalysis["verdict"], { icon: typeof Check; bg: s
 };
 
 export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
-  const { original, dupe, matchScore, verdict, notes, bestFor } = analysis;
+  const { original, dupe, matchScore, verdict, notes, bestFor, sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch } = analysis;
   const v = verdictStyles[verdict];
   const Icon = v.icon;
 
