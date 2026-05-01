@@ -34,6 +34,10 @@ export type DupeAnalysis = {
   notes: string;
   bestFor: string[];
   confidence: "high" | "medium" | "low";
+  sharedIngredients?: string[];
+  uniqueToOriginal?: string[];
+  uniqueToDupe?: string[];
+  contextMatch?: string;
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
