@@ -72,6 +72,55 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
         </div>
       )}
 
+      {/* Formula breakdown — visual evidence behind the match score */}
+      {dupe && (
+        ((sharedIngredients?.length ?? 0) +
+          (uniqueToOriginal?.length ?? 0) +
+          (uniqueToDupe?.length ?? 0) > 0 ||
+          !!contextMatch) && (
+          <div className="space-y-4 border-t border-border bg-secondary/30 px-5 py-4">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Formula breakdown
+            </div>
+
+            {contextMatch && (
+              <p className="flex items-start gap-2 text-xs italic leading-relaxed text-muted-foreground">
+                <Sparkles className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
+                <span>{contextMatch}</span>
+              </p>
+            )}
+
+            {sharedIngredients && sharedIngredients.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Check className="h-3 w-3 text-success" strokeWidth={3} />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground">
+                    In both
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {sharedIngredients.map((i) => (
+                    <span
+                      key={i}
+                      className="rounded-full bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background"
+                    >
+                      {i}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {((uniqueToOriginal?.length ?? 0) > 0 || (uniqueToDupe?.length ?? 0) > 0) && (
+              <div className="grid grid-cols-2 gap-4">
+                <UniqueColumn label="Only in original" items={uniqueToOriginal ?? []} />
+                <UniqueColumn label="Only in dupe" items={uniqueToDupe ?? []} />
+              </div>
+            )}
+          </div>
+        )
+      )}
+
       {/* Notes */}
       <div className="space-y-3 border-t border-border px-5 py-4">
         <p className="text-sm leading-relaxed text-foreground">{notes}</p>
