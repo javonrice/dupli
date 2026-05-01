@@ -20,6 +20,7 @@ export type DupeSuggestion = {
   category: string;
   estimatedPriceUsd: number;
   whereToBuy: string;
+  buyUrl: string;
   keyIngredients: string[];
 };
 
@@ -101,10 +102,11 @@ export const scanProduct = createServerFn({ method: "POST" })
                             brand: { type: "string" },
                             category: { type: "string" },
                             estimatedPriceUsd: { type: "number" },
-                            whereToBuy: { type: "string", description: "e.g. Dollar Tree, Target, Amazon, CVS" },
+                            whereToBuy: { type: "string", description: "Retailer name, e.g. Dollar Tree, Target, Amazon, CVS" },
+                            buyUrl: { type: "string", description: "A direct, working URL where the user can buy or view the dupe. Prefer the retailer's product page. If a precise product page URL isn't known, use a retailer search URL such as https://www.amazon.com/s?k=<product+name+brand> or https://www.target.com/s?searchTerm=<product+name+brand>. Always return a valid https URL." },
                             keyIngredients: { type: "array", items: { type: "string" } },
                           },
-                          required: ["productName", "brand", "category", "estimatedPriceUsd", "whereToBuy", "keyIngredients"],
+                          required: ["productName", "brand", "category", "estimatedPriceUsd", "whereToBuy", "buyUrl", "keyIngredients"],
                           additionalProperties: false,
                         },
                         { type: "null" },
