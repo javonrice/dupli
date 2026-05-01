@@ -11,13 +11,9 @@ export function AppHeader() {
           </div>
           <span className="font-display text-lg font-bold tracking-tight">Dupli</span>
         </Link>
-        <Link
-          to="/library"
-          className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-          activeProps={{ className: "text-foreground" }}
-        >
-          Library
-        </Link>
+        <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+          AI Dupe Finder
+        </span>
       </div>
     </header>
   );
