@@ -1,11 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Camera, ImageUp, Loader2, RotateCcw, X, ScanLine } from "lucide-react";
-import { scanProduct, type ScanResult } from "@/server/scan.functions";
-import { findDupeByAlias, type DupePair } from "@/data/catalog";
+import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
 import { DupeCard } from "@/components/dupe-card";
 
-type Stage = "idle" | "captured" | "scanning" | "results" | "no-match";
+type Stage = "idle" | "captured" | "scanning" | "results";
 
 async function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -43,76 +42,49 @@ export function Scanner() {
 
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
-  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
-  const [match, setMatch] = useState<DupePair | null>(null);
+  const [analysis, setAnalysis] = useState<DupeAnalysis | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setStage("idle");
     setPreview(null);
-    setScanResult(null);
-    setMatch(null);
+    setAnalysis(null);
     setError(null);
     if (fileRef.current) fileRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
   }, []);
 
-  const handleFile = useCallback(async (file: File) => {
-    setError(null);
-    const raw = await fileToDataUrl(file);
-    const small = await downscaleImage(raw, 1024);
-    setPreview(small);
-    setStage("scanning");
+  const handleFile = useCallback(
+    async (file: File) => {
+      setError(null);
+      const raw = await fileToDataUrl(file);
+      const small = await downscaleImage(raw, 1024);
+      setPreview(small);
+      setStage("scanning");
 
-    const { result, error: err } = await scan({ data: { imageDataUrl: small } });
-    if (err || !result) {
-      setError(err ?? "Couldn't analyze the photo.");
-      setStage("captured");
-      return;
-    }
-    setScanResult(result);
-    const found =
-      findDupeByAlias(`${result.brand ?? ""} ${result.productName} ${result.category ?? ""}`) ??
-      findDupeByAlias(result.productName);
-    setMatch(found);
-    setStage(found ? "results" : "no-match");
-  }, [scan]);
+      const { result, error: err } = await scan({ data: { imageDataUrl: small } });
+      if (err || !result) {
+        setError(err ?? "Couldn't analyze the photo.");
+        setStage("captured");
+        return;
+      }
+      setAnalysis(result);
+      setStage("results");
+    },
+    [scan],
+  );
 
-  useEffect(() => () => reset(), [reset]);
-
-  if (stage === "results" && match) {
+  if (stage === "results" && analysis) {
     return (
       <div className="space-y-5">
-        <ScanSummary preview={preview} result={scanResult} onReset={reset} />
-        <DupeCard pair={match} />
-      </div>
-    );
-  }
-
-  if (stage === "no-match") {
-    return (
-      <div className="space-y-5">
-        <ScanSummary preview={preview} result={scanResult} onReset={reset} />
-        <div className="rounded-3xl border border-border bg-card p-6 text-center shadow-soft">
-          <h3 className="font-display text-lg font-semibold">No dupe in our library yet</h3>
-          <p className="mt-2 text-sm text-muted-foreground">
-            We identified the product but don't have a dupe match for it yet. Our library grows every week.
-          </p>
-          <button
-            onClick={reset}
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
-          >
-            <ScanLine className="h-4 w-4" />
-            Scan another product
-          </button>
-        </div>
+        <ScanSummary preview={preview} analysis={analysis} onReset={reset} />
+        <DupeCard analysis={analysis} />
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      {/* Viewfinder */}
       <div className="relative aspect-[4/5] overflow-hidden rounded-3xl border border-border bg-secondary/40 shadow-soft">
         {preview ? (
           <img src={preview} alt="Captured product" className="h-full w-full object-cover" />
@@ -137,7 +109,6 @@ export function Scanner() {
         </div>
       )}
 
-      {/* Actions */}
       <div className="grid grid-cols-2 gap-3">
         <input
           ref={cameraRef}
@@ -207,39 +178,30 @@ function Viewfinder() {
 function ScanningOverlay() {
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/70 backdrop-blur-sm">
-      <div className="absolute inset-x-6 top-1/2 h-px -translate-y-1/2 overflow-hidden">
-        <div className="h-full w-full animate-pulse bg-foreground/40" />
-      </div>
       <Loader2 className="h-6 w-6 animate-spin text-foreground" />
-      <p className="font-display text-sm font-semibold tracking-wide">Reading the label…</p>
+      <p className="font-display text-sm font-semibold tracking-wide">Finding the dupe…</p>
     </div>
   );
 }
 
 function ScanSummary({
   preview,
-  result,
+  analysis,
   onReset,
 }: {
   preview: string | null;
-  result: ScanResult | null;
+  analysis: DupeAnalysis;
   onReset: () => void;
 }) {
   return (
     <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-soft">
-      {preview && (
-        <img src={preview} alt="" className="h-16 w-16 flex-shrink-0 rounded-xl object-cover" />
-      )}
+      {preview && <img src={preview} alt="" className="h-16 w-16 flex-shrink-0 rounded-xl object-cover" />}
       <div className="min-w-0 flex-1">
         <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
           Identified
         </div>
-        <div className="truncate font-display text-sm font-semibold">
-          {result?.productName ?? "Unknown product"}
-        </div>
-        {result?.brand && (
-          <div className="truncate text-xs text-muted-foreground">{result.brand}</div>
-        )}
+        <div className="truncate font-display text-sm font-semibold">{analysis.original.productName}</div>
+        <div className="truncate text-xs text-muted-foreground">{analysis.original.brand}</div>
       </div>
       <button
         onClick={onReset}
