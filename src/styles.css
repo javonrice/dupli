@@ -65,8 +65,35 @@
 }
 
 @layer base {
-  * { border-color: var(--color-border); }
-  html, body { background-color: var(--color-background); color: var(--color-foreground); }
-  body { font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  * { border-color: var(--color-border); -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    touch-action: manipulation;
+  }
   h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.02em; }
+  /* Disable iOS pull-to-refresh shimmer where we want fixed screens */
+  .no-bounce { overscroll-behavior-y: contain; }
+  /* Safe-area utilities (env() falls back to 0 on non-iOS) */
+  .pt-safe   { padding-top: max(env(safe-area-inset-top), 0px); }
+  .pb-safe   { padding-bottom: max(env(safe-area-inset-bottom), 0px); }
+  .pl-safe   { padding-left: max(env(safe-area-inset-left), 0px); }
+  .pr-safe   { padding-right: max(env(safe-area-inset-right), 0px); }
+  .mt-safe   { margin-top: max(env(safe-area-inset-top), 0px); }
+  .mb-safe   { margin-bottom: max(env(safe-area-inset-bottom), 0px); }
+  /* Dynamic-viewport sizing (accounts for iOS Safari's collapsing URL bar) */
+  .h-screen-safe     { height: 100dvh; }
+  .min-h-screen-safe { min-height: 100dvh; }
+  /* iOS-style tap feedback */
+  .tap { transition: transform 100ms ease-out, opacity 150ms ease-out; }
+  .tap:active { transform: scale(0.97); }
+  /* Hairline border (iOS uses sub-pixel separators on retina) */
+  .hairline-b { border-bottom: 0.5px solid var(--color-border); }
+  .hairline-t { border-top: 0.5px solid var(--color-border); }
 }
