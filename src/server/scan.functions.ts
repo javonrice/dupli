@@ -176,16 +176,100 @@ export const scanProduct = createServerFn({ method: "POST" })
   });
 
 /**
- * Best-effort product image lookup using Bing's async image endpoint.
- * Bing returns a chunk of HTML where each result has a `murl` (media URL),
- * `purl` (page URL), and an `m` JSON blob with width/height/title — no token
- * dance required, which makes it reliable from edge runtimes (DuckDuckGo's
- * endpoints intermittently return Cloudflare 525s for Worker traffic).
+ * Best-effort product image lookup. Tries DuckDuckGo's image JSON endpoint
+ * first (it returns rich `width`/`height`/`source` metadata that the ranker
+ * uses heavily), and falls back to Bing's async image endpoint when DDG is
+ * unreachable from the runtime (e.g. the production Worker intermittently
+ * gets Cloudflare 525s when calling DDG).
  * Returns undefined on any failure so a missing image never breaks the scan.
  */
 async function findProductImage(brand: string, productName: string): Promise<string | undefined> {
   const query = `${brand} ${productName}`.trim();
   console.log("[findProductImage] looking up:", query);
+
+  const ddg = await searchDuckDuckGoImages(query);
+  if (ddg && ddg.length > 0) {
+    const best = pickBestProductImage(ddg, brand, productName);
+    console.log("[findProductImage] ddg found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
+    return best.image;
+  }
+
+  const bing = await searchBingImages(query);
+  if (bing && bing.length > 0) {
+    const best = pickBestProductImage(bing, brand, productName);
+    console.log("[findProductImage] bing found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
+    return best.image;
+  }
+
+  console.warn("[findProductImage] no image results from any provider");
+  return undefined;
+}
+
+type ImageCandidate = {
+  image?: string;
+  url?: string;
+  source?: string;
+  title?: string;
+  width?: number;
+  height?: number;
+};
+
+/** DuckDuckGo image search — preferred (rich metadata for ranking). */
+async function searchDuckDuckGoImages(query: string): Promise<ImageCandidate[] | null> {
+  try {
+    const tokenRes = await fetch(
+      `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      },
+    );
+    if (!tokenRes.ok) {
+      console.warn("[findProductImage] ddg token fetch failed", tokenRes.status);
+      return null;
+    }
+    const tokenHtml = await tokenRes.text();
+    const vqdMatch =
+      tokenHtml.match(/vqd=([\d-]+)\&/) ||
+      tokenHtml.match(/vqd="([\d-]+)"/) ||
+      tokenHtml.match(/vqd=([\d-]+)/);
+    const vqd = vqdMatch?.[1];
+    if (!vqd) {
+      console.warn("[findProductImage] no vqd token in response");
+      return null;
+    }
+
+    const apiUrl =
+      `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}` +
+      `&vqd=${vqd}&f=,,,,,&p=1`;
+    const apiRes = await fetch(apiUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept: "application/json",
+        Referer: "https://duckduckgo.com/",
+      },
+    });
+    if (!apiRes.ok) {
+      console.warn("[findProductImage] ddg api fetch failed", apiRes.status);
+      return null;
+    }
+    const data = (await apiRes.json()) as { results?: ImageCandidate[] };
+    const candidates = (data.results ?? []).filter(
+      (r) => r.image && /^https?:\/\//i.test(r.image),
+    );
+    return candidates;
+  } catch (e) {
+    console.warn("[findProductImage] ddg failed", e);
+    return null;
+  }
+}
+
+/** Bing image search — fallback when DDG is unreachable. */
+async function searchBingImages(query: string): Promise<ImageCandidate[] | null> {
   try {
     const url =
       `https://www.bing.com/images/async?q=${encodeURIComponent(query)}` +
@@ -200,20 +284,13 @@ async function findProductImage(brand: string, productName: string): Promise<str
     });
     if (!res.ok) {
       console.warn("[findProductImage] bing fetch failed", res.status);
-      return undefined;
+      return null;
     }
     const html = await res.text();
 
     // Each tile is an <a class="iusc" ... m="{...json...}"> with HTML-escaped JSON.
     const tileRegex = /m="([^"]+)"/g;
-    const candidates: Array<{
-      image?: string;
-      url?: string;
-      source?: string;
-      title?: string;
-      width?: number;
-      height?: number;
-    }> = [];
+    const candidates: ImageCandidate[] = [];
     let match: RegExpExecArray | null;
     while ((match = tileRegex.exec(html)) !== null) {
       const decoded = match[1]
@@ -243,17 +320,10 @@ async function findProductImage(brand: string, productName: string): Promise<str
       if (candidates.length >= 30) break;
     }
 
-    if (candidates.length === 0) {
-      console.warn("[findProductImage] no image results");
-      return undefined;
-    }
-
-    const best = pickBestProductImage(candidates, brand, productName);
-    console.log("[findProductImage] found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
-    return best.image;
+    return candidates;
   } catch (e) {
-    console.warn("[findProductImage] failed", e);
-    return undefined;
+    console.warn("[findProductImage] bing failed", e);
+    return null;
   }
 }
 
