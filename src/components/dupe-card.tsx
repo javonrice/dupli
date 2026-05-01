@@ -1,5 +1,5 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, MapPin } from "lucide-react";
+import { Check, TrendingDown, AlertCircle, MapPin, ExternalLink } from "lucide-react";
 
 function priceTag(n: number) {
   if (n < 10) return `$${n.toFixed(2)}`;
@@ -75,10 +75,23 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       <div className="space-y-3 border-t border-border px-5 py-4">
         <p className="text-sm leading-relaxed text-foreground">{notes}</p>
         {dupe?.whereToBuy && (
-          <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-            <MapPin className="h-3.5 w-3.5" />
-            Find it at <span className="text-foreground">{dupe.whereToBuy}</span>
-          </div>
+          dupe.buyUrl ? (
+            <a
+              href={dupe.buyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/60"
+            >
+              <MapPin className="h-3.5 w-3.5" />
+              Buy at {dupe.whereToBuy}
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          ) : (
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <MapPin className="h-3.5 w-3.5" />
+              Find it at <span className="text-foreground">{dupe.whereToBuy}</span>
+            </div>
+          )
         )}
         {bestFor.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
