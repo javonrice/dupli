@@ -218,17 +218,116 @@ async function findProductImage(brand: string, productName: string): Promise<str
       return undefined;
     }
     const data = (await apiRes.json()) as {
-      results?: Array<{ image?: string }>;
+      results?: Array<{ image?: string; url?: string; source?: string; title?: string; width?: number; height?: number }>;
     };
-    const first = data.results?.find((r) => r.image && /^https?:\/\//i.test(r.image));
-    if (!first?.image) {
+    const candidates = (data.results ?? []).filter(
+      (r) => r.image && /^https?:\/\//i.test(r.image),
+    );
+    if (candidates.length === 0) {
       console.warn("[findProductImage] no image results");
       return undefined;
     }
-    console.log("[findProductImage] found:", first.image);
-    return first.image;
+
+    const best = pickBestProductImage(candidates, brand, productName);
+    console.log("[findProductImage] found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
+    return best.image;
   } catch (e) {
     console.warn("[findProductImage] failed", e);
     return undefined;
   }
+}
+
+/**
+ * Rank image results to prefer real retailer / brand storefront product pages
+ * over generic blog thumbnails, Pinterest pins, marketplace listings, etc.
+ */
+function pickBestProductImage(
+  results: Array<{ image?: string; url?: string; source?: string; title?: string; width?: number; height?: number }>,
+  brand: string,
+  productName: string,
+): { image: string; score: number; url?: string; source?: string } {
+  // Trusted beauty/skincare retailers + general retailers that typically host
+  // clean, on-white product photography on real product pages.
+  const RETAILER_DOMAINS = [
+    "sephora.com", "ulta.com", "target.com", "walmart.com", "amazon.com",
+    "cvs.com", "walgreens.com", "riteaid.com", "dollartree.com", "dollargeneral.com",
+    "boots.com", "lookfantastic.com", "cultbeauty.com", "spacenk.com", "beautylish.com",
+    "dermstore.com", "skinstore.com", "bluemercury.com", "credobeauty.com",
+    "nordstrom.com", "macys.com", "bloomingdales.com", "saksfifthavenue.com",
+    "costco.com", "samsclub.com", "kohls.com", "thebay.com",
+  ];
+  // Sources that usually serve cropped/low-quality thumbnails or unrelated lifestyle shots.
+  const PENALIZED_DOMAINS = [
+    "pinterest.", "lookaside.fbsbx.com", "fbcdn.net", "instagram.com", "cdninstagram.com",
+    "tiktok.com", "tiktokcdn.com", "youtube.com", "ytimg.com", "reddit.com", "redd.it",
+    "ebay.com", "ebayimg.com", "etsy.com", "poshmark.com", "mercari.com", "depop.com",
+    "aliexpress.com", "alicdn.com", "wish.com", "dhgate.com",
+  ];
+
+  const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const productTokens = productName
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3);
+
+  const hostOf = (u?: string) => {
+    if (!u) return "";
+    try {
+      return new URL(u).hostname.toLowerCase();
+    } catch {
+      return "";
+    }
+  };
+
+  let best: { image: string; score: number; url?: string; source?: string } = {
+    image: results[0].image!,
+    score: -Infinity,
+    url: results[0].url,
+    source: results[0].source,
+  };
+
+  for (const r of results) {
+    if (!r.image) continue;
+    const pageHost = hostOf(r.url);
+    const imgHost = hostOf(r.image);
+    const combined = `${pageHost} ${imgHost} ${(r.url ?? "").toLowerCase()} ${(r.title ?? "").toLowerCase()}`;
+    let score = 0;
+
+    // Strong preference: result page is on a known retailer.
+    if (RETAILER_DOMAINS.some((d) => pageHost.endsWith(d))) score += 50;
+    // Image itself served from a retailer CDN.
+    if (RETAILER_DOMAINS.some((d) => imgHost.endsWith(d) || imgHost.includes(d.replace(".com", "")))) score += 20;
+    // Brand's own storefront (e.g. cerave.com, theordinary.com).
+    if (brandSlug.length >= 4 && pageHost.includes(brandSlug)) score += 40;
+    if (brandSlug.length >= 4 && imgHost.includes(brandSlug)) score += 15;
+    // URL path hints we're on a real product page, not a blog/listicle.
+    if (/\/(p|product|products|prod|item|dp|ip)[\/-]/i.test(r.url ?? "")) score += 25;
+    // Image filename hints at product photography.
+    if (/(product|packshot|pdp|hero|main|front)/i.test(r.image)) score += 8;
+
+    // Penalize known low-quality / unrelated sources.
+    if (PENALIZED_DOMAINS.some((d) => pageHost.includes(d) || imgHost.includes(d))) score -= 60;
+    // Penalize obvious thumbnails.
+    if (/(thumb|thumbnail|_t\.|_sm\.|-small|150x|200x|300x)/i.test(r.image)) score -= 15;
+
+    // Favor larger images.
+    if (typeof r.width === "number" && typeof r.height === "number") {
+      const px = r.width * r.height;
+      if (px >= 600 * 600) score += 10;
+      if (px >= 1000 * 1000) score += 8;
+      if (px < 250 * 250) score -= 20;
+      const ratio = r.width / r.height;
+      if (ratio > 0.8 && ratio < 1.25) score += 5;
+    }
+
+    // Reward token overlap with the product name.
+    const matched = productTokens.filter((t) => combined.includes(t)).length;
+    score += matched * 3;
+
+    if (score > best.score) {
+      best = { image: r.image, score, url: r.url, source: r.source };
+    }
+  }
+
+  return best;
 }
