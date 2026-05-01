@@ -1,10 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Camera, ImageUp, Loader2, RotateCcw, X, ScanLine } from "lucide-react";
+import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw } from "lucide-react";
 import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
 import { DupeCard } from "@/components/dupe-card";
+import { IOSScreen } from "@/components/ios-screen";
+import { googleShoppingLink } from "@/lib/retailer-links";
+import wordmark from "@/assets/dupli-wordmark.png";
 
-type Stage = "idle" | "captured" | "scanning" | "results";
+type Stage = "idle" | "scanning" | "results";
 
 async function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -65,7 +68,8 @@ export function Scanner() {
       const { result, error: err } = await scan({ data: { imageDataUrl: small } });
       if (err || !result) {
         setError(err ?? "Couldn't analyze the photo.");
-        setStage("captured");
+        setStage("idle");
+        setPreview(null);
         return;
       }
       setAnalysis(result);
@@ -74,141 +78,230 @@ export function Scanner() {
     [scan],
   );
 
-  if (stage === "results" && analysis) {
-    return (
-      <div className="space-y-5">
-        <ScanSummary preview={preview} analysis={analysis} onReset={reset} />
-        <DupeCard analysis={analysis} />
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-5">
-      <div className="relative aspect-[4/5] overflow-hidden rounded-3xl border border-border bg-secondary/40 shadow-soft">
-        {preview ? (
-          <img src={preview} alt="Captured product" className="h-full w-full object-cover" />
-        ) : (
-          <Viewfinder />
+    <>
+      {/* Hidden file inputs — shared across screens */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+      />
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+      />
+
+      {stage === "idle" && (
+        <HomeScreen
+          error={error}
+          onCamera={() => cameraRef.current?.click()}
+          onLibrary={() => fileRef.current?.click()}
+        />
+      )}
+
+      {stage === "scanning" && <ScanningScreen preview={preview} />}
+
+      {stage === "results" && analysis && (
+        <ResultsScreen analysis={analysis} onReset={reset} />
+      )}
+    </>
+  );
+}
+
+/* ---------------- Home (Camera-style, no scroll) ---------------- */
+
+function HomeScreen({
+  onCamera,
+  onLibrary,
+  error,
+}: {
+  onCamera: () => void;
+  onLibrary: () => void;
+  error: string | null;
+}) {
+  return (
+    <IOSScreen
+      title=""
+      trailing={
+        <img src={wordmark} alt="Dupli" className="h-5 w-auto" width={1536} height={1024} />
+      }
+      fixed
+    >
+      <div className="flex flex-1 flex-col items-center justify-between px-6 pb-2 pt-6">
+        {/* Hero copy */}
+        <div className="text-center">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            AI Dupe Finder
+          </p>
+          <h1 className="mt-2 font-display text-[34px] font-bold leading-[1.05] tracking-tight">
+            Snap any product.
+          </h1>
+          <p className="font-display text-[34px] font-bold italic leading-[1.05] tracking-tight text-muted-foreground">
+            Find the dupe.
+          </p>
+        </div>
+
+        {/* Viewfinder */}
+        <div className="relative my-4 aspect-[4/5] w-full max-w-[260px]">
+          <div className="absolute inset-0 rounded-[28px] border border-border bg-secondary/40" />
+          <div className="absolute left-3 top-3 h-7 w-7 rounded-tl-[20px] border-l-[3px] border-t-[3px] border-foreground/50" />
+          <div className="absolute right-3 top-3 h-7 w-7 rounded-tr-[20px] border-r-[3px] border-t-[3px] border-foreground/50" />
+          <div className="absolute bottom-3 left-3 h-7 w-7 rounded-bl-[20px] border-b-[3px] border-l-[3px] border-foreground/50" />
+          <div className="absolute bottom-3 right-3 h-7 w-7 rounded-br-[20px] border-b-[3px] border-r-[3px] border-foreground/50" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+            <ScanLine className="h-9 w-9 text-foreground/30" strokeWidth={1.5} />
+            <p className="text-[13px] leading-snug text-muted-foreground">
+              Center the product. Good lighting helps.
+            </p>
+          </div>
+        </div>
+
+        {error && (
+          <div className="w-full rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
+            {error}
+          </div>
         )}
-        {stage === "scanning" && <ScanningOverlay />}
-        {preview && stage !== "scanning" && (
+
+        {/* Capture controls — iOS Camera.app pattern */}
+        <div className="flex w-full items-center justify-around pb-2 pt-4">
+          {/* Library (left) */}
           <button
-            onClick={reset}
-            aria-label="Clear photo"
-            className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-background/90 text-foreground shadow-soft backdrop-blur transition hover:bg-background"
+            onClick={onLibrary}
+            aria-label="Choose from library"
+            className="tap flex h-12 w-12 items-center justify-center rounded-[14px] bg-secondary/60 text-foreground"
           >
-            <X className="h-4 w-4" />
+            <Images className="h-6 w-6" strokeWidth={1.75} />
           </button>
+
+          {/* Shutter (center) */}
+          <button
+            onClick={onCamera}
+            aria-label="Take photo"
+            className="tap relative flex h-[78px] w-[78px] items-center justify-center rounded-full"
+          >
+            <span className="absolute inset-0 rounded-full border-[3px] border-foreground" />
+            <span className="absolute inset-[6px] rounded-full bg-foreground transition-transform" />
+            <Camera className="relative z-10 h-7 w-7 text-background" strokeWidth={1.75} />
+          </button>
+
+          {/* Spacer to balance shutter — iOS Camera has a flip-camera button here */}
+          <div className="h-12 w-12" />
+        </div>
+      </div>
+    </IOSScreen>
+  );
+}
+
+/* ---------------- Scanning (full-screen modal, no scroll) ---------------- */
+
+function ScanningScreen({ preview }: { preview: string | null }) {
+  return (
+    <div className="fixed inset-0 z-50 flex h-screen-safe flex-col bg-background">
+      <div className="pt-safe" />
+      <div className="relative flex-1 overflow-hidden">
+        {preview && (
+          <img
+            src={preview}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
         )}
-      </div>
-
-      {error && (
-        <div className="rounded-2xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <input
-          ref={cameraRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-        />
-        <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-        />
-        <button
-          onClick={() => cameraRef.current?.click()}
-          disabled={stage === "scanning"}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl bg-primary px-4 py-4 text-sm font-semibold text-primary-foreground shadow-soft transition hover:opacity-90 disabled:opacity-60"
-        >
-          <Camera className="h-4 w-4" />
-          Take photo
-        </button>
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={stage === "scanning"}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-border bg-card px-4 py-4 text-sm font-semibold text-foreground shadow-soft transition hover:bg-secondary/60 disabled:opacity-60"
-        >
-          <ImageUp className="h-4 w-4" />
-          Upload
-        </button>
-      </div>
-
-      {preview && stage === "captured" && !error && (
-        <button
-          onClick={reset}
-          className="mx-auto flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-        >
-          <RotateCcw className="h-3 w-3" />
-          Try a different photo
-        </button>
-      )}
-    </div>
-  );
-}
-
-function Viewfinder() {
-  return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 p-8 text-center">
-      <div className="relative h-44 w-32">
-        <div className="absolute left-0 top-0 h-6 w-6 border-l-2 border-t-2 border-foreground/40" />
-        <div className="absolute right-0 top-0 h-6 w-6 border-r-2 border-t-2 border-foreground/40" />
-        <div className="absolute bottom-0 left-0 h-6 w-6 border-b-2 border-l-2 border-foreground/40" />
-        <div className="absolute bottom-0 right-0 h-6 w-6 border-b-2 border-r-2 border-foreground/40" />
-        <div className="absolute inset-4 flex items-center justify-center rounded-md border border-dashed border-foreground/20">
-          <ScanLine className="h-8 w-8 text-foreground/30" strokeWidth={1.5} />
+        {/* Scrim */}
+        <div className="absolute inset-0 bg-foreground/40 backdrop-blur-[2px]" />
+        {/* Sweeping scan line */}
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-[2px] animate-[ios-scan_2.2s_ease-in-out_infinite] bg-gradient-to-r from-transparent via-background to-transparent shadow-[0_0_24px_rgba(255,255,255,0.55)]" />
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-8 text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-background" strokeWidth={2} />
+          <p className="font-display text-[17px] font-semibold text-background">
+            Finding the dupe…
+          </p>
+          <p className="text-[13px] text-background/80">
+            Reading the label and scanning ingredients.
+          </p>
         </div>
       </div>
-      <p className="max-w-[16rem] text-sm text-muted-foreground">
-        Center the product in frame. Good lighting helps us read the label.
-      </p>
+      <div className="pb-safe" />
+      <style>{`
+        @keyframes ios-scan {
+          0%   { transform: translateY(0); opacity: 0; }
+          10%  { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateY(100vh); opacity: 0; }
+        }
+      `}</style>
     </div>
   );
 }
 
-function ScanningOverlay() {
-  return (
-    <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background/70 backdrop-blur-sm">
-      <Loader2 className="h-6 w-6 animate-spin text-foreground" />
-      <p className="font-display text-sm font-semibold tracking-wide">Finding the dupe…</p>
-    </div>
-  );
-}
+/* ---------------- Results (scrollable Detail view) ---------------- */
 
-function ScanSummary({
-  preview,
+function ResultsScreen({
   analysis,
   onReset,
 }: {
-  preview: string | null;
   analysis: DupeAnalysis;
   onReset: () => void;
 }) {
+  const dupe = analysis.dupe;
+  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-soft">
-      {preview && <img src={preview} alt="" className="h-16 w-16 flex-shrink-0 rounded-xl object-cover" />}
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          Identified
-        </div>
-        <div className="truncate font-display text-sm font-semibold">{analysis.original.productName}</div>
-        <div className="truncate text-xs text-muted-foreground">{analysis.original.brand}</div>
+    <IOSScreen
+      title="Result"
+      back={{ onClick: onReset }}
+      trailing={
+        <button
+          onClick={onReset}
+          aria-label="New scan"
+          className="tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground"
+        >
+          <RotateCw className="h-4 w-4" strokeWidth={2} />
+        </button>
+      }
+      bottomBar={
+        link ? (
+          <a
+            href={link.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="tap flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
+          >
+            <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={2} />
+            Shop on Google
+            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+          </a>
+        ) : (
+          <button
+            onClick={onReset}
+            className="tap flex h-[50px] w-full items-center justify-center rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
+          >
+            Scan another product
+          </button>
+        )
+      }
+    >
+      <div className="space-y-4 px-4 pb-6 pt-3">
+        <DupeCard analysis={analysis} />
       </div>
-      <button
-        onClick={onReset}
-        className="flex-shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/60"
-      >
-        New scan
-      </button>
-    </div>
+    </IOSScreen>
+  );
+}
+
+/* close-button atom kept for potential future overlays */
+export function IOSCloseButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Close"
+      className="tap flex h-8 w-8 items-center justify-center rounded-full bg-foreground/10 text-foreground backdrop-blur"
+    >
+      <X className="h-4 w-4" strokeWidth={2.5} />
+    </button>
   );
 }

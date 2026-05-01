@@ -1,6 +1,5 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, ExternalLink, ShoppingBag, Sparkles } from "lucide-react";
-import { googleShoppingLink } from "@/lib/retailer-links";
+import { Check, TrendingDown, AlertCircle, Sparkles } from "lucide-react";
 
 function priceTag(n: number) {
   if (n < 10) return `$${n.toFixed(2)}`;
@@ -25,7 +24,7 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       : 0;
 
   return (
-    <article className="overflow-hidden rounded-3xl border border-border bg-card shadow-soft">
+    <article className="overflow-hidden rounded-[20px] border border-border bg-card shadow-soft">
       {/* Verdict bar */}
       <div className="flex items-center justify-between border-b border-border bg-secondary/60 px-5 py-3">
         <div className="flex items-center gap-2">
@@ -72,8 +71,8 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
         </div>
       )}
 
-      {/* Formula breakdown — visual evidence behind the match score */}
-      {dupe && (
+      {/* Formula breakdown */}
+      {dupe &&
         ((sharedIngredients?.length ?? 0) +
           (uniqueToOriginal?.length ?? 0) +
           (uniqueToDupe?.length ?? 0) > 0 ||
@@ -118,27 +117,11 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
               </div>
             )}
           </div>
-        )
-      )}
+        )}
 
       {/* Notes */}
       <div className="space-y-3 border-t border-border px-5 py-4">
         <p className="text-sm leading-relaxed text-foreground">{notes}</p>
-        {dupe && (() => {
-          const link = googleShoppingLink(dupe.brand, dupe.productName);
-          return (
-            <a
-              href={link.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition hover:opacity-90"
-            >
-              <ShoppingBag className="h-3.5 w-3.5" />
-              Shop on Google
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          );
-        })()}
         {bestFor.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {bestFor.map((b) => (
