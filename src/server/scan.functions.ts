@@ -12,6 +12,7 @@ export type ScannedProduct = {
   category: string;
   estimatedPriceUsd: number;
   keyIngredients: string[];
+  imageUrl?: string;
 };
 
 export type DupeSuggestion = {
@@ -149,11 +150,13 @@ export const scanProduct = createServerFn({ method: "POST" })
       }
       const parsed = JSON.parse(argsRaw) as DupeAnalysis;
 
-      // Best-effort: enrich the dupe with a real product photo so users can recognize it.
-      if (parsed.dupe) {
-        const imageUrl = await findProductImage(parsed.dupe.brand, parsed.dupe.productName);
-        if (imageUrl) parsed.dupe.imageUrl = imageUrl;
-      }
+      // Best-effort: enrich both the original and the dupe with real product photos in parallel.
+      const [originalImg, dupeImg] = await Promise.all([
+        parsed.original ? findProductImage(parsed.original.brand, parsed.original.productName) : Promise.resolve(undefined),
+        parsed.dupe ? findProductImage(parsed.dupe.brand, parsed.dupe.productName) : Promise.resolve(undefined),
+      ]);
+      if (originalImg && parsed.original) parsed.original.imageUrl = originalImg;
+      if (dupeImg && parsed.dupe) parsed.dupe.imageUrl = dupeImg;
 
       return { result: parsed, error: null };
     } catch (e) {
