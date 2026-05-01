@@ -129,7 +129,7 @@ function HomeScreen({
     <IOSScreen
       title=""
       trailing={
-        <img src={wordmark} alt="Dupli" className="h-9 w-auto" width={1536} height={1024} />
+        <img src={wordmark} alt="Dupli" className="h-12 w-auto" width={1536} height={1024} />
       }
       fixed
     >
