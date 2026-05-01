@@ -176,63 +176,73 @@ export const scanProduct = createServerFn({ method: "POST" })
   });
 
 /**
- * Best-effort product image lookup using DuckDuckGo's image search.
- * DuckDuckGo exposes a lightweight JSON endpoint that's reliable from a server
- * (Google's image search aggressively blocks/obfuscates non-browser requests).
+ * Best-effort product image lookup using Bing's async image endpoint.
+ * Bing returns a chunk of HTML where each result has a `murl` (media URL),
+ * `purl` (page URL), and an `m` JSON blob with width/height/title — no token
+ * dance required, which makes it reliable from edge runtimes (DuckDuckGo's
+ * endpoints intermittently return Cloudflare 525s for Worker traffic).
  * Returns undefined on any failure so a missing image never breaks the scan.
  */
 async function findProductImage(brand: string, productName: string): Promise<string | undefined> {
   const query = `${brand} ${productName}`.trim();
   console.log("[findProductImage] looking up:", query);
   try {
-    // Step 1: hit the HTML endpoint to get a `vqd` token (required by DDG).
-    const tokenRes = await fetch(
-      `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`,
-      {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-      },
-    );
-    if (!tokenRes.ok) {
-      console.warn("[findProductImage] token fetch failed", tokenRes.status);
-      return undefined;
-    }
-    const tokenHtml = await tokenRes.text();
-    const vqdMatch =
-      tokenHtml.match(/vqd=([\d-]+)\&/) ||
-      tokenHtml.match(/vqd="([\d-]+)"/) ||
-      tokenHtml.match(/vqd=([\d-]+)/);
-    const vqd = vqdMatch?.[1];
-    if (!vqd) {
-      console.warn("[findProductImage] no vqd token in response");
-      return undefined;
-    }
-
-    // Step 2: call the JSON image endpoint with the token.
-    const apiUrl =
-      `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}` +
-      `&vqd=${vqd}&f=,,,,,&p=1`;
-    const apiRes = await fetch(apiUrl, {
+    const url =
+      `https://www.bing.com/images/async?q=${encodeURIComponent(query)}` +
+      `&first=1&count=30&mmasync=1&adlt=moderate`;
+    const res = await fetch(url, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        Accept: "application/json",
-        Referer: "https://duckduckgo.com/",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
       },
     });
-    if (!apiRes.ok) {
-      console.warn("[findProductImage] api fetch failed", apiRes.status);
+    if (!res.ok) {
+      console.warn("[findProductImage] bing fetch failed", res.status);
       return undefined;
     }
-    const data = (await apiRes.json()) as {
-      results?: Array<{ image?: string; url?: string; source?: string; title?: string; width?: number; height?: number }>;
-    };
-    const candidates = (data.results ?? []).filter(
-      (r) => r.image && /^https?:\/\//i.test(r.image),
-    );
+    const html = await res.text();
+
+    // Each tile is an <a class="iusc" ... m="{...json...}"> with HTML-escaped JSON.
+    const tileRegex = /m="([^"]+)"/g;
+    const candidates: Array<{
+      image?: string;
+      url?: string;
+      source?: string;
+      title?: string;
+      width?: number;
+      height?: number;
+    }> = [];
+    let match: RegExpExecArray | null;
+    while ((match = tileRegex.exec(html)) !== null) {
+      const decoded = match[1]
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, "&")
+        .replace(/&#39;/g, "'")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">");
+      try {
+        const m = JSON.parse(decoded) as {
+          murl?: string;
+          purl?: string;
+          t?: string;
+          desc?: string;
+        };
+        if (m.murl && /^https?:\/\//i.test(m.murl)) {
+          candidates.push({
+            image: m.murl,
+            url: m.purl,
+            source: m.purl,
+            title: m.t ?? m.desc,
+          });
+        }
+      } catch {
+        // skip malformed tile
+      }
+      if (candidates.length >= 30) break;
+    }
+
     if (candidates.length === 0) {
       console.warn("[findProductImage] no image results");
       return undefined;
