@@ -14,7 +14,113 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      saved_scans: {
+        Row: {
+          created_at: string
+          id: string
+          scan_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          scan_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          scan_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_scans_scan_id_fkey"
+            columns: ["scan_id"]
+            isOneToOne: false
+            referencedRelation: "scans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scans: {
+        Row: {
+          analysis: Json
+          created_at: string
+          dupe_brand: string | null
+          dupe_image_url: string | null
+          dupe_product_name: string | null
+          id: string
+          match_score: number | null
+          original_brand: string
+          original_image_url: string | null
+          original_product_name: string
+          thumbnail_data_url: string | null
+          user_id: string
+          verdict: string | null
+        }
+        Insert: {
+          analysis: Json
+          created_at?: string
+          dupe_brand?: string | null
+          dupe_image_url?: string | null
+          dupe_product_name?: string | null
+          id?: string
+          match_score?: number | null
+          original_brand: string
+          original_image_url?: string | null
+          original_product_name: string
+          thumbnail_data_url?: string | null
+          user_id: string
+          verdict?: string | null
+        }
+        Update: {
+          analysis?: Json
+          created_at?: string
+          dupe_brand?: string | null
+          dupe_image_url?: string | null
+          dupe_product_name?: string | null
+          id?: string
+          match_score?: number | null
+          original_brand?: string
+          original_image_url?: string | null
+          original_product_name?: string
+          thumbnail_data_url?: string | null
+          user_id?: string
+          verdict?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
