@@ -38,7 +38,7 @@ export function IOSScreen({
     <div className="flex h-screen-safe flex-col bg-background no-bounce">
       {/* Nav bar */}
       <div className="pt-safe sticky top-0 z-30 bg-background/85 backdrop-blur-xl">
-        <div className="hairline-b flex h-11 items-center justify-between px-4">
+        <div className="hairline-b flex h-14 items-center justify-between px-4">
           <div className="flex min-w-0 flex-1 items-center">
             {back ? (
               <button
