@@ -1,5 +1,6 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, MapPin, ExternalLink } from "lucide-react";
+import { Check, TrendingDown, AlertCircle, MapPin, ExternalLink, ShoppingBag } from "lucide-react";
+import { resolveBuyLink, buildAlternateRetailerLinks, type RetailerLink } from "@/lib/retailer-links";
 
 function priceTag(n: number) {
   if (n < 10) return `$${n.toFixed(2)}`;
