@@ -1,53 +1,28 @@
-## Goal
+## Problem
 
-When the AI identifies a dupe, also show a real photo of that dupe so the user can recognize it on a shelf.
+The dupe image isn't showing up. Server logs from the last hour show no calls to `findProductImage`, and even if it did run, scraping `google.com/search?tbm=isch` from a server is unreliable — Google serves a consent interstitial / heavily obfuscated HTML to non-browser clients, so the regex finds nothing and we silently return `undefined`.
 
-## Approach
+## Fix
 
-Two viable options. I recommend **Option A** for v1 — it's faster, free, and returns real product packaging shots.
+Replace the Google Images scrape with **DuckDuckGo's image search**, which has a lightweight JSON endpoint (`duckduckgo.com/i.js`) that's well-suited to server-side calls and doesn't need an API key.
 
-### Option A (recommended): Google Shopping image via a server-side image search
+Two-step lookup:
+1. `GET https://duckduckgo.com/?q=<query>&iax=images&ia=images` to grab the required `vqd` token from the HTML.
+2. `GET https://duckduckgo.com/i.js?q=<query>&vqd=<token>&o=json` to get a JSON list of image results — pick the first `image` URL.
 
-After the AI returns the dupe's brand + product name, do a second server-side request to Google's image search and pull the first product image URL. No API key needed; we already proxy through our server function so there's no CORS issue.
-
-Pros:
-- Returns a real, recognizable product photo (actual packaging).
-- Free, no extra API/secret to wire up.
-- Stays consistent with our "Shop on Google" CTA.
-
-Cons:
-- Scraping HTML is fragile; Google can change markup. We'll wrap it in a try/catch and gracefully fall back to no image.
-
-### Option B: AI-generated image (Nano Banana)
-
-Use `google/gemini-2.5-flash-image` to generate a stylized product render.
-
-Pros: always returns something; on-brand visuals.
-Cons: not the real product (could mislead users on a "find the dupe" app); slower; uses extra credits.
-
-I'll implement Option A and keep the dupe card resilient when no image is found.
+Also add `console.log` lines so we can see in server logs exactly what's happening (lookup query, token success, found URL, or which step failed).
 
 ## Changes
 
-### Backend (`src/server/scan.functions.ts`)
-- Add `imageUrl?: string` to `DupeSuggestion`.
-- After the AI tool call resolves, if a dupe was found, call a new helper `findProductImage(brand, productName)` that:
-  - Queries `https://www.google.com/search?tbm=isch&q=<brand+productName>` with a desktop User-Agent.
-  - Extracts the first usable image URL (not a Google logo/sprite) from the HTML.
-  - Returns `undefined` on any failure or empty result.
-- Attach the URL to the dupe before returning. Wrap in `try/catch` so a scrape failure never breaks the scan.
+**`src/server/scan.functions.ts`** — rewrite `findProductImage`:
+- Build query as `${brand} ${productName}`.
+- Fetch the DDG HTML page with a desktop User-Agent to extract the `vqd` token via regex.
+- Call the DDG image JSON endpoint with that token + `Referer: https://duckduckgo.com/`.
+- Return the first result's `image` URL (or `undefined` on any failure).
+- Add `console.log` / `console.warn` at each step for debuggability.
 
-### UI (`src/components/dupe-card.tsx`)
-- In the "The dupe" side of the comparison grid, render the image above the brand/name when `dupe.imageUrl` exists.
-- Use a fixed aspect-ratio container (`aspect-square`, rounded, `object-contain`, neutral background) so layout stays stable even if the image fails to load.
-- Add `onError` handler that hides the image if the URL 404s.
+No frontend changes required — the dupe card already handles `imageUrl` and gracefully hides on load error.
 
-### Optional polish
-- Lazy-load the image (`loading="lazy"`).
-- Add a subtle skeleton while loading.
+## Fallback if DDG also fails
 
-## Technical notes
-
-- The scrape runs server-side inside the existing `scanProduct` server function — no client CORS concerns, no exposed keys.
-- Total added latency: ~300-700ms per scan. Acceptable since the AI call is already 2-4s.
-- If we later want higher reliability, we can swap `findProductImage` for the Firecrawl `search` API or SerpAPI without changing the UI contract.
+If logs show DDG getting blocked too, the next move is wiring up the **Firecrawl connector** (already documented in our context) and using its `search` API with `scrapeOptions`, which handles bot protection for us. I'll only add that if the simpler DDG approach doesn't work.

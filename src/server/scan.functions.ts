@@ -163,34 +163,69 @@ export const scanProduct = createServerFn({ method: "POST" })
   });
 
 /**
- * Best-effort product image lookup via Google Images HTML.
+ * Best-effort product image lookup using DuckDuckGo's image search.
+ * DuckDuckGo exposes a lightweight JSON endpoint that's reliable from a server
+ * (Google's image search aggressively blocks/obfuscates non-browser requests).
  * Returns undefined on any failure so a missing image never breaks the scan.
  */
 async function findProductImage(brand: string, productName: string): Promise<string | undefined> {
+  const query = `${brand} ${productName}`.trim();
+  console.log("[findProductImage] looking up:", query);
   try {
-    const query = `${brand} ${productName} product`.trim();
-    const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}&safe=active`;
-    const res = await fetch(url, {
+    // Step 1: hit the HTML endpoint to get a `vqd` token (required by DDG).
+    const tokenRes = await fetch(
+      `https://duckduckgo.com/?q=${encodeURIComponent(query)}&iax=images&ia=images`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      },
+    );
+    if (!tokenRes.ok) {
+      console.warn("[findProductImage] token fetch failed", tokenRes.status);
+      return undefined;
+    }
+    const tokenHtml = await tokenRes.text();
+    const vqdMatch =
+      tokenHtml.match(/vqd=([\d-]+)\&/) ||
+      tokenHtml.match(/vqd="([\d-]+)"/) ||
+      tokenHtml.match(/vqd=([\d-]+)/);
+    const vqd = vqdMatch?.[1];
+    if (!vqd) {
+      console.warn("[findProductImage] no vqd token in response");
+      return undefined;
+    }
+
+    // Step 2: call the JSON image endpoint with the token.
+    const apiUrl =
+      `https://duckduckgo.com/i.js?l=us-en&o=json&q=${encodeURIComponent(query)}` +
+      `&vqd=${vqd}&f=,,,,,&p=1`;
+    const apiRes = await fetch(apiUrl, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
+        Accept: "application/json",
+        Referer: "https://duckduckgo.com/",
       },
     });
-    if (!res.ok) return undefined;
-    const html = await res.text();
-
-    // Google embeds image URLs in the page; pick the first http(s) image that
-    // isn't a Google asset and looks like a real product image.
-    const matches = html.match(/https?:\/\/[^"'\\\s]+\.(?:jpg|jpeg|png|webp)/gi) ?? [];
-    for (const candidate of matches) {
-      if (/gstatic\.com|google\.com\/images|googleusercontent\.com\/.*\/proxy/i.test(candidate)) continue;
-      if (candidate.length > 600) continue;
-      return candidate;
+    if (!apiRes.ok) {
+      console.warn("[findProductImage] api fetch failed", apiRes.status);
+      return undefined;
     }
-    return undefined;
+    const data = (await apiRes.json()) as {
+      results?: Array<{ image?: string }>;
+    };
+    const first = data.results?.find((r) => r.image && /^https?:\/\//i.test(r.image));
+    if (!first?.image) {
+      console.warn("[findProductImage] no image results");
+      return undefined;
+    }
+    console.log("[findProductImage] found:", first.image);
+    return first.image;
   } catch (e) {
-    console.warn("findProductImage failed", e);
+    console.warn("[findProductImage] failed", e);
     return undefined;
   }
 }
