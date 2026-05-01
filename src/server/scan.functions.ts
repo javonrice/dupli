@@ -34,6 +34,10 @@ export type DupeAnalysis = {
   notes: string;
   bestFor: string[];
   confidence: "high" | "medium" | "low";
+  sharedIngredients?: string[];
+  uniqueToOriginal?: string[];
+  uniqueToDupe?: string[];
+  contextMatch?: string;
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
@@ -60,9 +64,11 @@ export const scanProduct = createServerFn({ method: "POST" })
                 "You are an expert licensed esthetician and product analyst.",
                 "Step 1: Identify the beauty/skincare product in the image (name, brand, category, typical retail price, key actives).",
                 "Step 2: Suggest the single best affordable dupe — a real product, widely available (drugstore, Dollar Tree, Target, Amazon, etc.). Prefer dupes that are meaningfully cheaper.",
-                "Step 3: Compare formulas and give a match score (0-100) based on how close the active ingredients and intended effect are.",
-                "Step 4: Give an honest esthetician verdict and short notes.",
-                "If you genuinely cannot find a credible dupe, set dupe to null and verdict to 'No dupe found'.",
+                "Step 3: Compare formulas. Populate sharedIngredients (actives present in BOTH formulas), uniqueToOriginal (only in the original), uniqueToDupe (only in the dupe). Use canonical INCI names (e.g. 'Niacinamide', 'Hyaluronic Acid'), 3-6 items per list, prioritize meaningful actives over fillers/water/preservatives, and never repeat the same ingredient across lists.",
+                "Step 4: Give a match score (0-100) reflecting how close the actives AND intended effect are.",
+                "Step 5: Write contextMatch — ONE sentence explaining WHY this is a real dupe beyond ingredients (skin concern, texture, finish, vibe). Keep distinct from notes.",
+                "Step 6: Give an honest esthetician verdict and short notes.",
+                "If you genuinely cannot find a credible dupe, set dupe to null, verdict to 'No dupe found', and leave the comparison lists empty.",
                 "Always call the analyze_dupe tool exactly once. Never invent a fake brand.",
               ].join(" "),
             },
@@ -119,8 +125,12 @@ export const scanProduct = createServerFn({ method: "POST" })
                     notes: { type: "string", description: "1-2 sentences from a licensed esthetician's perspective." },
                     bestFor: { type: "array", items: { type: "string" }, description: "2-4 short use-case tags, e.g. 'Anti-aging', 'Dry skin'." },
                     confidence: { type: "string", enum: ["high", "medium", "low"] },
+                    sharedIngredients: { type: "array", items: { type: "string" }, description: "Active ingredients present in BOTH formulas (canonical INCI names, 0-6 items). Empty array if no dupe." },
+                    uniqueToOriginal: { type: "array", items: { type: "string" }, description: "Notable actives only in the original (canonical INCI, 0-6 items). Empty array if no dupe." },
+                    uniqueToDupe: { type: "array", items: { type: "string" }, description: "Notable actives only in the dupe (canonical INCI, 0-6 items). Empty array if no dupe." },
+                    contextMatch: { type: "string", description: "ONE sentence on WHY these match beyond ingredients (skin concern, texture, finish). Empty string if no dupe." },
                   },
-                  required: ["original", "dupe", "matchScore", "verdict", "notes", "bestFor", "confidence"],
+                  required: ["original", "dupe", "matchScore", "verdict", "notes", "bestFor", "confidence", "sharedIngredients", "uniqueToOriginal", "uniqueToDupe", "contextMatch"],
                   additionalProperties: false,
                 },
               },

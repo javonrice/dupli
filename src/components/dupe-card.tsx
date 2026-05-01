@@ -1,5 +1,5 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, ExternalLink, ShoppingBag } from "lucide-react";
+import { Check, TrendingDown, AlertCircle, ExternalLink, ShoppingBag, Sparkles } from "lucide-react";
 import { googleShoppingLink } from "@/lib/retailer-links";
 
 function priceTag(n: number) {
@@ -15,7 +15,7 @@ const verdictStyles: Record<DupeAnalysis["verdict"], { icon: typeof Check; bg: s
 };
 
 export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
-  const { original, dupe, matchScore, verdict, notes, bestFor } = analysis;
+  const { original, dupe, matchScore, verdict, notes, bestFor, sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch } = analysis;
   const v = verdictStyles[verdict];
   const Icon = v.icon;
 
@@ -70,6 +70,55 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
             <div className="h-full rounded-full bg-foreground transition-all" style={{ width: `${matchScore}%` }} />
           </div>
         </div>
+      )}
+
+      {/* Formula breakdown — visual evidence behind the match score */}
+      {dupe && (
+        ((sharedIngredients?.length ?? 0) +
+          (uniqueToOriginal?.length ?? 0) +
+          (uniqueToDupe?.length ?? 0) > 0 ||
+          !!contextMatch) && (
+          <div className="space-y-4 border-t border-border bg-secondary/30 px-5 py-4">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              Formula breakdown
+            </div>
+
+            {contextMatch && (
+              <p className="flex items-start gap-2 text-xs italic leading-relaxed text-muted-foreground">
+                <Sparkles className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
+                <span>{contextMatch}</span>
+              </p>
+            )}
+
+            {sharedIngredients && sharedIngredients.length > 0 && (
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-1.5">
+                  <Check className="h-3 w-3 text-success" strokeWidth={3} />
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-foreground">
+                    In both
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {sharedIngredients.map((i) => (
+                    <span
+                      key={i}
+                      className="rounded-full bg-foreground px-2.5 py-1 text-[11px] font-semibold text-background"
+                    >
+                      {i}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {((uniqueToOriginal?.length ?? 0) > 0 || (uniqueToDupe?.length ?? 0) > 0) && (
+              <div className="grid grid-cols-2 gap-4">
+                <UniqueColumn label="Only in original" items={uniqueToOriginal ?? []} />
+                <UniqueColumn label="Only in dupe" items={uniqueToDupe ?? []} />
+              </div>
+            )}
+          </div>
+        )
       )}
 
       {/* Notes */}
@@ -138,6 +187,30 @@ function ProductSide({
         <span className="font-display text-2xl font-bold">{priceTag(item.estimatedPriceUsd)}</span>
       </div>
       <p className="mt-1 text-[11px] text-muted-foreground">{item.category}</p>
+    </div>
+  );
+}
+
+function UniqueColumn({ label, items }: { label: string; items: string[] }) {
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      {items.length === 0 ? (
+        <div className="text-[11px] italic text-muted-foreground/70">—</div>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map((i) => (
+            <span
+              key={i}
+              className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground"
+            >
+              {i}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
