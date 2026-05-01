@@ -168,30 +168,22 @@ function HomeScreen({
           </div>
         )}
 
-        {/* Capture controls — iOS Camera.app pattern */}
-        <div className="flex w-full items-center justify-around pb-2 pt-4">
-          {/* Library (left) */}
-          <button
-            onClick={onLibrary}
-            aria-label="Choose from library"
-            className="tap flex h-12 w-12 items-center justify-center rounded-[14px] bg-secondary/60 text-foreground"
-          >
-            <Images className="h-6 w-6" strokeWidth={1.75} />
-          </button>
-
-          {/* Shutter (center) */}
+        {/* Capture controls — stacked button format */}
+        <div className="flex w-full flex-col gap-2.5 pb-2 pt-4">
           <button
             onClick={onCamera}
-            aria-label="Take photo"
-            className="tap relative flex h-[78px] w-[78px] items-center justify-center rounded-full"
+            className="tap flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
           >
-            <span className="absolute inset-0 rounded-full border-[3px] border-foreground" />
-            <span className="absolute inset-[6px] rounded-full bg-foreground transition-transform" />
-            <Camera className="relative z-10 h-7 w-7 text-background" strokeWidth={1.75} />
+            <Camera className="h-[18px] w-[18px]" strokeWidth={2} />
+            Take Photo
           </button>
-
-          {/* Spacer to balance shutter — iOS Camera has a flip-camera button here */}
-          <div className="h-12 w-12" />
+          <button
+            onClick={onLibrary}
+            className="tap flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-secondary text-[15px] font-semibold text-foreground"
+          >
+            <Images className="h-[18px] w-[18px]" strokeWidth={2} />
+            Choose from Library
+          </button>
         </div>
       </div>
     </IOSScreen>
