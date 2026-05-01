@@ -1,5 +1,6 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, MapPin, ExternalLink } from "lucide-react";
+import { Check, TrendingDown, AlertCircle, MapPin, ExternalLink, ShoppingBag } from "lucide-react";
+import { resolveBuyLink, buildAlternateRetailerLinks, type RetailerLink } from "@/lib/retailer-links";
 
 function priceTag(n: number) {
   if (n < 10) return `$${n.toFixed(2)}`;
@@ -74,25 +75,53 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       {/* Notes */}
       <div className="space-y-3 border-t border-border px-5 py-4">
         <p className="text-sm leading-relaxed text-foreground">{notes}</p>
-        {dupe?.whereToBuy && (
-          dupe.buyUrl ? (
-            <a
-              href={dupe.buyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground transition hover:bg-secondary/60"
-            >
-              <MapPin className="h-3.5 w-3.5" />
-              Buy at {dupe.whereToBuy}
-              <ExternalLink className="h-3 w-3" />
-            </a>
-          ) : (
-            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <MapPin className="h-3.5 w-3.5" />
-              Find it at <span className="text-foreground">{dupe.whereToBuy}</span>
+        {dupe && (() => {
+          const primary = resolveBuyLink({
+            brand: dupe.brand,
+            productName: dupe.productName,
+            whereToBuy: dupe.whereToBuy,
+            buyUrl: dupe.buyUrl,
+          });
+          const alternates = buildAlternateRetailerLinks({
+            brand: dupe.brand,
+            productName: dupe.productName,
+            excludeLabel: primary.label,
+          });
+          return (
+            <div className="space-y-2">
+              <a
+                href={primary.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-3 py-1.5 text-xs font-semibold text-background transition hover:opacity-90"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+                Buy at {primary.label}
+                <ExternalLink className="h-3 w-3" />
+              </a>
+              {alternates.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    <ShoppingBag className="h-3 w-3" />
+                    Also search
+                  </span>
+                  {alternates.map((alt: RetailerLink) => (
+                    <a
+                      key={alt.label}
+                      href={alt.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground transition hover:bg-secondary/60"
+                    >
+                      {alt.label}
+                      <ExternalLink className="h-2.5 w-2.5" />
+                    </a>
+                  ))}
+                </div>
+              )}
             </div>
-          )
-        )}
+          );
+        })()}
         {bestFor.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {bestFor.map((b) => (
