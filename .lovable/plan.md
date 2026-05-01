@@ -1,28 +1,45 @@
-## Problem
+## Goal
 
-The dupe image isn't showing up. Server logs from the last hour show no calls to `findProductImage`, and even if it did run, scraping `google.com/search?tbm=isch` from a server is unreliable — Google serves a consent interstitial / heavily obfuscated HTML to non-browser clients, so the regex finds nothing and we silently return `undefined`.
+Make the ingredient match score feel earned, not arbitrary. Today users see "78%" with no evidence. Add a visual breakdown showing **which actives both products share** vs **what's unique to each side**, so the score has visible context — and let the AI explain *why* the dupe matches contextually (skin concern, texture, finish), not just by ingredient list.
 
-## Fix
+## What changes for the user
 
-Replace the Google Images scrape with **DuckDuckGo's image search**, which has a lightweight JSON endpoint (`duckduckgo.com/i.js`) that's well-suited to server-side calls and doesn't need an API key.
+Below the existing "Ingredient match" meter, a new **Formula breakdown** section:
 
-Two-step lookup:
-1. `GET https://duckduckgo.com/?q=<query>&iax=images&ia=images` to grab the required `vqd` token from the HTML.
-2. `GET https://duckduckgo.com/i.js?q=<query>&vqd=<token>&o=json` to get a JSON list of image results — pick the first `image` URL.
+```text
+Both products
+[Niacinamide] [Hyaluronic Acid] [Glycerin]
 
-Also add `console.log` lines so we can see in server logs exactly what's happening (lookup query, token success, found URL, or which step failed).
+Only in original                Only in the dupe
+[Bakuchiol] [Squalane]          [Vitamin E] [Panthenol]
 
-## Changes
+Why they match
+"Both target dehydrated, dull skin with a lightweight humectant
+base. The dupe swaps bakuchiol for panthenol — gentler but less
+firming."
+```
 
-**`src/server/scan.functions.ts`** — rewrite `findProductImage`:
-- Build query as `${brand} ${productName}`.
-- Fetch the DDG HTML page with a desktop User-Agent to extract the `vqd` token via regex.
-- Call the DDG image JSON endpoint with that token + `Referer: https://duckduckgo.com/`.
-- Return the first result's `image` URL (or `undefined` on any failure).
-- Add `console.log` / `console.warn` at each step for debuggability.
+- **Shared ingredients** rendered as filled pills (high-confidence visual = "yes, this overlaps").
+- **Unique ingredients** rendered as outlined pills under each side, color-muted.
+- A short **context match** sentence from the AI explains *why* this is a real dupe (skin concern, texture, finish, vibe) — separate from the existing notes, which stay focused on the esthetician verdict.
 
-No frontend changes required — the dupe card already handles `imageUrl` and gracefully hides on load error.
+## Technical changes
 
-## Fallback if DDG also fails
+**`src/server/scan.functions.ts`**
+- Extend the `analyze_dupe` tool schema with two new required fields:
+  - `sharedIngredients: string[]` — actives present in both formulas (canonical INCI names, deduped).
+  - `uniqueToOriginal: string[]` / `uniqueToDupe: string[]` — actives only in one side.
+  - `contextMatch: string` — 1 sentence on *why* the products serve the same need (concern, texture, finish), distinct from the esthetician `notes`.
+- Update the system prompt so the model populates these consistently and keeps each list to ~3–6 items, prioritizing meaningful actives over filler.
+- Extend `DupeAnalysis` type with those fields (all optional on the type to stay safe if the model omits them, but required in the schema).
 
-If logs show DDG getting blocked too, the next move is wiring up the **Firecrawl connector** (already documented in our context) and using its `search` API with `scrapeOptions`, which handles bot protection for us. I'll only add that if the simpler DDG approach doesn't work.
+**`src/components/dupe-card.tsx`**
+- New `IngredientBreakdown` subcomponent rendered below the match meter, only when `dupe` exists and at least one of the three lists is non-empty.
+- Layout: shared row on top (full width, centered), then a 2-column grid mirroring the product pair above for unique ingredients. Pills reuse the existing `bestFor` chip style for visual consistency.
+- Add the `contextMatch` line above the breakdown in italic muted text so it reads as an explanatory caption.
+
+## Out of scope
+
+- No backend persistence — this is a per-scan view.
+- No ingredient hover/tooltips with INCI definitions (could be a follow-up).
+- No re-ranking of the match score; the AI continues to set it.
