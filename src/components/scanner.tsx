@@ -235,9 +235,11 @@ function ScanningScreen({ preview }: { preview: string | null }) {
 
 function ResultsScreen({
   analysis,
+  preview,
   onReset,
 }: {
   analysis: DupeAnalysis;
+  preview: string | null;
   onReset: () => void;
 }) {
   const dupe = analysis.dupe;
@@ -279,6 +281,35 @@ function ResultsScreen({
       }
     >
       <div className="space-y-4 px-4 pb-6 pt-3">
+        {preview && (
+          <div className="flex items-center gap-3 rounded-[16px] border border-border bg-card p-3 shadow-soft">
+            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-border bg-secondary/40">
+              <img
+                src={preview}
+                alt="Your scan"
+                className="h-full w-full object-cover"
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Your scan
+              </div>
+              <p className="mt-0.5 truncate font-display text-[15px] font-semibold text-foreground">
+                {analysis.original.productName}
+              </p>
+              <p className="truncate text-[12px] text-muted-foreground">
+                {analysis.original.brand}
+              </p>
+            </div>
+            <button
+              onClick={onReset}
+              className="tap flex h-9 items-center justify-center gap-1.5 rounded-full bg-secondary px-3 text-[12px] font-semibold text-foreground"
+            >
+              <RotateCw className="h-3.5 w-3.5" strokeWidth={2.25} />
+              New scan
+            </button>
+          </div>
+        )}
         <DupeCard analysis={analysis} />
       </div>
     </IOSScreen>
