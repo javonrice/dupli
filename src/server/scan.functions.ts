@@ -22,6 +22,7 @@ export type DupeSuggestion = {
   whereToBuy: string;
   buyUrl: string;
   keyIngredients: string[];
+  imageUrl?: string;
 };
 
 export type DupeAnalysis = {
@@ -147,9 +148,49 @@ export const scanProduct = createServerFn({ method: "POST" })
         return { result: null, error: "Couldn't read the product. Try a clearer, well-lit photo." };
       }
       const parsed = JSON.parse(argsRaw) as DupeAnalysis;
+
+      // Best-effort: enrich the dupe with a real product photo so users can recognize it.
+      if (parsed.dupe) {
+        const imageUrl = await findProductImage(parsed.dupe.brand, parsed.dupe.productName);
+        if (imageUrl) parsed.dupe.imageUrl = imageUrl;
+      }
+
       return { result: parsed, error: null };
     } catch (e) {
       console.error("scanProduct failed", e);
       return { result: null, error: "Something went wrong. Please try again." };
     }
   });
+
+/**
+ * Best-effort product image lookup via Google Images HTML.
+ * Returns undefined on any failure so a missing image never breaks the scan.
+ */
+async function findProductImage(brand: string, productName: string): Promise<string | undefined> {
+  try {
+    const query = `${brand} ${productName} product`.trim();
+    const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}&safe=active`;
+    const res = await fetch(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9",
+      },
+    });
+    if (!res.ok) return undefined;
+    const html = await res.text();
+
+    // Google embeds image URLs in the page; pick the first http(s) image that
+    // isn't a Google asset and looks like a real product image.
+    const matches = html.match(/https?:\/\/[^"'\\\s]+\.(?:jpg|jpeg|png|webp)/gi) ?? [];
+    for (const candidate of matches) {
+      if (/gstatic\.com|google\.com\/images|googleusercontent\.com\/.*\/proxy/i.test(candidate)) continue;
+      if (candidate.length > 600) continue;
+      return candidate;
+    }
+    return undefined;
+  } catch (e) {
+    console.warn("findProductImage failed", e);
+    return undefined;
+  }
+}

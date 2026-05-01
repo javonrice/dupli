@@ -113,12 +113,25 @@ function ProductSide({
   muted = false,
 }: {
   label: string;
-  item: { brand: string; productName: string; category: string; estimatedPriceUsd: number };
+  item: { brand: string; productName: string; category: string; estimatedPriceUsd: number; imageUrl?: string };
   muted?: boolean;
 }) {
   return (
     <div className={`p-5 ${muted ? "bg-background" : "bg-card"}`}>
       <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
+      {item.imageUrl && (
+        <div className="mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary/40">
+          <img
+            src={item.imageUrl}
+            alt={`${item.brand} ${item.productName}`}
+            loading="lazy"
+            className="h-full w-full object-contain"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+        </div>
+      )}
       <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{item.brand}</div>
       <h3 className="mt-1 font-display text-base font-semibold leading-tight">{item.productName}</h3>
       <div className="mt-3 flex items-baseline gap-1">
