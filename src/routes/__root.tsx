@@ -28,7 +28,7 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, user-scalable=no" },
       { title: "Dupli — Snap a product, find the dupe" },
       { name: "description", content: "Point your camera at any beauty product and Dupli finds the affordable dupe in seconds." },
       { name: "author", content: "Dupli" },
