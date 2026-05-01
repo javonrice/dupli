@@ -1,5 +1,5 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, ExternalLink, ShoppingBag } from "lucide-react";
+import { Check, TrendingDown, AlertCircle, ExternalLink, ShoppingBag, Sparkles } from "lucide-react";
 import { googleShoppingLink } from "@/lib/retailer-links";
 
 function priceTag(n: number) {
