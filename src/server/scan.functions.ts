@@ -68,12 +68,12 @@ export const scanProduct = createServerFn({ method: "POST" })
             {
               role: "system",
               content: [
-                "You are a licensed esthetician helping a real shopper standing in a Dollar Tree, drugstore, or beauty aisle decide whether a cheaper product is a credible swap for a name brand — and whether that swap is SAFE.",
+                "You are a practical beauty dupe scanner. A shopper may scan a name-brand product, an affordable lookalike, or a normal product that simply needs a lower-cost alternative.",
                 "Dupe culture is about TWO things, not just price:",
                 "(a) LOOKALIKE PACKAGING — the cheap product is intentionally designed to mimic a name brand (color palette, bottle shape, font, label layout). Treat visual mimicry as a first-class signal. If the photo shows an obvious lookalike (e.g. an XtraCare body balm copying Vaseline, a Dermasil tube copying Summer Fridays, an XtraCare cleanser saying 'Compare to Neutrogena'), the dupe IS that name brand even when the price gap is small.",
                 "(b) FORMULA — does the cheaper product actually deliver the same actives at usable percentages, or does it strip them out / swap in cheaper, riskier substitutes?",
                 "Step 1: Identify the product in the image (name, brand, category, typical retail price, key actives).",
-                "Step 2: Identify what it is duping or being duped by — the real name-brand counterpart. Always provide a buyUrl (retailer product page, or a retailer search URL).",
+                "Step 2: If the scanned item is affordable/lookalike, identify the name-brand counterpart. If the scanned item is name-brand, identify a credible affordable dupe. If no clear lookalike exists, pick the closest formula/use-case alternative. Always provide a buyUrl (retailer product page, or a retailer search URL).",
                 "Step 3: Set dupeType: 'Lookalike packaging' (visual copy, formula differs), 'Formula dupe' (formula matches but packaging is its own thing), 'Both', or 'Neither'.",
                 "Step 4: Score packagingSimilarity 0-100 honestly based on color, shape, typography, label layout. A bottle that just shares a color gets ~30; a near-clone with matching font and silhouette gets 85+.",
                 "Step 5: Compare formulas. sharedIngredients (actives in BOTH), uniqueToOriginal (only original), uniqueToDupe (only dupe). Use canonical INCI names, 0-6 per list, never repeat across lists, prioritize meaningful actives over water/fillers.",
@@ -93,13 +93,13 @@ export const scanProduct = createServerFn({ method: "POST" })
                 "  - 'Skip' = not a real dupe, or actively worse in ways that matter",
                 "  - 'No dupe found' = no credible counterpart exists",
                 "If you genuinely cannot find a credible dupe, set dupe to null, verdict 'No dupe found', and leave comparison/risk lists empty.",
-                "Always call analyze_dupe exactly once. Never invent a fake brand.",
+                "Always call analyze_dupe exactly once. Never invent a fake brand, but do not fail just because the product is ordinary — give the best practical comparison you can.",
               ].join(" "),
             },
             {
               role: "user",
               content: [
-                { type: "text", text: "Identify this product, find its name-brand counterpart (or the dupe being copied), and tell me whether the swap is safe." },
+                { type: "text", text: "Identify this product, find the best dupe/counterpart for a normal shopper, and tell me whether the swap is safe." },
                 { type: "image_url", image_url: { url: data.imageDataUrl } },
               ],
             },
@@ -160,13 +160,15 @@ export const scanProduct = createServerFn({ method: "POST" })
                     missingActives: { type: "array", items: { type: "string" }, description: "0-4 actives the original has that the dupe drops. Empty if nothing meaningful is lost." },
                     safetyNote: { type: "string", description: "ONE plain-English esthetician sentence about who/where this dupe is OK to use. Empty string if no dupe." },
                   },
-                  required: ["original", "dupe", "matchScore", "verdict", "notes", "bestFor", "confidence", "sharedIngredients", "uniqueToOriginal", "uniqueToDupe", "contextMatch", "dupeType", "packagingSimilarity", "riskLevel", "riskFactors", "missingActives", "safetyNote"],
+                  required: ["original", "dupe", "matchScore", "verdict", "notes", "bestFor", "confidence"],
                   additionalProperties: false,
                 },
               },
             },
           ],
           tool_choice: { type: "function", function: { name: "analyze_dupe" } },
+          temperature: 0.2,
+          max_tokens: 2400,
         }),
       });
 
