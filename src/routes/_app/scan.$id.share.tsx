@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import { Loader2, Share2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getScan } from "@/server/scans.functions";
@@ -7,10 +8,13 @@ import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import { ShareCard } from "@/components/share-card";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
+import { selectDupe } from "@/lib/select-dupe";
 import type { DupeAnalysis } from "@/server/scan.functions";
 
 export const Route = createFileRoute("/_app/scan/$id/share")({
   component: SharePage,
+  // ?dupe=<idx> picks an alternate from the "Also could be a dupe" rail.
+  validateSearch: (s) => z.object({ dupe: z.coerce.number().int().min(0).optional() }).parse(s),
   head: () => ({
     meta: [{ title: "Share dupe — Dupli" }],
   }),
@@ -19,17 +23,25 @@ export const Route = createFileRoute("/_app/scan/$id/share")({
 function SharePage() {
   useHideTabBar();
   const { id } = Route.useParams();
+  const { dupe: dupeIdx } = Route.useSearch();
   const navigate = useNavigate();
   const fetchScan = useServerFn(getScan);
   const proxyImage = useServerFn(fetchImageAsDataUrl);
 
-  const [analysis, setAnalysis] = useState<DupeAnalysis | null>(null);
+  const [rawAnalysis, setRawAnalysis] = useState<DupeAnalysis | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [originalImg, setOriginalImg] = useState<string | null>(null);
   const [dupeImg, setDupeImg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  // Apply the optional ?dupe=<idx> selection so sharing an alternate from the
+  // "Also could be a dupe" rail puts THAT product on the share card.
+  const analysis = useMemo<DupeAnalysis | null>(
+    () => (rawAnalysis ? selectDupe(rawAnalysis, dupeIdx ?? 0) : null),
+    [rawAnalysis, dupeIdx],
+  );
 
   const dataUrlToFile = async (dataUrl: string, filename: string): Promise<File> => {
     const res = await fetch(dataUrl);
@@ -49,7 +61,7 @@ function SharePage() {
           setError(r.error ?? "Scan not found");
           return;
         }
-        setAnalysis(r.scan.analysis);
+        setRawAnalysis(r.scan.analysis);
         setPreview(r.scan.thumbnail_data_url ?? r.scan.original_image_url ?? null);
       })
       .catch((e) => {

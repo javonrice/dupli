@@ -8,6 +8,7 @@ import { DupeCard } from "@/components/dupe-card";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
 import { googleShoppingLink } from "@/lib/retailer-links";
+import { selectDupe } from "@/lib/select-dupe";
 import wordmark from "@/assets/dupli-wordmark.png";
 
 type Stage = "idle" | "scanning" | "results";
@@ -98,17 +99,18 @@ export function Scanner() {
     [scan, persistScan],
   );
 
-  const handleShare = useCallback(async () => {
+  const handleShare = useCallback(async (dupeIdx?: number) => {
     if (preparingShare) return;
+    const search = dupeIdx && dupeIdx > 0 ? { dupe: dupeIdx } : undefined;
     if (scanId) {
-      navigate({ to: "/scan/$id/share", params: { id: scanId } });
+      navigate({ to: "/scan/$id/share", params: { id: scanId }, search });
       return;
     }
     setPreparingShare(true);
     try {
       const r = await (persistPromiseRef.current ?? Promise.resolve({ id: null as string | null }));
       if (r?.id) {
-        navigate({ to: "/scan/$id/share", params: { id: r.id } });
+        navigate({ to: "/scan/$id/share", params: { id: r.id }, search });
       } else {
         console.warn("Cannot share: scan not persisted");
       }
@@ -317,7 +319,7 @@ export function ResultsScreen({
   isSaved: boolean;
   canSave: boolean;
   onToggleSave: () => void | Promise<void>;
-  onShare?: () => void | Promise<void>;
+  onShare?: (dupeIdx?: number) => void | Promise<void>;
   preparingShare?: boolean;
 }) {
   // Hide the bottom tab bar while results are shown for extra spacing.
@@ -333,29 +335,7 @@ export function ResultsScreen({
         : [];
   const [selectedIdx, setSelectedIdx] = useState(0);
   const safeIdx = Math.min(selectedIdx, Math.max(0, candidates.length - 1));
-  const displayedAnalysis: DupeAnalysis = (() => {
-    if (candidates.length === 0 || safeIdx === 0) return analysis;
-    const c = candidates[safeIdx];
-    return {
-      ...analysis,
-      dupe: c,
-      matchScore: typeof c.matchScore === "number" ? c.matchScore : analysis.matchScore,
-      sharedIngredients: c.sharedIngredients ?? analysis.sharedIngredients,
-      uniqueToOriginal: c.uniqueToOriginal ?? analysis.uniqueToOriginal,
-      uniqueToDupe: c.uniqueToDupe ?? analysis.uniqueToDupe,
-      contextMatch: c.contextMatch ?? analysis.contextMatch,
-      dupeType: c.dupeType ?? analysis.dupeType,
-      packagingSimilarity:
-        typeof c.packagingSimilarity === "number"
-          ? c.packagingSimilarity
-          : analysis.packagingSimilarity,
-      riskLevel: c.riskLevel ?? analysis.riskLevel,
-      riskFactors: c.riskFactors ?? analysis.riskFactors,
-      missingActives: c.missingActives ?? analysis.missingActives,
-      safetyNote: c.safetyNote ?? analysis.safetyNote,
-      notes: c.notes && c.notes.trim() ? c.notes : analysis.notes,
-    };
-  })();
+  const displayedAnalysis: DupeAnalysis = selectDupe(analysis, safeIdx);
 
   const dupe = displayedAnalysis.dupe;
   const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
@@ -400,6 +380,7 @@ export function ResultsScreen({
               <Link
                 to="/scan/$id/share"
                 params={{ id: scanId }}
+                search={safeIdx > 0 ? { dupe: safeIdx } : undefined}
                 aria-label="Share this dupe as image"
                 className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground"
               >
@@ -409,7 +390,7 @@ export function ResultsScreen({
             ) : (
               <button
                 type="button"
-                onClick={() => onShare?.()}
+                onClick={() => onShare?.(safeIdx)}
                 disabled={preparingShare}
                 aria-label="Share this dupe as image"
                 className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground disabled:opacity-60"
