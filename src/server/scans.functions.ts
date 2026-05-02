@@ -77,6 +77,7 @@ export const listScans = createServerFn({ method: "GET" })
     if (error) {
       return { scans: [], error: error.message };
     }
+    return { scans: (data ?? []) as ScanRow[], error: null };
   });
 
 export const getScan = createServerFn({ method: "GET" })
