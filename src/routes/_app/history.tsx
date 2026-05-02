@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Loader2, Camera } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { listScans, type ScanRow } from "@/server/scans.functions";
@@ -21,14 +21,23 @@ function HistoryPage() {
   const [scans, setScans] = useState<ScanRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(null);
+    setScans(null);
     list({})
       .then((r) => {
         if (r.error) setError(r.error);
         else setScans(r.scans);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load history"));
   }, [list]);
+
+  useEffect(() => {
+    load();
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [load]);
 
   return (
     <div className="flex min-h-screen-safe flex-col bg-background">
@@ -51,7 +60,13 @@ function HistoryPage() {
         )}
         {error && (
           <div className="rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-3 text-center text-[13px] text-destructive">
-            {error}
+            <div>{error}</div>
+            <button
+              onClick={load}
+              className="tap mt-2 inline-flex h-8 items-center justify-center rounded-[10px] bg-destructive px-3 text-[12px] font-semibold text-destructive-foreground"
+            >
+              Try again
+            </button>
           </div>
         )}
         {scans && scans.length === 0 && <EmptyState />}
