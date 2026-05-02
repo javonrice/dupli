@@ -331,7 +331,15 @@ export function ResultsScreen({
   useHideTabBar();
 
   const dupe = analysis.dupe;
-  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  // Prefer a real retailer deep link (Target/Ulta/Amazon/etc.) when SkinSort
+  // gave us one. Falls back to Google Shopping search only when no vendor
+  // data exists for this product.
+  const topVendor = dupe?.vendors?.[0];
+  const link = dupe
+    ? topVendor
+      ? { url: topVendor.url, label: `Buy at ${topVendor.merchant}` }
+      : { ...googleShoppingLink(dupe.brand, dupe.productName), label: "Shop on Google" }
+    : null;
 
   return (
     <IOSScreen
@@ -403,7 +411,7 @@ export function ResultsScreen({
               className="tap flex h-[50px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
             >
               <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={2} />
-              Shop on Google
+              {link.label}
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
             </a>
           ) : (

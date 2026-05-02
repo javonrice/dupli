@@ -246,18 +246,21 @@ export function parseSkinsortPage(
 // canonical INCI name (e.g. "Glycerin", "Cetearyl Alcohol"). We pull them in
 // document order so the user sees the same ordering SkinSort shows.
 function pickIngredients(html: string): string[] {
-  const start = html.indexOf('id="ingredients_list"');
+  // SkinSort renders the INCI list inside <section id="ingredients">. Older
+  // pages used "ingredients_list" — kept as a fallback so we never miss data.
+  let start = html.search(/id="ingredients"(?![_a-z])/i);
+  if (start < 0) start = html.indexOf('id="ingredients_list"');
   if (start < 0) return [];
-  // Bound the slice so we don't accidentally grab unrelated /ingredients/ links
-  // from elsewhere on the page (related products, etc.).
-  const slice = html.slice(start, start + 60_000);
+  // Stop the slice BEFORE "ingredients_explained" (a sibling section that
+  // also contains /ingredients/ links) so we only capture the real INCI list.
+  const explainedAt = html.indexOf('id="ingredients_explained"', start);
+  const end = explainedAt > start ? explainedAt : start + 60_000;
+  const slice = html.slice(start, end);
   const out: string[] = [];
   const seen = new Set<string>();
   const linkRe = /<a[^>]+href="\/ingredients\/[a-z0-9-]+"[^>]*>([\s\S]*?)<\/a>/gi;
   let m: RegExpExecArray | null;
   while ((m = linkRe.exec(slice)) !== null) {
-    // The anchor often wraps additional spans (descriptions, ratings).
-    // The first non-empty text node is the ingredient name.
     const inner = m[1];
     const nameMatch = inner.match(/>\s*([^<>]{1,80}?)\s*</) || inner.match(/^\s*([^<>\n]{1,80}?)\s*$/);
     const raw = nameMatch ? nameMatch[1] : stripTags(inner).split("\n")[0];

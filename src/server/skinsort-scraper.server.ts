@@ -39,14 +39,21 @@ async function fetchHtml(url: string): Promise<string | null> {
     const res = await fetch(url, {
       signal: ctrl.signal,
       headers: {
+        // Pose as a real browser. SkinSort returns 403/empty for unknown bot UAs.
         "user-agent":
-          "Mozilla/5.0 (compatible; DupliBot/1.0; +https://dupli.lovable.app)",
-        accept: "text/html,application/xhtml+xml",
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[skinsort-scraper] fetch ${res.status} for ${url}`);
+      return null;
+    }
     return await res.text();
-  } catch {
+  } catch (err) {
+    console.warn(`[skinsort-scraper] fetch error for ${url}:`, err);
     return null;
   } finally {
     clearTimeout(t);
@@ -58,9 +65,16 @@ async function fetchHtml(url: string): Promise<string | null> {
 // product-only pages may not have any dupes (parseSkinsortPage returns null
 // in that case) and we still want their ingredients.
 function extractIngredients(html: string): string[] {
-  const start = html.indexOf('id="ingredients_list"');
+  // SkinSort renders the INCI list inside <section id="ingredients"> (the
+  // legacy id was "ingredients_list" — kept as a fallback for safety).
+  let start = html.search(/id="ingredients"(?![_a-z])/i);
+  if (start < 0) start = html.indexOf('id="ingredients_list"');
   if (start < 0) return [];
-  const slice = html.slice(start, start + 60_000);
+  // Stop the slice BEFORE "ingredients_explained" (a separate downstream
+  // section) so we don't pick up unrelated ingredient links.
+  const explainedAt = html.indexOf('id="ingredients_explained"', start);
+  const end = explainedAt > start ? explainedAt : start + 60_000;
+  const slice = html.slice(start, end);
   const out: string[] = [];
   const seen = new Set<string>();
   const linkRe = /<a[^>]+href="\/ingredients\/[a-z0-9-]+"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -138,6 +152,10 @@ export async function ensureProductData(
       return { ingredients, vendors };
     }
 
+    console.log(
+      `[skinsort-scraper] enrich ${row.brand_slug}/${row.product_slug} needIng=${needIngredients} needVendors=${needVendors}`,
+    );
+
     await withSlot(async () => {
       // 1. Fetch product HTML for ingredients (only if missing).
       if (needIngredients) {
@@ -146,6 +164,9 @@ export async function ensureProductData(
         );
         if (html) {
           const parsed = extractIngredients(html);
+          console.log(
+            `[skinsort-scraper] ingredients ${row.product_slug}: ${parsed.length}`,
+          );
           if (parsed.length > 0) {
             ingredients = parsed;
             await supabaseAdmin
@@ -163,6 +184,9 @@ export async function ensureProductData(
         );
         if (html) {
           const parsed = parseSkinsortVendors(html);
+          console.log(
+            `[skinsort-scraper] vendors ${row.product_slug}: ${parsed.length}`,
+          );
           if (parsed.length > 0) {
             // Replace cached vendor set atomically (delete then insert).
             await supabaseAdmin
