@@ -787,36 +787,22 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     `[dupedb] HIT via ${product.matchStrategy}: "${brand} / ${productName}" -> "${product.brand_name} / ${product.product_name}"`,
   );
 
-  const { data: dupeRows } = await supabaseAdmin
-    .from("dupes")
-    .select(
-      `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
-    )
-    .eq("original_product_id", product.id)
-    .order("overall_match", { ascending: false })
-    .limit(1);
+  // The dupe graph is stored directionally but real-world dupes are symmetric:
+  // if A is a dupe of B, then B is also a dupe of A. Query BOTH directions.
+  const bidirectional = await fetchBestCounterpart(product.id);
+  let top = bidirectional?.top;
+  let topDupe = bidirectional?.counterpart;
 
-  let top: {
-    overall_match: number;
-    ingredient_match: number | null;
-    shared_ingredients_count: number | null;
-    rationale: string | null;
-  } | undefined = (dupeRows ?? [])[0];
-  let topDupe = ((dupeRows ?? [])[0] as unknown as {
-    dupe?: { brand_name: string; product_name: string; category: string | null; image_url: string | null } | null;
-  })?.dupe ?? undefined;
-
-  // TIER 5: sibling fallback. The matched product has no dupe edges, but a
-  // sibling SKU in the same brand might. Walk the graph from there.
+  // TIER 5: sibling fallback. The matched product has no edges in EITHER
+  // direction, but a sibling SKU in the same brand might. Walk the graph.
   if (!top || !topDupe) {
     const sibling = await findSiblingWithDupes(product);
     if (sibling) {
       console.log(
-        `[dupedb] sibling-fallback: "${product.product_name}" -> "${sibling.product.product_name}" -> dupe`,
+        `[dupedb] sibling-fallback: "${product.product_name}" -> "${sibling.product.product_name}" -> "${sibling.counterpart.product_name}"`,
       );
       top = sibling.top;
-      topDupe = sibling.topDupe;
+      topDupe = sibling.counterpart;
     }
   }
 
@@ -853,11 +839,76 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
   }
 }
 
+type CounterpartProduct = {
+  brand_name: string;
+  product_name: string;
+  category: string | null;
+  image_url: string | null;
+};
+type CounterpartHit = {
+  top: {
+    overall_match: number;
+    ingredient_match: number | null;
+    shared_ingredients_count: number | null;
+    rationale: string | null;
+  };
+  counterpart: CounterpartProduct;
+};
+
 /**
- * When the matched product itself has no rows in `dupes`, look for a sibling
- * SKU in the same brand that shares the most name tokens AND has dupe edges.
- * This lets us surface a credible dupe even for product variants SkinSort
- * didn't compare directly.
+ * Fetch the best dupe counterpart for a given product, walking BOTH directions
+ * of the dupe edge. Real-world dupe relationships are symmetric: if A is a
+ * dupe of B then B is also a dupe of A. SkinSort stored them as a directed
+ * edge, so a single-direction query misses ~6× the available data.
+ */
+async function fetchBestCounterpart(productId: string): Promise<CounterpartHit | null> {
+  // Direction 1: this product is the original; counterparts are its listed dupes.
+  const { data: outRows } = await supabaseAdmin
+    .from("dupes")
+    .select(
+      `overall_match, ingredient_match, shared_ingredients_count, rationale,
+       counterpart:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
+    )
+    .eq("original_product_id", productId)
+    .order("overall_match", { ascending: false })
+    .limit(1);
+
+  // Direction 2: this product IS the dupe of something else — that something
+  // is a credible counterpart too (a name-brand original we can recommend back).
+  const { data: inRows } = await supabaseAdmin
+    .from("dupes")
+    .select(
+      `overall_match, ingredient_match, shared_ingredients_count, rationale,
+       counterpart:products!dupes_original_product_id_fkey ( brand_name, product_name, category, image_url )`,
+    )
+    .eq("dupe_product_id", productId)
+    .order("overall_match", { ascending: false })
+    .limit(1);
+
+  const candidates: CounterpartHit[] = [];
+  for (const r of [...(outRows ?? []), ...(inRows ?? [])]) {
+    const cp = (r as unknown as { counterpart?: CounterpartProduct | null }).counterpart;
+    if (cp && r.overall_match != null) {
+      candidates.push({
+        top: {
+          overall_match: r.overall_match,
+          ingredient_match: r.ingredient_match,
+          shared_ingredients_count: r.shared_ingredients_count,
+          rationale: r.rationale,
+        },
+        counterpart: cp,
+      });
+    }
+  }
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.top.overall_match - a.top.overall_match);
+  return candidates[0];
+}
+
+/**
+ * When the matched product has no edges in either direction, look for a
+ * sibling SKU in the same brand that DOES have edges (either direction) and
+ * return its best counterpart.
  */
 async function findSiblingWithDupes(matched: {
   id: string;
@@ -866,8 +917,8 @@ async function findSiblingWithDupes(matched: {
 }): Promise<
   | {
       product: { id: string; brand_name: string; product_name: string };
-      top: { overall_match: number; ingredient_match: number | null; shared_ingredients_count: number | null; rationale: string | null };
-      topDupe: { brand_name: string; product_name: string; category: string | null; image_url: string | null };
+      top: CounterpartHit["top"];
+      counterpart: CounterpartProduct;
     }
   | null
 > {
@@ -884,31 +935,19 @@ async function findSiblingWithDupes(matched: {
   // Rank siblings by name similarity to the matched product.
   const ranked = siblings
     .map((s) => ({ s, score: trigramSimilarity(matched.product_name, s.product_name) }))
-    .filter((r) => r.score >= 0.25)
+    .filter((r) => r.score >= 0.2)
     .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+    .slice(0, 8);
 
   for (const { s } of ranked) {
-    const { data: rows } = await supabaseAdmin
-      .from("dupes")
-      .select(
-        `overall_match, ingredient_match, shared_ingredients_count, rationale,
-         dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
-      )
-      .eq("original_product_id", s.id)
-      .order("overall_match", { ascending: false })
-      .limit(1);
-    const top = (rows ?? [])[0];
-    const topDupe = top?.dupe as
-      | { brand_name: string; product_name: string; category: string | null; image_url: string | null }
-      | null
-      | undefined;
-    if (top && topDupe) {
-      return { product: s, top, topDupe };
+    const hit = await fetchBestCounterpart(s.id);
+    if (hit) {
+      return { product: s, top: hit.top, counterpart: hit.counterpart };
     }
   }
   return null;
 }
+
 
 // Smart 3-tier product lookup. AI rarely returns SkinSort's exact wording,
 // so exact slug match alone misses ~80% of real hits. We expand with
