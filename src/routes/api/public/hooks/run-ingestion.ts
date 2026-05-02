@@ -1,17 +1,12 @@
-// Drains N pending queue items, calling ingest-product for each with rate limiting.
-// Token-protected. Designed to be called by pg_cron once a minute.
+// Drains N pending queue items by fan-out: fires ingest-product as parallel
+// sub-requests (each runs in its own Worker invocation with its own timeout
+// budget), and returns immediately. Token-protected. Called by pg_cron.
 
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const DEFAULT_BATCH = 8; // keep total under ~30s worker budget
-const MIN_DELAY_MS = 250;
-const JITTER_MS = 200;
-
-
-function sleep(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+const DEFAULT_BATCH = 8;
+const MAX_BATCH = 20;
 
 export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
   server: {
@@ -30,11 +25,11 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
         } catch {
           // empty body is fine
         }
-        const batch = Math.min(Math.max(body.batch ?? DEFAULT_BATCH, 1), 15);
+        const batch = Math.min(Math.max(body.batch ?? DEFAULT_BATCH, 1), MAX_BATCH);
 
-        // Reclaim items stuck in "processing" — a previous worker timed out.
-        // Safe because cron runs sequentially (every minute) and each invocation
-        // completes within its own timeout budget.
+        // Reclaim items stuck in "processing" — likely from a worker that timed out.
+        // Cron runs every minute and individual ingests finish in <30s, so anything
+        // still "processing" at the start of a new tick is stale.
         await supabaseAdmin
           .from("ingestion_queue")
           .update({ status: "pending" })
@@ -66,54 +61,30 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
           .in("id", ids);
 
         const origin = new URL(request.url).origin;
-        const results: { id: string; ok: boolean; status?: number }[] = [];
-        let consecutive429 = 0;
 
+        // Fan out: fire all ingest-product sub-requests in parallel without
+        // awaiting their bodies. Each sub-request gets its own worker timeout.
+        // We don't `await` the fetches in this handler so we can return fast.
         for (const pick of picks) {
-          const start = Date.now();
-          try {
-            const res = await fetch(`${origin}/api/public/hooks/ingest-product`, {
-              method: "POST",
-              headers: {
-                "content-type": "application/json",
-                authorization: `Bearer ${expected}`,
-              },
-              body: JSON.stringify({
-                brandSlug: pick.brand_slug,
-                productSlug: pick.product_slug,
-                queueId: pick.id,
-              }),
-            });
-            results.push({ id: pick.id, ok: res.ok, status: res.status });
-            if (res.status === 429) {
-              consecutive429++;
-              if (consecutive429 >= 3) {
-                console.warn("[ingestion] hit 3 consecutive 429s, stopping batch");
-                break;
-              }
-              await sleep(5000);
-            } else {
-              consecutive429 = 0;
-            }
-          } catch (e) {
-            console.error("[ingestion] item failed", pick.id, e);
-            await supabaseAdmin
-              .from("ingestion_queue")
-              .update({
-                status: "failed",
-                last_error: e instanceof Error ? e.message : String(e),
-              })
-              .eq("id", pick.id);
-            results.push({ id: pick.id, ok: false });
-          }
-
-          const elapsed = Date.now() - start;
-          const wait = Math.max(0, MIN_DELAY_MS + Math.floor(Math.random() * JITTER_MS) - elapsed);
-          if (wait > 0) await sleep(wait);
+          // Intentionally not awaited — fire-and-forget.
+          fetch(`${origin}/api/public/hooks/ingest-product`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${expected}`,
+            },
+            body: JSON.stringify({
+              brandSlug: pick.brand_slug,
+              productSlug: pick.product_slug,
+              queueId: pick.id,
+            }),
+          }).catch((e) => {
+            console.error("[ingestion] fan-out fetch failed", pick.id, e);
+          });
         }
 
         return new Response(
-          JSON.stringify({ ok: true, processed: results.length, results }),
+          JSON.stringify({ ok: true, dispatched: picks.length, ids }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
       },
