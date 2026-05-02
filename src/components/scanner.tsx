@@ -47,7 +47,7 @@ export function Scanner() {
   const toggleSaved = useServerFn(setSaved);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
-  const persistPromiseRef = useRef<Promise<{ id?: string }> | null>(null);
+  const persistPromiseRef = useRef<Promise<{ id: string | null }> | null>(null);
   const navigate = useNavigate();
   const [preparingShare, setPreparingShare] = useState(false);
 
