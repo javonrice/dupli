@@ -751,7 +751,21 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
 
   const brand = analysis.original.brand;
   const productName = analysis.original.productName;
-  const product = await findProductSmart(brand, productName);
+  const keyIngredients = analysis.original.keyIngredients ?? [];
+  let product = await findProductSmart(brand, productName);
+
+  // TIER 4.5: category-inferred cross-brand fallback. The brand is unknown to
+  // us OR we couldn't find any plausible product, but we can still derive a
+  // category from the name and find the best ingredient-overlap match.
+  if (!product) {
+    const inferred = await findByCategoryAndIngredients(productName, keyIngredients);
+    if (inferred) {
+      console.log(
+        `[dupedb] HIT via category_ingredients(${inferred.score.toFixed(2)}): "${brand} / ${productName}" -> "${inferred.product.brand_name} / ${inferred.product.product_name}"`,
+      );
+      product = { ...inferred.product, matchStrategy: `category_ingredients(${inferred.score.toFixed(2)})` };
+    }
+  }
 
   if (!product) {
     if (isJunkBrand(brand)) {
@@ -907,7 +921,27 @@ async function findProductSmart(
   | null
 > {
   const brandSlug = slugify(brand);
-  const brandSlugs = brandSlugVariants(brand);
+  const seedSlugs = brandSlugVariants(brand);
+  // Forward brand-alias resolution: ask the DB for any brand_slug that starts
+  // with our shortest core token (e.g. "nyx" -> "nyx-cosmetics"). This is the
+  // direction stripping alone can't reach. Restrict to slugs ≥ 3 chars to
+  // avoid matching every brand starting with "a".
+  const coreTokens = seedSlugs
+    .filter((s) => s.length >= 3 && !s.startsWith("the-"))
+    .sort((a, b) => a.length - b.length);
+  const brandSlugSet = new Set(seedSlugs);
+  if (coreTokens.length > 0) {
+    const shortest = coreTokens[0];
+    const { data: aliasRows } = await supabaseAdmin
+      .from("products")
+      .select("brand_slug")
+      .or(`brand_slug.like.${shortest}-%,brand_slug.eq.${shortest}`)
+      .limit(50);
+    for (const row of aliasRows ?? []) {
+      if (row.brand_slug) brandSlugSet.add(row.brand_slug);
+    }
+  }
+  const brandSlugs = Array.from(brandSlugSet);
   const productSlug = slugify(productName);
 
   // TIER 1: exact slug
@@ -956,6 +990,16 @@ async function findProductSmart(
     }
   }
 
+  // TIER 4: sibling-as-original. Brand was found, exact product wasn't, but a
+  // brand sibling exists with at least minimal name overlap. Use that sibling
+  // as the matched product so we can walk its dupe edges instead of giving up.
+  if (tier2Best && tier2Best.score >= 0.15) {
+    return {
+      ...tier2Best.product,
+      matchStrategy: `sibling_as_original(${tier2Best.score.toFixed(2)})`,
+    };
+  }
+
   console.log(
     `[dupedb] no-match diagnostics: brand="${brand}" slug="${brandSlug}" variants="${brandSlugs.join(",")}" tier2_candidates=${tier2Count} tier2_best=${
       tier2Best ? `"${tier2Best.product.brand_name} / ${tier2Best.product.product_name}" @ ${tier2Best.score.toFixed(2)}` : "none"
@@ -963,6 +1007,82 @@ async function findProductSmart(
   );
 
   return null;
+}
+
+/**
+ * Infer a category token from a product name and find the best cross-brand
+ * match by name + ingredient overlap (using the AI's keyIngredients) within
+ * that category. Used when the brand is entirely absent from our DB.
+ */
+const CATEGORY_TOKENS = [
+  "concealer", "foundation", "primer", "lipstick", "lipgloss",
+  "mascara", "eyeliner", "eyeshadow", "blush", "bronzer", "highlighter",
+  "powder",
+  "serum", "essence", "toner", "moisturizer", "moisturiser", "cream",
+  "lotion", "balm", "ointment",
+  "cleanser", "wash", "soap",
+  "mask", "scrub", "exfoliant", "peel",
+  "sunscreen", "spf",
+  "shampoo", "conditioner",
+  "deodorant", "antiperspirant",
+  "oil", "mist", "spray",
+];
+
+function inferCategory(productName: string): string | null {
+  const tokens = tokenize(productName);
+  for (const cat of CATEGORY_TOKENS) {
+    if (tokens.includes(cat)) return cat;
+  }
+  return null;
+}
+
+async function findByCategoryAndIngredients(
+  productName: string,
+  keyIngredients: string[],
+): Promise<
+  | { product: { id: string; brand_name: string; product_name: string }; score: number }
+  | null
+> {
+  const category = inferCategory(productName);
+  if (!category) return null;
+
+  const { data: candidates } = await supabaseAdmin
+    .from("products")
+    .select("id, brand_name, product_name")
+    .ilike("product_name", `%${category}%`)
+    .limit(300);
+
+  if (!candidates || candidates.length === 0) return null;
+
+  const qTokens = new Set(tokenize(productName));
+  const ingredientTokens = new Set(
+    keyIngredients
+      .flatMap((i) => tokenize(i))
+      .filter((t) => HEADLINE_ACTIVES.has(t) || t.length >= 5),
+  );
+
+  let best: { product: { id: string; brand_name: string; product_name: string }; score: number } | null = null;
+  for (const c of candidates) {
+    const cTokens = new Set(tokenize(c.product_name));
+    if (cTokens.size === 0) continue;
+
+    let nameOverlap = 0;
+    for (const t of qTokens) if (cTokens.has(t)) nameOverlap++;
+    const jaccard = nameOverlap / (qTokens.size + cTokens.size - nameOverlap || 1);
+
+    let ingredientOverlap = 0;
+    for (const t of ingredientTokens) if (cTokens.has(t)) ingredientOverlap++;
+    const ingredientBonus = ingredientTokens.size > 0
+      ? (ingredientOverlap / ingredientTokens.size) * 0.4
+      : 0;
+
+    const score = jaccard + ingredientBonus;
+    if (!best || score > best.score) best = { product: c, score };
+  }
+
+  // Require some signal beyond just matching the category word.
+  if (!best || best.score < 0.25) return null;
+  return best;
 }
 
 /**
