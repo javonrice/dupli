@@ -65,9 +65,16 @@ async function fetchHtml(url: string): Promise<string | null> {
 // product-only pages may not have any dupes (parseSkinsortPage returns null
 // in that case) and we still want their ingredients.
 function extractIngredients(html: string): string[] {
-  const start = html.indexOf('id="ingredients_list"');
+  // SkinSort renders the INCI list inside <section id="ingredients"> (the
+  // legacy id was "ingredients_list" — kept as a fallback for safety).
+  let start = html.search(/id="ingredients"(?![_a-z])/i);
+  if (start < 0) start = html.indexOf('id="ingredients_list"');
   if (start < 0) return [];
-  const slice = html.slice(start, start + 60_000);
+  // Stop the slice BEFORE "ingredients_explained" (a separate downstream
+  // section) so we don't pick up unrelated ingredient links.
+  const explainedAt = html.indexOf('id="ingredients_explained"', start);
+  const end = explainedAt > start ? explainedAt : start + 60_000;
+  const slice = html.slice(start, end);
   const out: string[] = [];
   const seen = new Set<string>();
   const linkRe = /<a[^>]+href="\/ingredients\/[a-z0-9-]+"[^>]*>([\s\S]*?)<\/a>/gi;
