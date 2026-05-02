@@ -231,10 +231,115 @@ export function parseSkinsortPage(
     freeFrom: [],
     goodFor: [],
     contains: [],
+    ingredients: pickIngredients(html),
+    variantId: pickVariantId(html),
   };
 
   // Override brand slug back to the URL slug if it doesn't match (slug is canonical).
   product.brandSlug = fallbackBrandSlug;
 
   return { product, dupes };
+}
+
+// SkinSort renders the full INCI list inside `#ingredients_list` as a series
+// of <a href="/ingredients/{slug}"> links. Each link's visible text is the
+// canonical INCI name (e.g. "Glycerin", "Cetearyl Alcohol"). We pull them in
+// document order so the user sees the same ordering SkinSort shows.
+function pickIngredients(html: string): string[] {
+  const start = html.indexOf('id="ingredients_list"');
+  if (start < 0) return [];
+  // Bound the slice so we don't accidentally grab unrelated /ingredients/ links
+  // from elsewhere on the page (related products, etc.).
+  const slice = html.slice(start, start + 60_000);
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const linkRe = /<a[^>]+href="\/ingredients\/[a-z0-9-]+"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(slice)) !== null) {
+    // The anchor often wraps additional spans (descriptions, ratings).
+    // The first non-empty text node is the ingredient name.
+    const inner = m[1];
+    const nameMatch = inner.match(/>\s*([^<>]{1,80}?)\s*</) || inner.match(/^\s*([^<>\n]{1,80}?)\s*$/);
+    const raw = nameMatch ? nameMatch[1] : stripTags(inner).split("\n")[0];
+    const name = decodeEntities(raw).trim();
+    if (!name || name.length > 80) continue;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+    if (out.length >= 80) break;
+  }
+  return out;
+}
+
+function pickVariantId(html: string): number | null {
+  // Several stable anchors carry the numeric variant id, e.g.:
+  //   id="vendors_product_2216"  src="/products/.../us/vendors"
+  //   id="new_comparison_product_2216"
+  const m =
+    html.match(/id="vendors_product_(\d+)"/i) ||
+    html.match(/id="new_comparison_product_(\d+)"/i) ||
+    html.match(/data-product-id="(\d+)"/i);
+  return m ? Number(m[1]) : null;
+}
+
+// SkinSort's `/products/{brand}/{slug}/us/vendors` page is a clean list of
+// merchant rows with logo, deep link, and a price chip like "$15.99".
+export function parseSkinsortVendors(html: string): ParsedVendor[] {
+  const out: ParsedVendor[] = [];
+  const seen = new Set<string>();
+
+  // Each row is an <a class="..."> wrapping a flex with merchant name + price.
+  // We split by <a ...href="..."> openings inside the vendors list.
+  const rowRe = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  let rank = 0;
+  while ((m = rowRe.exec(html)) !== null) {
+    const href = decodeEntities(m[1]);
+    const inner = m[2];
+    // Skip non-vendor links (icons in the header, "back" links, etc.).
+    // Vendor rows always include a merchant_icons logo image.
+    if (!/merchant_icons/i.test(inner)) continue;
+
+    // Merchant name: first <span> after the logo. Fallback to alt text.
+    let merchant = "";
+    const nameSpan = inner.match(/<span[^>]*>\s*([A-Za-z0-9 .&'+-]{2,40}?)\s*<\/span>/);
+    if (nameSpan) merchant = decodeEntities(nameSpan[1]).trim();
+    if (!merchant) {
+      const alt = inner.match(/alt="([^"]+?)\s*Logo"/i);
+      if (alt) merchant = decodeEntities(alt[1]).trim();
+    }
+    if (!merchant) continue;
+
+    // Price chip: "$15.99" — first $-prefixed number in the row.
+    let priceUsd: number | null = null;
+    const priceMatch = inner.match(/\$\s*(\d{1,4}(?:\.\d{1,2})?)/);
+    if (priceMatch) {
+      const n = Number(priceMatch[1]);
+      if (Number.isFinite(n) && n > 0 && n < 10_000) priceUsd = n;
+    }
+
+    // Resolve viglink / redirect wrappers to the underlying retailer URL when
+    // possible — keeps the "go to Target" affordance honest in the UI.
+    let url = href;
+    const viglinkU = url.match(/[?&]u=([^&]+)/);
+    if (viglinkU && /redirect\.viglink\.com/i.test(url)) {
+      try {
+        url = decodeURIComponent(viglinkU[1]);
+      } catch {
+        /* keep wrapped url */
+      }
+    }
+    if (!/^https?:\/\//i.test(url)) continue;
+
+    const key = merchant.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    rank += 1;
+    out.push({ merchant, url, priceUsd, currency: "USD", rank });
+    if (out.length >= 12) break;
+  }
+
+  return out;
 }
