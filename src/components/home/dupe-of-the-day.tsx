@@ -7,8 +7,8 @@ export function DupeOfTheDay({ dupe }: { dupe: CommunityDupe | null }) {
   if (!dupe) return null;
   return (
     <Link
-      to="/community/$brand/$product"
-      params={{ brand: dupe.original.brandSlug, product: dupe.original.productSlug }}
+      to="/p/$productId"
+      params={{ productId: dupe.dupe.id }}
       className="tap group block overflow-hidden rounded-[20px] border border-border bg-card shadow-lift"
     >
       <div className="flex items-center justify-between border-b border-border bg-secondary/60 px-4 py-2.5">
@@ -29,19 +29,21 @@ export function DupeOfTheDay({ dupe }: { dupe: CommunityDupe | null }) {
           brand={dupe.original.brand}
           name={dupe.original.productName}
           imageUrl={dupe.original.imageUrl}
+          priceUsd={dupe.original.lowestPriceUsd}
         />
         <HeroSide
           label="The dupe"
           brand={dupe.dupe.brand}
           name={dupe.dupe.productName}
           imageUrl={dupe.dupe.imageUrl}
+          priceUsd={dupe.dupe.lowestPriceUsd}
           emphasized
         />
       </div>
 
       <div className="flex items-center justify-between border-t border-border px-4 py-3">
         <span className="text-[12px] text-muted-foreground">
-          See ingredients & verdict
+          See ingredients & where to buy
         </span>
         <ArrowRight
           className="h-4 w-4 text-foreground transition-transform group-hover:translate-x-0.5"
@@ -57,12 +59,14 @@ function HeroSide({
   brand,
   name,
   imageUrl,
+  priceUsd,
   emphasized = false,
 }: {
   label: string;
   brand: string;
   name: string;
   imageUrl: string | null;
+  priceUsd: number | null;
   emphasized?: boolean;
 }) {
   return (
@@ -91,6 +95,11 @@ function HeroSide({
       <h3 className="mt-0.5 line-clamp-2 font-display text-[14px] font-semibold leading-tight">
         {name}
       </h3>
+      {priceUsd != null && (
+        <div className="mt-1.5 font-display text-[14px] font-bold tabular-nums text-foreground">
+          ${priceUsd.toFixed(2)}
+        </div>
+      )}
     </div>
   );
 }
