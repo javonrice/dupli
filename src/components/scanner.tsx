@@ -138,7 +138,14 @@ export function Scanner() {
       {stage === "scanning" && <ScanningScreen preview={preview} />}
 
       {stage === "results" && analysis && (
-        <ResultsScreen analysis={analysis} preview={preview} onReset={reset} />
+        <ResultsScreen
+          analysis={analysis}
+          preview={preview}
+          isSaved={isSaved}
+          canSave={!!scanId}
+          onToggleSave={handleToggleSave}
+          onReset={reset}
+        />
       )}
     </>
   );
