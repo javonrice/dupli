@@ -754,13 +754,17 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
   const product = await findProductSmart(brand, productName);
 
   if (!product) {
-    await supabaseAdmin.from("ingestion_queue").insert({
-      brand_slug: slugify(brand),
-      product_slug: slugify(productName),
-      reason: "user_scan_miss",
-      priority: 10,
-    });
-    console.log(`[dupedb] MISS: "${brand} / ${productName}" (no fuzzy match)`);
+    if (isJunkBrand(brand)) {
+      console.log(`[dupedb] MISS (skipped queue, junk brand): "${brand} / ${productName}"`);
+    } else {
+      await supabaseAdmin.from("ingestion_queue").insert({
+        brand_slug: slugify(brand),
+        product_slug: slugify(productName),
+        reason: "user_scan_miss",
+        priority: 10,
+      });
+      console.log(`[dupedb] MISS: "${brand} / ${productName}" (no fuzzy match)`);
+    }
     forceNoDupe(analysis);
     return;
   }
