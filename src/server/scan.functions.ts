@@ -68,12 +68,12 @@ export const scanProduct = createServerFn({ method: "POST" })
             {
               role: "system",
               content: [
-                "You are a licensed esthetician helping a real shopper standing in a Dollar Tree, drugstore, or beauty aisle decide whether a cheaper product is a credible swap for a name brand — and whether that swap is SAFE.",
+                "You are a practical beauty dupe scanner. A shopper may scan a name-brand product, an affordable lookalike, or a normal product that simply needs a lower-cost alternative.",
                 "Dupe culture is about TWO things, not just price:",
                 "(a) LOOKALIKE PACKAGING — the cheap product is intentionally designed to mimic a name brand (color palette, bottle shape, font, label layout). Treat visual mimicry as a first-class signal. If the photo shows an obvious lookalike (e.g. an XtraCare body balm copying Vaseline, a Dermasil tube copying Summer Fridays, an XtraCare cleanser saying 'Compare to Neutrogena'), the dupe IS that name brand even when the price gap is small.",
                 "(b) FORMULA — does the cheaper product actually deliver the same actives at usable percentages, or does it strip them out / swap in cheaper, riskier substitutes?",
                 "Step 1: Identify the product in the image (name, brand, category, typical retail price, key actives).",
-                "Step 2: Identify what it is duping or being duped by — the real name-brand counterpart. Always provide a buyUrl (retailer product page, or a retailer search URL).",
+                "Step 2: If the scanned item is affordable/lookalike, identify the name-brand counterpart. If the scanned item is name-brand, identify a credible affordable dupe. If no clear lookalike exists, pick the closest formula/use-case alternative. Always provide a buyUrl (retailer product page, or a retailer search URL).",
                 "Step 3: Set dupeType: 'Lookalike packaging' (visual copy, formula differs), 'Formula dupe' (formula matches but packaging is its own thing), 'Both', or 'Neither'.",
                 "Step 4: Score packagingSimilarity 0-100 honestly based on color, shape, typography, label layout. A bottle that just shares a color gets ~30; a near-clone with matching font and silhouette gets 85+.",
                 "Step 5: Compare formulas. sharedIngredients (actives in BOTH), uniqueToOriginal (only original), uniqueToDupe (only dupe). Use canonical INCI names, 0-6 per list, never repeat across lists, prioritize meaningful actives over water/fillers.",
@@ -93,13 +93,16 @@ export const scanProduct = createServerFn({ method: "POST" })
                 "  - 'Skip' = not a real dupe, or actively worse in ways that matter",
                 "  - 'No dupe found' = no credible counterpart exists",
                 "If you genuinely cannot find a credible dupe, set dupe to null, verdict 'No dupe found', and leave comparison/risk lists empty.",
-                "Always call analyze_dupe exactly once. Never invent a fake brand.",
+                "Always call analyze_dupe exactly once. Never invent a fake brand, but do not fail just because the product is ordinary — give the best practical comparison you can.",
               ].join(" "),
             },
             {
               role: "user",
               content: [
-                { type: "text", text: "Identify this product, find its name-brand counterpart (or the dupe being copied), and tell me whether the swap is safe." },
+                {
+                  type: "text",
+                  text: "Identify this product, find the best dupe/counterpart for a normal shopper, and tell me whether the swap is safe.",
+                },
                 { type: "image_url", image_url: { url: data.imageDataUrl } },
               ],
             },
@@ -118,11 +121,28 @@ export const scanProduct = createServerFn({ method: "POST" })
                       properties: {
                         productName: { type: "string" },
                         brand: { type: "string" },
-                        category: { type: "string", description: "e.g. Serum, Face Mist, Eye Cream, Moisturizer, Mask, Cleanser, Lipstick" },
-                        estimatedPriceUsd: { type: "number", description: "Approximate retail price in USD" },
-                        keyIngredients: { type: "array", items: { type: "string" }, description: "3-6 key actives" },
+                        category: {
+                          type: "string",
+                          description:
+                            "e.g. Serum, Face Mist, Eye Cream, Moisturizer, Mask, Cleanser, Lipstick",
+                        },
+                        estimatedPriceUsd: {
+                          type: "number",
+                          description: "Approximate retail price in USD",
+                        },
+                        keyIngredients: {
+                          type: "array",
+                          items: { type: "string" },
+                          description: "3-6 key actives",
+                        },
                       },
-                      required: ["productName", "brand", "category", "estimatedPriceUsd", "keyIngredients"],
+                      required: [
+                        "productName",
+                        "brand",
+                        "category",
+                        "estimatedPriceUsd",
+                        "keyIngredients",
+                      ],
                       additionalProperties: false,
                     },
                     dupe: {
@@ -134,44 +154,130 @@ export const scanProduct = createServerFn({ method: "POST" })
                             brand: { type: "string" },
                             category: { type: "string" },
                             estimatedPriceUsd: { type: "number" },
-                            whereToBuy: { type: "string", description: "Retailer name, e.g. Dollar Tree, Target, Amazon, CVS" },
-                            buyUrl: { type: "string", description: "A direct, working URL where the user can buy or view the dupe. Prefer the retailer's product page. If a precise product page URL isn't known, use a retailer search URL such as https://www.amazon.com/s?k=<product+name+brand> or https://www.target.com/s?searchTerm=<product+name+brand>. Always return a valid https URL." },
+                            whereToBuy: {
+                              type: "string",
+                              description: "Retailer name, e.g. Dollar Tree, Target, Amazon, CVS",
+                            },
+                            buyUrl: {
+                              type: "string",
+                              description:
+                                "A direct, working URL where the user can buy or view the dupe. Prefer the retailer's product page. If a precise product page URL isn't known, use a retailer search URL such as https://www.amazon.com/s?k=<product+name+brand> or https://www.target.com/s?searchTerm=<product+name+brand>. Always return a valid https URL.",
+                            },
                             keyIngredients: { type: "array", items: { type: "string" } },
                           },
-                          required: ["productName", "brand", "category", "estimatedPriceUsd", "whereToBuy", "buyUrl", "keyIngredients"],
+                          required: [
+                            "productName",
+                            "brand",
+                            "category",
+                            "estimatedPriceUsd",
+                            "whereToBuy",
+                            "buyUrl",
+                            "keyIngredients",
+                          ],
                           additionalProperties: false,
                         },
                         { type: "null" },
                       ],
                     },
                     matchScore: { type: "number", minimum: 0, maximum: 100 },
-                    verdict: { type: "string", enum: ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"] },
-                    notes: { type: "string", description: "1-2 sentences from a licensed esthetician's perspective." },
-                    bestFor: { type: "array", items: { type: "string" }, description: "2-4 short use-case tags, e.g. 'Anti-aging', 'Dry skin'." },
+                    verdict: {
+                      type: "string",
+                      enum: ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"],
+                    },
+                    notes: {
+                      type: "string",
+                      description: "1-2 sentences from a licensed esthetician's perspective.",
+                    },
+                    bestFor: {
+                      type: "array",
+                      items: { type: "string" },
+                      description: "2-4 short use-case tags, e.g. 'Anti-aging', 'Dry skin'.",
+                    },
                     confidence: { type: "string", enum: ["high", "medium", "low"] },
-                    sharedIngredients: { type: "array", items: { type: "string" }, description: "Active ingredients present in BOTH formulas (canonical INCI names, 0-6 items). Empty array if no dupe." },
-                    uniqueToOriginal: { type: "array", items: { type: "string" }, description: "Notable actives only in the original (canonical INCI, 0-6 items). Empty array if no dupe." },
-                    uniqueToDupe: { type: "array", items: { type: "string" }, description: "Notable actives only in the dupe (canonical INCI, 0-6 items). Empty array if no dupe." },
-                    contextMatch: { type: "string", description: "ONE sentence on WHY these match beyond ingredients (skin concern, texture, finish). Empty string if no dupe." },
-                    dupeType: { type: "string", enum: ["Lookalike packaging", "Formula dupe", "Both", "Neither"], description: "Why this qualifies as a dupe. 'Neither' if no dupe found." },
-                    packagingSimilarity: { type: "number", minimum: 0, maximum: 100, description: "How visually similar the dupe's packaging is to the original (0-100). 0 if no dupe." },
-                    riskLevel: { type: "string", enum: ["Lower risk", "Comparable", "Higher risk"], description: "Switching risk. Use 'Comparable' as the safe default if no dupe." },
-                    riskFactors: { type: "array", items: { type: "string" }, description: "0-4 short specific concerns about the dupe ('Added fragrance', 'Denatured alcohol high in INCI'). Empty if none." },
-                    missingActives: { type: "array", items: { type: "string" }, description: "0-4 actives the original has that the dupe drops. Empty if nothing meaningful is lost." },
-                    safetyNote: { type: "string", description: "ONE plain-English esthetician sentence about who/where this dupe is OK to use. Empty string if no dupe." },
+                    sharedIngredients: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "Active ingredients present in BOTH formulas (canonical INCI names, 0-6 items). Empty array if no dupe.",
+                    },
+                    uniqueToOriginal: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "Notable actives only in the original (canonical INCI, 0-6 items). Empty array if no dupe.",
+                    },
+                    uniqueToDupe: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "Notable actives only in the dupe (canonical INCI, 0-6 items). Empty array if no dupe.",
+                    },
+                    contextMatch: {
+                      type: "string",
+                      description:
+                        "ONE sentence on WHY these match beyond ingredients (skin concern, texture, finish). Empty string if no dupe.",
+                    },
+                    dupeType: {
+                      type: "string",
+                      enum: ["Lookalike packaging", "Formula dupe", "Both", "Neither"],
+                      description: "Why this qualifies as a dupe. 'Neither' if no dupe found.",
+                    },
+                    packagingSimilarity: {
+                      type: "number",
+                      minimum: 0,
+                      maximum: 100,
+                      description:
+                        "How visually similar the dupe's packaging is to the original (0-100). 0 if no dupe.",
+                    },
+                    riskLevel: {
+                      type: "string",
+                      enum: ["Lower risk", "Comparable", "Higher risk"],
+                      description:
+                        "Switching risk. Use 'Comparable' as the safe default if no dupe.",
+                    },
+                    riskFactors: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "0-4 short specific concerns about the dupe ('Added fragrance', 'Denatured alcohol high in INCI'). Empty if none.",
+                    },
+                    missingActives: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "0-4 actives the original has that the dupe drops. Empty if nothing meaningful is lost.",
+                    },
+                    safetyNote: {
+                      type: "string",
+                      description:
+                        "ONE plain-English esthetician sentence about who/where this dupe is OK to use. Empty string if no dupe.",
+                    },
                   },
-                  required: ["original", "dupe", "matchScore", "verdict", "notes", "bestFor", "confidence", "sharedIngredients", "uniqueToOriginal", "uniqueToDupe", "contextMatch", "dupeType", "packagingSimilarity", "riskLevel", "riskFactors", "missingActives", "safetyNote"],
+                  required: [
+                    "original",
+                    "dupe",
+                    "matchScore",
+                    "verdict",
+                    "notes",
+                    "bestFor",
+                    "confidence",
+                  ],
                   additionalProperties: false,
                 },
               },
             },
           ],
           tool_choice: { type: "function", function: { name: "analyze_dupe" } },
+          temperature: 0.2,
+          max_tokens: 2400,
         }),
       });
 
       if (res.status === 429) {
-        return { result: null, error: "We're getting a lot of scans right now — try again in a minute." };
+        return {
+          result: null,
+          error: "We're getting a lot of scans right now — try again in a minute.",
+        };
       }
       if (res.status === 402) {
         return { result: null, error: "AI credits exhausted. Please add credits to continue." };
@@ -188,7 +294,7 @@ export const scanProduct = createServerFn({ method: "POST" })
       if (!argsRaw) {
         return { result: null, error: "Couldn't read the product. Try a clearer, well-lit photo." };
       }
-      const parsed = JSON.parse(argsRaw) as DupeAnalysis;
+      const parsed = normalizeAnalysis(JSON.parse(argsRaw) as Partial<DupeAnalysis>);
 
       // Best-effort: enrich both the original and the dupe with real product photos in parallel.
       // Wrap each lookup so a thrown error (network / ranker / malformed data) never wipes a valid analysis.
@@ -201,8 +307,12 @@ export const scanProduct = createServerFn({ method: "POST" })
         }
       };
       const [originalImg, dupeImg] = await Promise.all([
-        parsed.original ? safeFind(parsed.original.brand, parsed.original.productName) : Promise.resolve(undefined),
-        parsed.dupe ? safeFind(parsed.dupe.brand, parsed.dupe.productName) : Promise.resolve(undefined),
+        parsed.original
+          ? safeFind(parsed.original.brand, parsed.original.productName)
+          : Promise.resolve(undefined),
+        parsed.dupe
+          ? safeFind(parsed.dupe.brand, parsed.dupe.productName)
+          : Promise.resolve(undefined),
       ]);
       if (originalImg && parsed.original) parsed.original.imageUrl = originalImg;
       if (dupeImg && parsed.dupe) parsed.dupe.imageUrl = dupeImg;
@@ -214,6 +324,95 @@ export const scanProduct = createServerFn({ method: "POST" })
     }
   });
 
+function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
+  const original = (input.original ?? {}) as Partial<ScannedProduct>;
+  const dupe = input.dupe ?? null;
+  const verdicts = ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"] as const;
+  const riskLevels = ["Lower risk", "Comparable", "Higher risk"] as const;
+  const dupeTypes = ["Lookalike packaging", "Formula dupe", "Both", "Neither"] as const;
+
+  return {
+    original: {
+      productName: safeText(original.productName, "Unknown product"),
+      brand: safeText(original.brand, "Unknown brand"),
+      category: safeText(original.category, "Beauty product"),
+      estimatedPriceUsd: safeNumber(original.estimatedPriceUsd),
+      keyIngredients: safeList(original.keyIngredients),
+      imageUrl: original.imageUrl,
+    },
+    dupe: dupe
+      ? {
+          productName: safeText(dupe.productName, "Suggested alternative"),
+          brand: safeText(dupe.brand, "Unknown brand"),
+          category: safeText(dupe.category, "Beauty product"),
+          estimatedPriceUsd: safeNumber(dupe.estimatedPriceUsd),
+          whereToBuy: safeText(dupe.whereToBuy, "Online"),
+          buyUrl: safeUrl(dupe.buyUrl, dupe.brand, dupe.productName),
+          keyIngredients: safeList(dupe.keyIngredients),
+          imageUrl: dupe.imageUrl,
+        }
+      : null,
+    matchScore: clampScore(input.matchScore),
+    verdict: verdicts.includes(input.verdict as DupeAnalysis["verdict"])
+      ? (input.verdict as DupeAnalysis["verdict"])
+      : dupe
+        ? "Mixed"
+        : "No dupe found",
+    notes: safeText(
+      input.notes,
+      "We found the closest practical comparison, but double-check the label if your skin is sensitive.",
+    ),
+    bestFor: safeList(input.bestFor),
+    confidence: ["high", "medium", "low"].includes(input.confidence ?? "")
+      ? (input.confidence as DupeAnalysis["confidence"])
+      : "medium",
+    sharedIngredients: safeList(input.sharedIngredients),
+    uniqueToOriginal: safeList(input.uniqueToOriginal),
+    uniqueToDupe: safeList(input.uniqueToDupe),
+    contextMatch: safeText(input.contextMatch, ""),
+    dupeType: dupeTypes.includes(input.dupeType as NonNullable<DupeAnalysis["dupeType"]>)
+      ? input.dupeType
+      : dupe
+        ? "Formula dupe"
+        : "Neither",
+    packagingSimilarity: clampScore(input.packagingSimilarity),
+    riskLevel: riskLevels.includes(input.riskLevel as NonNullable<DupeAnalysis["riskLevel"]>)
+      ? input.riskLevel
+      : "Comparable",
+    riskFactors: safeList(input.riskFactors),
+    missingActives: safeList(input.missingActives),
+    safetyNote: safeText(input.safetyNote, ""),
+  };
+}
+
+function safeText(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function safeList(value: unknown) {
+  return Array.isArray(value)
+    ? value
+        .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+        .map((v) => v.trim())
+        .slice(0, 6)
+    : [];
+}
+
+function safeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function clampScore(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value)
+    ? Math.min(100, Math.max(0, Math.round(value)))
+    : 0;
+}
+
+function safeUrl(value: unknown, brand?: string, productName?: string) {
+  if (typeof value === "string" && /^https:\/\//i.test(value)) return value;
+  return `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(`${brand ?? ""} ${productName ?? ""}`.trim() || "beauty product dupe")}`;
+}
+
 /**
  * Best-effort product image lookup. Tries DuckDuckGo's image JSON endpoint
  * first (it returns rich `width`/`height`/`source` metadata that the ranker
@@ -222,7 +421,10 @@ export const scanProduct = createServerFn({ method: "POST" })
  * gets Cloudflare 525s when calling DDG).
  * Returns undefined on any failure so a missing image never breaks the scan.
  */
-async function findProductImage(brand?: string | null, productName?: string | null): Promise<string | undefined> {
+async function findProductImage(
+  brand?: string | null,
+  productName?: string | null,
+): Promise<string | undefined> {
   const safeBrand = (brand ?? "").trim();
   const safeName = (productName ?? "").trim();
   const query = `${safeBrand} ${safeName}`.trim();
@@ -232,14 +434,28 @@ async function findProductImage(brand?: string | null, productName?: string | nu
   const ddg = await searchDuckDuckGoImages(query);
   if (ddg && ddg.length > 0) {
     const best = pickBestProductImage(ddg, safeBrand, safeName);
-    console.log("[findProductImage] ddg found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
+    console.log(
+      "[findProductImage] ddg found:",
+      best.image,
+      "score:",
+      best.score,
+      "from:",
+      best.url ?? best.source,
+    );
     return best.image;
   }
 
   const bing = await searchBingImages(query);
   if (bing && bing.length > 0) {
     const best = pickBestProductImage(bing, safeBrand, safeName);
-    console.log("[findProductImage] bing found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
+    console.log(
+      "[findProductImage] bing found:",
+      best.image,
+      "score:",
+      best.score,
+      "from:",
+      best.url ?? best.source,
+    );
     return best.image;
   }
 
@@ -275,7 +491,7 @@ async function searchDuckDuckGoImages(query: string): Promise<ImageCandidate[] |
     }
     const tokenHtml = await tokenRes.text();
     const vqdMatch =
-      tokenHtml.match(/vqd=([\d-]+)\&/) ||
+      tokenHtml.match(/vqd=([\d-]+)&/) ||
       tokenHtml.match(/vqd="([\d-]+)"/) ||
       tokenHtml.match(/vqd=([\d-]+)/);
     const vqd = vqdMatch?.[1];
@@ -300,9 +516,7 @@ async function searchDuckDuckGoImages(query: string): Promise<ImageCandidate[] |
       return null;
     }
     const data = (await apiRes.json()) as { results?: ImageCandidate[] };
-    const candidates = (data.results ?? []).filter(
-      (r) => r.image && /^https?:\/\//i.test(r.image),
-    );
+    const candidates = (data.results ?? []).filter((r) => r.image && /^https?:\/\//i.test(r.image));
     return candidates;
   } catch (e) {
     console.warn("[findProductImage] ddg failed", e);
@@ -374,26 +588,71 @@ async function searchBingImages(query: string): Promise<ImageCandidate[] | null>
  * over generic blog thumbnails, Pinterest pins, marketplace listings, etc.
  */
 function pickBestProductImage(
-  results: Array<{ image?: string; url?: string; source?: string; title?: string; width?: number; height?: number }>,
+  results: Array<{
+    image?: string;
+    url?: string;
+    source?: string;
+    title?: string;
+    width?: number;
+    height?: number;
+  }>,
   brand: string,
   productName: string,
 ): { image: string; score: number; url?: string; source?: string } {
   // Trusted beauty/skincare retailers + general retailers that typically host
   // clean, on-white product photography on real product pages.
   const RETAILER_DOMAINS = [
-    "sephora.com", "ulta.com", "target.com", "walmart.com", "amazon.com",
-    "cvs.com", "walgreens.com", "riteaid.com", "dollartree.com", "dollargeneral.com",
-    "boots.com", "lookfantastic.com", "cultbeauty.com", "spacenk.com", "beautylish.com",
-    "dermstore.com", "skinstore.com", "bluemercury.com", "credobeauty.com",
-    "nordstrom.com", "macys.com", "bloomingdales.com", "saksfifthavenue.com",
-    "costco.com", "samsclub.com", "kohls.com", "thebay.com",
+    "sephora.com",
+    "ulta.com",
+    "target.com",
+    "walmart.com",
+    "amazon.com",
+    "cvs.com",
+    "walgreens.com",
+    "riteaid.com",
+    "dollartree.com",
+    "dollargeneral.com",
+    "boots.com",
+    "lookfantastic.com",
+    "cultbeauty.com",
+    "spacenk.com",
+    "beautylish.com",
+    "dermstore.com",
+    "skinstore.com",
+    "bluemercury.com",
+    "credobeauty.com",
+    "nordstrom.com",
+    "macys.com",
+    "bloomingdales.com",
+    "saksfifthavenue.com",
+    "costco.com",
+    "samsclub.com",
+    "kohls.com",
+    "thebay.com",
   ];
   // Sources that usually serve cropped/low-quality thumbnails or unrelated lifestyle shots.
   const PENALIZED_DOMAINS = [
-    "pinterest.", "lookaside.fbsbx.com", "fbcdn.net", "instagram.com", "cdninstagram.com",
-    "tiktok.com", "tiktokcdn.com", "youtube.com", "ytimg.com", "reddit.com", "redd.it",
-    "ebay.com", "ebayimg.com", "etsy.com", "poshmark.com", "mercari.com", "depop.com",
-    "aliexpress.com", "alicdn.com", "wish.com", "dhgate.com",
+    "pinterest.",
+    "lookaside.fbsbx.com",
+    "fbcdn.net",
+    "instagram.com",
+    "cdninstagram.com",
+    "tiktok.com",
+    "tiktokcdn.com",
+    "youtube.com",
+    "ytimg.com",
+    "reddit.com",
+    "redd.it",
+    "ebay.com",
+    "ebayimg.com",
+    "etsy.com",
+    "poshmark.com",
+    "mercari.com",
+    "depop.com",
+    "aliexpress.com",
+    "alicdn.com",
+    "wish.com",
+    "dhgate.com",
   ];
 
   const brandSlug = brand.toLowerCase().replace(/[^a-z0-9]+/g, "");
@@ -428,12 +687,15 @@ function pickBestProductImage(
     // Strong preference: result page is on a known retailer.
     if (RETAILER_DOMAINS.some((d) => pageHost.endsWith(d))) score += 50;
     // Image itself served from a retailer CDN.
-    if (RETAILER_DOMAINS.some((d) => imgHost.endsWith(d) || imgHost.includes(d.replace(".com", "")))) score += 20;
+    if (
+      RETAILER_DOMAINS.some((d) => imgHost.endsWith(d) || imgHost.includes(d.replace(".com", "")))
+    )
+      score += 20;
     // Brand's own storefront (e.g. cerave.com, theordinary.com).
     if (brandSlug.length >= 4 && pageHost.includes(brandSlug)) score += 40;
     if (brandSlug.length >= 4 && imgHost.includes(brandSlug)) score += 15;
     // URL path hints we're on a real product page, not a blog/listicle.
-    if (/\/(p|product|products|prod|item|dp|ip)[\/-]/i.test(r.url ?? "")) score += 25;
+    if (/\/(p|product|products|prod|item|dp|ip)[/-]/i.test(r.url ?? "")) score += 25;
     // Image filename hints at product photography.
     if (/(product|packshot|pdp|hero|main|front)/i.test(r.image)) score += 8;
 
