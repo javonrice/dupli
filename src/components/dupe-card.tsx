@@ -24,8 +24,8 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
   const Icon = v.icon;
 
   const savings =
-    dupe && original.estimatedPriceUsd > 0 && dupe.estimatedPriceUsd > 0 && dupe.estimatedPriceUsd < original.estimatedPriceUsd
-      ? Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100)
+    dupe && original.estimatedPriceUsd > 0
+      ? Math.max(0, Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100))
       : 0;
 
   const showLookalikeBand =
@@ -216,31 +216,6 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
         </div>
       )}
 
-      {/* Real retailer prices */}
-      {dupe?.vendors && dupe.vendors.length > 0 && (
-        <div className="space-y-2 border-t border-border bg-secondary/30 px-5 py-4">
-          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-            Where to buy
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {dupe.vendors.slice(0, 6).map((v) => (
-              <a
-                key={v.merchant}
-                href={v.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-secondary"
-              >
-                <span>{v.merchant}</span>
-                {v.priceUsd != null && v.priceUsd > 0 && (
-                  <span className="font-bold tabular-nums">${v.priceUsd.toFixed(2)}</span>
-                )}
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Notes */}
       <div className="space-y-3 border-t border-border px-5 py-4">
         <p className="text-sm leading-relaxed text-foreground">{notes}</p>
@@ -267,7 +242,7 @@ function ProductSide({
   muted = false,
 }: {
   label: string;
-  item: { brand: string; productName: string; category: string; estimatedPriceUsd: number; imageUrl?: string; priceMerchant?: string };
+  item: { brand: string; productName: string; category: string; estimatedPriceUsd: number; imageUrl?: string };
   muted?: boolean;
 }) {
   return (
@@ -289,14 +264,7 @@ function ProductSide({
       <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{item.brand}</div>
       <h3 className="mt-1 font-display text-base font-semibold leading-tight">{item.productName}</h3>
       <div className="mt-3 flex items-baseline gap-1">
-        <span className="font-display text-2xl font-bold">
-          {item.estimatedPriceUsd > 0 ? priceTag(item.estimatedPriceUsd) : "—"}
-        </span>
-        {item.priceMerchant && item.estimatedPriceUsd > 0 && (
-          <span className="ml-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-            at {item.priceMerchant}
-          </span>
-        )}
+        <span className="font-display text-2xl font-bold">{priceTag(item.estimatedPriceUsd)}</span>
       </div>
       <p className="mt-1 text-[11px] text-muted-foreground">{item.category}</p>
     </div>

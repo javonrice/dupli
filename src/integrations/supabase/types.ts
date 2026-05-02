@@ -110,47 +110,6 @@ export type Database = {
         }
         Relationships: []
       }
-      product_vendors: {
-        Row: {
-          currency: string
-          fetched_at: string
-          id: string
-          merchant: string
-          price_usd: number | null
-          product_id: string
-          rank: number
-          url: string
-        }
-        Insert: {
-          currency?: string
-          fetched_at?: string
-          id?: string
-          merchant: string
-          price_usd?: number | null
-          product_id: string
-          rank?: number
-          url: string
-        }
-        Update: {
-          currency?: string
-          fetched_at?: string
-          id?: string
-          merchant?: string
-          price_usd?: number | null
-          product_id?: string
-          rank?: number
-          url?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "product_vendors_product_id_fkey"
-            columns: ["product_id"]
-            isOneToOne: false
-            referencedRelation: "products"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       products: {
         Row: {
           brand_name: string
@@ -162,16 +121,13 @@ export type Database = {
           good_for: string[]
           id: string
           image_url: string | null
-          ingredients: string[]
           ingredients_count: number | null
           last_ingested_at: string | null
-          last_priced_at: string | null
           product_name: string
           product_slug: string
           search_vector: unknown
           source_url: string | null
           updated_at: string
-          variant_id: number | null
         }
         Insert: {
           brand_name: string
@@ -183,16 +139,13 @@ export type Database = {
           good_for?: string[]
           id?: string
           image_url?: string | null
-          ingredients?: string[]
           ingredients_count?: number | null
           last_ingested_at?: string | null
-          last_priced_at?: string | null
           product_name: string
           product_slug: string
           search_vector?: unknown
           source_url?: string | null
           updated_at?: string
-          variant_id?: number | null
         }
         Update: {
           brand_name?: string
@@ -204,16 +157,13 @@ export type Database = {
           good_for?: string[]
           id?: string
           image_url?: string | null
-          ingredients?: string[]
           ingredients_count?: number | null
           last_ingested_at?: string | null
-          last_priced_at?: string | null
           product_name?: string
           product_slug?: string
           search_vector?: unknown
           source_url?: string | null
           updated_at?: string
-          variant_id?: number | null
         }
         Relationships: []
       }

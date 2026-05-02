@@ -3,17 +3,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { slugify } from "./skinsort-slugs";
-import { ensureProductData, diffIngredientLists } from "./skinsort-scraper.server";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
 });
-
-export type Vendor = {
-  merchant: string;
-  url: string;
-  priceUsd: number | null;
-};
 
 export type ScannedProduct = {
   productName: string;
@@ -22,9 +15,6 @@ export type ScannedProduct = {
   estimatedPriceUsd: number;
   keyIngredients: string[];
   imageUrl?: string;
-  priceSource?: "estimate" | "skinsort_vendor";
-  priceMerchant?: string;
-  vendors?: Vendor[];
 };
 
 export type DupeSuggestion = {
@@ -36,9 +26,6 @@ export type DupeSuggestion = {
   buyUrl: string;
   keyIngredients: string[];
   imageUrl?: string;
-  priceSource?: "estimate" | "skinsort_vendor";
-  priceMerchant?: string;
-  vendors?: Vendor[];
 };
 
 export type DupeAnalysis = {
@@ -364,9 +351,6 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
       estimatedPriceUsd: safeNumber(original.estimatedPriceUsd),
       keyIngredients: safeList(original.keyIngredients),
       imageUrl: original.imageUrl,
-      priceSource: original.priceSource ?? "estimate",
-      priceMerchant: original.priceMerchant,
-      vendors: original.vendors,
     },
     dupe: dupe
       ? {
@@ -378,9 +362,6 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
           buyUrl: safeUrl(dupe.buyUrl, dupe.brand, dupe.productName),
           keyIngredients: safeList(dupe.keyIngredients),
           imageUrl: dupe.imageUrl,
-          priceSource: dupe.priceSource ?? "estimate",
-          priceMerchant: dupe.priceMerchant,
-          vendors: dupe.vendors,
         }
       : null,
     matchScore: clampScore(input.matchScore),
@@ -763,625 +744,66 @@ function pickBestProductImage(
 
 
 async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
-  if (!analysis.original?.brand || !analysis.original?.productName) {
-    forceNoDupe(analysis);
-    return;
-  }
+  if (!analysis.original?.brand || !analysis.original?.productName) return;
 
-  const brand = analysis.original.brand;
-  const productName = analysis.original.productName;
-  const keyIngredients = analysis.original.keyIngredients ?? [];
-  let product = await findProductSmart(brand, productName);
+  const brandSlug = slugify(analysis.original.brand);
+  const productSlug = slugify(analysis.original.productName);
 
-  // TIER 4.5: category-inferred cross-brand fallback. The brand is unknown to
-  // us OR we couldn't find any plausible product, but we can still derive a
-  // category from the name and find the best ingredient-overlap match.
-  if (!product) {
-    const inferred = await findByCategoryAndIngredients(productName, keyIngredients);
-    if (inferred) {
-      console.log(
-        `[dupedb] HIT via category_ingredients(${inferred.score.toFixed(2)}): "${brand} / ${productName}" -> "${inferred.product.brand_name} / ${inferred.product.product_name}"`,
-      );
-      product = { ...inferred.product, matchStrategy: `category_ingredients(${inferred.score.toFixed(2)})` };
-    }
-  }
+  const { data: product } = await supabaseAdmin
+    .from("products")
+    .select("id, brand_name, product_name, category, image_url, free_from, good_for, contains")
+    .eq("brand_slug", brandSlug)
+    .eq("product_slug", productSlug)
+    .maybeSingle();
 
   if (!product) {
-    if (isJunkBrand(brand)) {
-      console.log(`[dupedb] MISS (skipped queue, junk brand): "${brand} / ${productName}"`);
-    } else {
-      await supabaseAdmin.from("ingestion_queue").insert({
-        brand_slug: slugify(brand),
-        product_slug: slugify(productName),
+    // Miss — enqueue for background ingestion. Conflict on pending unique idx is silent.
+    await supabaseAdmin
+      .from("ingestion_queue")
+      .insert({
+        brand_slug: brandSlug,
+        product_slug: productSlug,
         reason: "user_scan_miss",
         priority: 10,
       });
-      console.log(`[dupedb] MISS: "${brand} / ${productName}" (no fuzzy match)`);
-    }
-    forceNoDupe(analysis);
     return;
   }
 
-  console.log(
-    `[dupedb] HIT via ${product.matchStrategy}: "${brand} / ${productName}" -> "${product.brand_name} / ${product.product_name}"`,
-  );
-
-  // The dupe graph is stored directionally but real-world dupes are symmetric:
-  // if A is a dupe of B, then B is also a dupe of A. Query BOTH directions.
-  const bidirectional = await fetchBestCounterpart(product.id);
-  let top = bidirectional?.top;
-  let topDupe = bidirectional?.counterpart;
-
-  // TIER 5: sibling fallback. The matched product has no edges in EITHER
-  // direction, but a sibling SKU in the same brand might. Walk the graph.
-  if (!top || !topDupe) {
-    const sibling = await findSiblingWithDupes(product);
-    if (sibling) {
-      console.log(
-        `[dupedb] sibling-fallback: "${product.product_name}" -> "${sibling.product.product_name}" -> "${sibling.counterpart.product_name}"`,
-      );
-      top = sibling.top;
-      topDupe = sibling.counterpart;
-    }
-  }
-
-  if (!top || !topDupe) {
-    forceNoDupe(analysis);
-    return;
-  }
-
-  // Reflect the verified canonical name (so UI / share / history are accurate).
-  analysis.original.productName = product.product_name;
-  analysis.original.brand = product.brand_name;
-
-  // Pull REAL ingredient lists + REAL retailer prices from SkinSort (cached
-  // in our DB after the first hit). This is what replaces the AI's estimates.
-  const [origData, dupeData] = await Promise.all([
-    ensureProductData(product.id),
-    ensureProductData(topDupe.id),
-  ]);
-
-  // Real prices: cheapest in-stock vendor wins.
-  const origVendor = pickPrimaryVendor(origData.vendors);
-  const dupeVendor = pickPrimaryVendor(dupeData.vendors);
-
-  if (origVendor?.priceUsd != null) {
-    analysis.original.estimatedPriceUsd = origVendor.priceUsd;
-    analysis.original.priceSource = "skinsort_vendor";
-    analysis.original.priceMerchant = origVendor.merchant;
-  }
-  analysis.original.vendors = origData.vendors.map((v: { merchant: string; url: string; priceUsd: number | null }) => ({
-    merchant: v.merchant,
-    url: v.url,
-    priceUsd: v.priceUsd,
-  }));
-
-  analysis.dupe = {
-    productName: topDupe.product_name,
-    brand: topDupe.brand_name,
-    category: topDupe.category ?? "Beauty product",
-    estimatedPriceUsd: dupeVendor?.priceUsd ?? 0,
-    whereToBuy: dupeVendor?.merchant ?? "Online",
-    buyUrl:
-      dupeVendor?.url ??
-      `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(`${topDupe.brand_name} ${topDupe.product_name}`)}`,
-    keyIngredients: dupeData.ingredients.slice(0, 6),
-    imageUrl: topDupe.image_url ?? undefined,
-    priceSource: dupeVendor?.priceUsd != null ? "skinsort_vendor" : "estimate",
-    priceMerchant: dupeVendor?.merchant,
-    vendors: dupeData.vendors.map((v: { merchant: string; url: string; priceUsd: number | null }) => ({
-      merchant: v.merchant,
-      url: v.url,
-      priceUsd: v.priceUsd,
-    })),
-  };
-
-  // Real ingredient diff (only when we actually got both lists from SkinSort).
-  if (origData.ingredients.length > 0 && dupeData.ingredients.length > 0) {
-    const diff = diffIngredientLists(origData.ingredients, dupeData.ingredients);
-    analysis.sharedIngredients = diff.sharedIngredients;
-    analysis.uniqueToOriginal = diff.uniqueToOriginal;
-    analysis.uniqueToDupe = diff.uniqueToDupe;
-    // Refresh the original's keyIngredients with the real top-of-formula items.
-    analysis.original.keyIngredients = origData.ingredients.slice(0, 6);
-  } else {
-    // SkinSort missed one side — keep the AI's lists (already populated by the
-    // model) instead of clearing them, so the user always sees something.
-  }
-
-  // Always surface SkinSort's verified overall_match (0-100), never the lookup
-  // confidence — the fuzzy score was for ranking, not for telling the user
-  // how good the dupe actually is.
-  analysis.matchScore = top.overall_match;
-  analysis.confidence = top.overall_match >= 85 ? "high" : top.overall_match >= 70 ? "medium" : "low";
-  if (top.rationale) analysis.notes = top.rationale;
-  if (analysis.verdict === "No dupe found") {
-    analysis.verdict = top.overall_match >= 80 ? "Worth the hype" : "Mixed";
-  }
-}
-
-// Pick the best vendor row to surface as the primary "Buy at" CTA. Prefers
-// the cheapest priced row, falls back to the first listed vendor when no
-// prices are available.
-function pickPrimaryVendor(
-  vendors: { merchant: string; url: string; priceUsd: number | null }[],
-):
-  | { merchant: string; url: string; priceUsd: number | null }
-  | undefined {
-  if (!vendors.length) return undefined;
-  const priced = vendors.filter((v) => v.priceUsd != null && v.priceUsd > 0);
-  if (priced.length > 0) {
-    return priced.reduce((a, b) => ((a.priceUsd ?? Infinity) <= (b.priceUsd ?? Infinity) ? a : b));
-  }
-  return vendors[0];
-}
-
-type CounterpartProduct = {
-  id: string;
-  brand_name: string;
-  product_name: string;
-  category: string | null;
-  image_url: string | null;
-};
-type CounterpartHit = {
-  top: {
-    overall_match: number;
-    ingredient_match: number | null;
-    shared_ingredients_count: number | null;
-    rationale: string | null;
-  };
-  counterpart: CounterpartProduct;
-};
-
-/**
- * Fetch the best dupe counterpart for a given product, walking BOTH directions
- * of the dupe edge. Real-world dupe relationships are symmetric: if A is a
- * dupe of B then B is also a dupe of A. SkinSort stored them as a directed
- * edge, so a single-direction query misses ~6× the available data.
- */
-async function fetchBestCounterpart(productId: string): Promise<CounterpartHit | null> {
-  // Direction 1: this product is the original; counterparts are its listed dupes.
-  const { data: outRows } = await supabaseAdmin
+  // Hit — pull the top verified dupe.
+  const { data: dupeRows } = await supabaseAdmin
     .from("dupes")
     .select(
       `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       counterpart:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, category, image_url )`,
+       dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
     )
-    .eq("original_product_id", productId)
+    .eq("original_product_id", product.id)
     .order("overall_match", { ascending: false })
     .limit(1);
 
-  // Direction 2: this product IS the dupe of something else — that something
-  // is a credible counterpart too (a name-brand original we can recommend back).
-  const { data: inRows } = await supabaseAdmin
-    .from("dupes")
-    .select(
-      `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       counterpart:products!dupes_original_product_id_fkey ( id, brand_name, product_name, category, image_url )`,
-    )
-    .eq("dupe_product_id", productId)
-    .order("overall_match", { ascending: false })
-    .limit(1);
+  const top = (dupeRows ?? [])[0];
+  const topDupe = top?.dupe as
+    | { brand_name: string; product_name: string; category: string | null; image_url: string | null }
+    | null
+    | undefined;
 
-  const candidates: CounterpartHit[] = [];
-  for (const r of [...(outRows ?? []), ...(inRows ?? [])]) {
-    const cp = (r as unknown as { counterpart?: CounterpartProduct | null }).counterpart;
-    if (cp && r.overall_match != null) {
-      candidates.push({
-        top: {
-          overall_match: r.overall_match,
-          ingredient_match: r.ingredient_match,
-          shared_ingredients_count: r.shared_ingredients_count,
-          rationale: r.rationale,
-        },
-        counterpart: cp,
-      });
-    }
-  }
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.top.overall_match - a.top.overall_match);
-  return candidates[0];
-}
-
-/**
- * When the matched product has no edges in either direction, look for a
- * sibling SKU in the same brand that DOES have edges (either direction) and
- * return its best counterpart.
- */
-async function findSiblingWithDupes(matched: {
-  id: string;
-  brand_name: string;
-  product_name: string;
-}): Promise<
-  | {
-      product: { id: string; brand_name: string; product_name: string };
-      top: CounterpartHit["top"];
-      counterpart: CounterpartProduct;
-    }
-  | null
-> {
-  const brandSlug = slugify(matched.brand_name);
-  const { data: siblings } = await supabaseAdmin
-    .from("products")
-    .select("id, brand_name, product_name")
-    .eq("brand_slug", brandSlug)
-    .neq("id", matched.id)
-    .limit(200);
-
-  if (!siblings || siblings.length === 0) return null;
-
-  // Rank siblings by name similarity to the matched product.
-  const ranked = siblings
-    .map((s) => ({ s, score: trigramSimilarity(matched.product_name, s.product_name) }))
-    .filter((r) => r.score >= 0.2)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 8);
-
-  for (const { s } of ranked) {
-    const hit = await fetchBestCounterpart(s.id);
-    if (hit) {
-      return { product: s, top: hit.top, counterpart: hit.counterpart };
-    }
-  }
-  return null;
-}
-
-
-// Smart 3-tier product lookup. AI rarely returns SkinSort's exact wording,
-// so exact slug match alone misses ~80% of real hits. We expand with
-// brand-scoped fuzzy match and a global FTS fallback.
-async function findProductSmart(
-  brand: string,
-  productName: string,
-): Promise<
-  | { id: string; brand_name: string; product_name: string; matchStrategy: string }
-  | null
-> {
-  const brandSlug = slugify(brand);
-  const seedSlugs = brandSlugVariants(brand);
-  // Forward brand-alias resolution: ask the DB for any brand_slug that starts
-  // with our shortest core token (e.g. "nyx" -> "nyx-cosmetics"). This is the
-  // direction stripping alone can't reach. Restrict to slugs ≥ 3 chars to
-  // avoid matching every brand starting with "a".
-  const coreTokens = seedSlugs
-    .filter((s) => s.length >= 3 && !s.startsWith("the-"))
-    .sort((a, b) => a.length - b.length);
-  const brandSlugSet = new Set(seedSlugs);
-  if (coreTokens.length > 0) {
-    const shortest = coreTokens[0];
-    const { data: aliasRows } = await supabaseAdmin
-      .from("products")
-      .select("brand_slug")
-      .or(`brand_slug.like.${shortest}-%,brand_slug.eq.${shortest}`)
-      .limit(50);
-    for (const row of aliasRows ?? []) {
-      if (row.brand_slug) brandSlugSet.add(row.brand_slug);
-    }
-  }
-  const brandSlugs = Array.from(brandSlugSet);
-  const productSlug = slugify(productName);
-
-  // TIER 1: exact slug
-  const { data: exact } = await supabaseAdmin
-    .from("products")
-    .select("id, brand_name, product_name")
-    .in("brand_slug", brandSlugs)
-    .eq("product_slug", productSlug)
-    .maybeSingle();
-  if (exact) return { ...exact, matchStrategy: "exact" };
-
-  // TIER 2: same brand, fuzzy match on product name (token-set Jaccard)
-  let tier2Count = 0;
-  let tier2Best: { product: { id: string; brand_name: string; product_name: string }; score: number } | null = null;
-  if (brandSlugs.length > 0) {
-    const { data: brandProducts } = await supabaseAdmin
-      .from("products")
-      .select("id, brand_name, product_name")
-      .in("brand_slug", brandSlugs)
-      .limit(500);
-
-    tier2Count = brandProducts?.length ?? 0;
-    if (brandProducts && brandProducts.length > 0) {
-      const ranked = rankBySimilarity(productName, brandProducts);
-      tier2Best = ranked;
-      if (ranked && ranked.score >= 0.35) {
-        return { ...ranked.product, matchStrategy: `brand_fuzzy(${ranked.score.toFixed(2)})` };
-      }
-    }
-  }
-
-  // TIER 3: cross-brand FTS via search_vector (handles wrong brand)
-  const ftsQuery = tokenize(productName).join(" | ");
-  if (ftsQuery) {
-    const { data: ftsHits } = await supabaseAdmin
-      .from("products")
-      .select("id, brand_name, product_name")
-      .textSearch("search_vector", ftsQuery, { config: "simple" })
-      .limit(50);
-
-    if (ftsHits && ftsHits.length > 0) {
-      const ranked = rankBySimilarity(productName, ftsHits, brand);
-      if (ranked && ranked.score >= 0.6) {
-        return { ...ranked.product, matchStrategy: `fts_global(${ranked.score.toFixed(2)})` };
-      }
-    }
-  }
-
-  // TIER 4: sibling-as-original. Brand was found, exact product wasn't, but a
-  // brand sibling exists with at least minimal name overlap. Use that sibling
-  // as the matched product so we can walk its dupe edges instead of giving up.
-  if (tier2Best && tier2Best.score >= 0.15) {
-    return {
-      ...tier2Best.product,
-      matchStrategy: `sibling_as_original(${tier2Best.score.toFixed(2)})`,
+  // If our verified top dupe is materially better than the AI's guess, swap it in.
+  if (top && topDupe && top.overall_match >= analysis.matchScore) {
+    analysis.dupe = {
+      productName: topDupe.product_name,
+      brand: topDupe.brand_name,
+      category: topDupe.category ?? analysis.dupe?.category ?? "Beauty product",
+      estimatedPriceUsd: analysis.dupe?.estimatedPriceUsd ?? 0,
+      whereToBuy: analysis.dupe?.whereToBuy ?? "Online",
+      buyUrl:
+        analysis.dupe?.buyUrl ??
+        `https://www.amazon.com/s?k=${encodeURIComponent(`${topDupe.brand_name} ${topDupe.product_name}`)}`,
+      keyIngredients: analysis.dupe?.keyIngredients ?? [],
+      imageUrl: topDupe.image_url ?? analysis.dupe?.imageUrl,
     };
-  }
-
-  console.log(
-    `[dupedb] no-match diagnostics: brand="${brand}" slug="${brandSlug}" variants="${brandSlugs.join(",")}" tier2_candidates=${tier2Count} tier2_best=${
-      tier2Best ? `"${tier2Best.product.brand_name} / ${tier2Best.product.product_name}" @ ${tier2Best.score.toFixed(2)}` : "none"
-    }`,
-  );
-
-  return null;
-}
-
-/**
- * Infer a category token from a product name and find the best cross-brand
- * match by name + ingredient overlap (using the AI's keyIngredients) within
- * that category. Used when the brand is entirely absent from our DB.
- */
-const CATEGORY_TOKENS = [
-  "concealer", "foundation", "primer", "lipstick", "lipgloss",
-  "mascara", "eyeliner", "eyeshadow", "blush", "bronzer", "highlighter",
-  "powder",
-  "serum", "essence", "toner", "moisturizer", "moisturiser", "cream",
-  "lotion", "balm", "ointment",
-  "cleanser", "wash", "soap",
-  "mask", "scrub", "exfoliant", "peel",
-  "sunscreen", "spf",
-  "shampoo", "conditioner",
-  "deodorant", "antiperspirant",
-  "oil", "mist", "spray",
-];
-
-function inferCategory(productName: string): string | null {
-  const tokens = tokenize(productName);
-  for (const cat of CATEGORY_TOKENS) {
-    if (tokens.includes(cat)) return cat;
-  }
-  return null;
-}
-
-async function findByCategoryAndIngredients(
-  productName: string,
-  keyIngredients: string[],
-): Promise<
-  | { product: { id: string; brand_name: string; product_name: string }; score: number }
-  | null
-> {
-  const category = inferCategory(productName);
-  if (!category) return null;
-
-  const { data: candidates } = await supabaseAdmin
-    .from("products")
-    .select("id, brand_name, product_name")
-    .ilike("product_name", `%${category}%`)
-    .limit(300);
-
-  if (!candidates || candidates.length === 0) return null;
-
-  const qTokens = new Set(tokenize(productName));
-  const ingredientTokens = new Set(
-    keyIngredients
-      .flatMap((i) => tokenize(i))
-      .filter((t) => HEADLINE_ACTIVES.has(t) || t.length >= 5),
-  );
-
-  let best: { product: { id: string; brand_name: string; product_name: string }; score: number } | null = null;
-  for (const c of candidates) {
-    const cTokens = new Set(tokenize(c.product_name));
-    if (cTokens.size === 0) continue;
-
-    let nameOverlap = 0;
-    for (const t of qTokens) if (cTokens.has(t)) nameOverlap++;
-    const jaccard = nameOverlap / (qTokens.size + cTokens.size - nameOverlap || 1);
-
-    let ingredientOverlap = 0;
-    for (const t of ingredientTokens) if (cTokens.has(t)) ingredientOverlap++;
-    const ingredientBonus = ingredientTokens.size > 0
-      ? (ingredientOverlap / ingredientTokens.size) * 0.4
-      : 0;
-
-    const score = jaccard + ingredientBonus;
-    if (!best || score > best.score) best = { product: c, score };
-  }
-
-  // Require some signal beyond just matching the category word.
-  if (!best || best.score < 0.25) return null;
-  return best;
-}
-
-/**
- * Junk-brand guard. AI sometimes returns generic placeholders like
- * "Unbranded (Dollar General)" or "Generic" — these will never resolve to
- * a real DB row, so we skip queuing them for ingestion.
- */
-function isJunkBrand(brand: string): boolean {
-  const b = brand.trim().toLowerCase();
-  if (!b) return true;
-  return (
-    b.startsWith("unbranded") ||
-    b.startsWith("generic") ||
-    b.startsWith("store brand") ||
-    b.startsWith("private label") ||
-    b === "unknown" ||
-    b === "n/a" ||
-    b === "none"
-  );
-}
-
-/**
- * Aggressive brand-slug normalizer. AI commonly appends suffixes the DB
- * doesn't carry ("NYX Professional Makeup" -> DB has "nyx-cosmetics").
- * We generate every plausible slug and let the SQL `IN` filter sort it out.
- */
-const BRAND_SUFFIX_NOISE = new Set([
-  "professional",
-  "makeup",
-  "make-up",
-  "cosmetics",
-  "cosmetic",
-  "beauty",
-  "skincare",
-  "skin-care",
-  "skin",
-  "care",
-  "paris",
-  "london",
-  "new-york",
-  "newyork",
-  "ny",
-  "usa",
-  "co",
-  "inc",
-  "ltd",
-  "llc",
-  "company",
-  "official",
-]);
-
-function brandSlugVariants(brand: string): string[] {
-  const base = slugify(brand);
-  const variants = new Set<string>();
-  if (!base) return [];
-  variants.add(base);
-
-  // Toggle "the-" prefix
-  if (base.startsWith("the-")) variants.add(base.replace(/^the-/, ""));
-  else variants.add(`the-${base}`);
-
-  // Strip trailing noise tokens iteratively
-  const tokens = base.split("-").filter(Boolean);
-  let stripped = [...tokens];
-  while (stripped.length > 1 && BRAND_SUFFIX_NOISE.has(stripped[stripped.length - 1])) {
-    stripped.pop();
-    if (stripped.length > 0) {
-      variants.add(stripped.join("-"));
-      if (stripped[0] !== "the") variants.add(`the-${stripped.join("-")}`);
+    analysis.matchScore = top.overall_match;
+    analysis.confidence = "high";
+    if (top.rationale && (!analysis.notes || analysis.notes.length < 40)) {
+      analysis.notes = top.rationale;
     }
   }
-
-  // Strip ANY noise tokens (not just trailing)
-  const denoised = tokens.filter((t) => !BRAND_SUFFIX_NOISE.has(t));
-  if (denoised.length > 0 && denoised.length < tokens.length) {
-    variants.add(denoised.join("-"));
-  }
-
-  // First 1-2 tokens alone (handles "nyx-professional-makeup" -> "nyx")
-  if (tokens.length >= 1) variants.add(tokens[0]);
-  if (tokens.length >= 2) variants.add(`${tokens[0]}-${tokens[1]}`);
-
-  return Array.from(variants).filter((v) => v.length >= 2);
-}
-
-const STOPWORDS = new Set([
-  "the", "and", "for", "with", "of", "to", "in", "on", "a", "an",
-]);
-
-// Headline actives — when both names contain the same one, that's a strong signal.
-const HEADLINE_ACTIVES = new Set([
-  "niacinamide", "retinol", "retinal", "retinaldehyde", "tretinoin",
-  "salicylic", "glycolic", "lactic", "mandelic", "azelaic",
-  "hyaluronic", "ceramide", "ceramides", "peptide", "peptides",
-  "vitamin", "ascorbic", "tocopherol",
-  "benzoyl", "adapalene",
-  "spf", "sunscreen",
-  "collagen", "squalane", "squalene",
-  "panthenol", "centella", "cica",
-  "bakuchiol", "kojic", "arbutin",
-  "caffeine", "zinc", "copper", "sulfur",
-]);
-
-function tokenize(s: string): string[] {
-  return s
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 1 && !STOPWORDS.has(t));
-}
-
-/** Trigram set for fuzzy string similarity. */
-function trigrams(s: string): Set<string> {
-  const cleaned = `  ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}  `;
-  const set = new Set<string>();
-  for (let i = 0; i < cleaned.length - 2; i++) set.add(cleaned.slice(i, i + 3));
-  return set;
-}
-
-function trigramSimilarity(a: string, b: string): number {
-  const ta = trigrams(a);
-  const tb = trigrams(b);
-  if (ta.size === 0 || tb.size === 0) return 0;
-  let inter = 0;
-  for (const t of ta) if (tb.has(t)) inter++;
-  return inter / (ta.size + tb.size - inter);
-}
-
-function rankBySimilarity<T extends { brand_name: string; product_name: string }>(
-  query: string,
-  candidates: T[],
-  brandHint?: string,
-): { product: T; score: number } | null {
-  const qTokens = new Set(tokenize(query));
-  if (qTokens.size === 0) return null;
-  const brandHintLower = brandHint?.toLowerCase() ?? "";
-  const qActives = new Set([...qTokens].filter((t) => HEADLINE_ACTIVES.has(t)));
-
-  let best: { product: T; score: number } | null = null;
-  for (const c of candidates) {
-    const cTokens = new Set(tokenize(c.product_name));
-    if (cTokens.size === 0) continue;
-
-    let intersection = 0;
-    for (const t of qTokens) if (cTokens.has(t)) intersection++;
-    const union = qTokens.size + cTokens.size - intersection;
-    const jaccard = union === 0 ? 0 : intersection / union;
-
-    // Trigram catches "Niacinamide 10% + Zinc 1%" ≈ "Niacinamide 10% + Zinc 1% Oil Control Serum"
-    const trig = trigramSimilarity(query, c.product_name);
-
-    // Shared headline active (niacinamide, retinol, spf, etc.)
-    let activeBonus = 0;
-    for (const a of qActives) {
-      if (cTokens.has(a)) {
-        activeBonus = 0.15;
-        break;
-      }
-    }
-
-    const brandBonus =
-      brandHintLower && c.brand_name.toLowerCase() === brandHintLower ? 0.25 : 0;
-    const lenPenalty = Math.abs(qTokens.size - cTokens.size) * 0.03;
-
-    // Blend jaccard + trigram (max of the two carries; average smooths)
-    const lexical = Math.max(jaccard, trig * 0.9);
-    const score = lexical + brandBonus + activeBonus - lenPenalty;
-    if (!best || score > best.score) best = { product: c, score };
-  }
-  return best;
-}
-
-function forceNoDupe(analysis: DupeAnalysis): void {
-  analysis.dupe = null;
-  analysis.matchScore = 0;
-  analysis.verdict = "No dupe found";
-  analysis.sharedIngredients = [];
-  analysis.uniqueToOriginal = [];
-  analysis.uniqueToDupe = [];
-  analysis.riskFactors = [];
-  analysis.missingActives = [];
-  analysis.packagingSimilarity = 0;
-  analysis.dupeType = "Neither";
-  analysis.notes =
-    "No verified dupe in our database for this product yet. We've queued it — try again in a minute.";
 }
