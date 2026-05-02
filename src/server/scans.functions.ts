@@ -38,21 +38,23 @@ export const saveScan = createServerFn({ method: "POST" })
       return { id: null, error: "Invalid analysis payload" };
     }
 
+    const insertRow: ScanInsert = {
+      user_id: userId,
+      original_brand: a.original.brand,
+      original_product_name: a.original.productName,
+      original_image_url: a.original.imageUrl ?? null,
+      dupe_brand: a.dupe?.brand ?? null,
+      dupe_product_name: a.dupe?.productName ?? null,
+      dupe_image_url: a.dupe?.imageUrl ?? null,
+      match_score: a.matchScore ?? null,
+      verdict: a.verdict ?? null,
+      thumbnail_data_url: data.thumbnailDataUrl ?? null,
+      analysis: a as unknown as Json,
+    };
+
     const { data: row, error } = await supabase
       .from("scans")
-      .insert({
-        user_id: userId,
-        original_brand: a.original.brand,
-        original_product_name: a.original.productName,
-        original_image_url: a.original.imageUrl ?? null,
-        dupe_brand: a.dupe?.brand ?? null,
-        dupe_product_name: a.dupe?.productName ?? null,
-        dupe_image_url: a.dupe?.imageUrl ?? null,
-        match_score: a.matchScore ?? null,
-        verdict: a.verdict ?? null,
-        thumbnail_data_url: data.thumbnailDataUrl ?? null,
-        analysis: a as unknown as Record<string, unknown>,
-      })
+      .insert(insertRow)
       .select("id")
       .single();
 
