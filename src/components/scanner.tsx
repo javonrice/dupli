@@ -195,57 +195,57 @@ function HomeScreen({
     <IOSScreen
       title=""
       trailing={
-        <img src={wordmark} alt="Dupli" className="h-12 w-auto" width={1536} height={1024} />
+        <img src={wordmark} alt="Dupli" className="h-9 w-auto sm:h-12" width={1536} height={1024} />
       }
       fixed
     >
-      <div className="flex flex-1 flex-col items-center px-6 pb-3 pt-4">
+      <div className="flex flex-1 flex-col items-center px-6 pb-3 pt-3">
         {/* Hero copy */}
-        <div className="text-center">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+        <div className="shrink-0 text-center">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:text-[11px]">
             AI Dupe Finder
           </p>
-          <h1 className="mt-2 font-display text-[28px] font-bold leading-[1.05] tracking-tight sm:text-[34px]">
+          <h1 className="mt-1.5 font-display text-[24px] font-bold leading-[1.05] tracking-tight sm:text-[34px]">
             Snap any product.
           </h1>
-          <p className="font-display text-[28px] font-bold italic leading-[1.05] tracking-tight text-muted-foreground sm:text-[34px]">
+          <p className="font-display text-[24px] font-bold italic leading-[1.05] tracking-tight text-muted-foreground sm:text-[34px]">
             Find the dupe.
           </p>
         </div>
 
-        {/* Viewfinder — flexes to fill leftover space, never pushes buttons out */}
-        <div className="relative my-3 aspect-[4/5] w-full max-w-[260px] min-h-0 flex-1">
+        {/* Viewfinder — fills available space, shrinks freely on small screens */}
+        <div className="relative my-3 w-full max-w-[260px] min-h-[120px] flex-1 overflow-hidden">
           <div className="absolute inset-0 rounded-[28px] border border-border bg-secondary/40" />
           <div className="absolute left-3 top-3 h-7 w-7 rounded-tl-[20px] border-l-[3px] border-t-[3px] border-foreground/50" />
           <div className="absolute right-3 top-3 h-7 w-7 rounded-tr-[20px] border-r-[3px] border-t-[3px] border-foreground/50" />
           <div className="absolute bottom-3 left-3 h-7 w-7 rounded-bl-[20px] border-b-[3px] border-l-[3px] border-foreground/50" />
           <div className="absolute bottom-3 right-3 h-7 w-7 rounded-br-[20px] border-b-[3px] border-r-[3px] border-foreground/50" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-            <ScanLine className="h-9 w-9 text-foreground/30" strokeWidth={1.5} />
-            <p className="text-[13px] leading-snug text-muted-foreground">
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
+            <ScanLine className="h-8 w-8 text-foreground/30" strokeWidth={1.5} />
+            <p className="text-[12px] leading-snug text-muted-foreground sm:text-[13px]">
               Center the product. Good lighting helps.
             </p>
           </div>
         </div>
 
         {error && (
-          <div className="mt-2 w-full rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
+          <div className="mb-2 w-full shrink-0 rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
             {error}
           </div>
         )}
 
         {/* Capture controls — pinned to bottom, never clipped */}
-        <div className="mt-3 flex w-full shrink-0 flex-col gap-2.5">
+        <div className="flex w-full shrink-0 flex-col gap-2">
           <button
             onClick={onCamera}
-            className="tap flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
+            className="tap flex h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background sm:h-[52px]"
           >
             <Camera className="h-[18px] w-[18px]" strokeWidth={2} />
             Take Photo
           </button>
           <button
             onClick={onLibrary}
-            className="tap flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-secondary text-[15px] font-semibold text-foreground"
+            className="tap flex h-[48px] w-full items-center justify-center gap-2 rounded-[14px] bg-secondary text-[15px] font-semibold text-foreground sm:h-[52px]"
           >
             <Images className="h-[18px] w-[18px]" strokeWidth={2} />
             Choose from Library
