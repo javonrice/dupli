@@ -191,9 +191,18 @@ export const scanProduct = createServerFn({ method: "POST" })
       const parsed = JSON.parse(argsRaw) as DupeAnalysis;
 
       // Best-effort: enrich both the original and the dupe with real product photos in parallel.
+      // Wrap each lookup so a thrown error (network / ranker / malformed data) never wipes a valid analysis.
+      const safeFind = async (b?: string | null, n?: string | null) => {
+        try {
+          return await findProductImage(b, n);
+        } catch (err) {
+          console.warn("[findProductImage] threw, ignoring:", err);
+          return undefined;
+        }
+      };
       const [originalImg, dupeImg] = await Promise.all([
-        parsed.original ? findProductImage(parsed.original.brand, parsed.original.productName) : Promise.resolve(undefined),
-        parsed.dupe ? findProductImage(parsed.dupe.brand, parsed.dupe.productName) : Promise.resolve(undefined),
+        parsed.original ? safeFind(parsed.original.brand, parsed.original.productName) : Promise.resolve(undefined),
+        parsed.dupe ? safeFind(parsed.dupe.brand, parsed.dupe.productName) : Promise.resolve(undefined),
       ]);
       if (originalImg && parsed.original) parsed.original.imageUrl = originalImg;
       if (dupeImg && parsed.dupe) parsed.dupe.imageUrl = dupeImg;
