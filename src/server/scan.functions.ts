@@ -858,6 +858,7 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
 }
 
 type CounterpartProduct = {
+  id: string;
   brand_name: string;
   product_name: string;
   category: string | null;
