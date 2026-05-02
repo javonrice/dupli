@@ -170,39 +170,60 @@ export const scanProduct = createServerFn({ method: "POST" })
                       ],
                       additionalProperties: false,
                     },
-                    dupe: {
-                      anyOf: [
-                        {
-                          type: "object",
-                          properties: {
-                            productName: { type: "string" },
-                            brand: { type: "string" },
-                            category: { type: "string" },
-                            estimatedPriceUsd: { type: "number" },
-                            whereToBuy: {
-                              type: "string",
-                              description: "Retailer name, e.g. Dollar Tree, Target, Amazon, CVS",
-                            },
-                            buyUrl: {
-                              type: "string",
-                              description:
-                                "A direct, working URL where the user can buy or view the dupe. Prefer the retailer's product page. If a precise product page URL isn't known, use a retailer search URL such as https://www.amazon.com/s?k=<product+name+brand> or https://www.target.com/s?searchTerm=<product+name+brand>. Always return a valid https URL.",
-                            },
-                            keyIngredients: { type: "array", items: { type: "string" } },
+                    dupes: {
+                      type: "array",
+                      minItems: 0,
+                      maxItems: 7,
+                      description:
+                        "Ranked list of 5-7 candidate dupes, sorted best -> worst. The first item is the headline dupe. Empty array if no credible dupe exists.",
+                      items: {
+                        type: "object",
+                        properties: {
+                          productName: { type: "string" },
+                          brand: { type: "string" },
+                          category: { type: "string" },
+                          estimatedPriceUsd: { type: "number" },
+                          whereToBuy: {
+                            type: "string",
+                            description: "Retailer name, e.g. Dollar Tree, Target, Amazon, CVS",
                           },
-                          required: [
-                            "productName",
-                            "brand",
-                            "category",
-                            "estimatedPriceUsd",
-                            "whereToBuy",
-                            "buyUrl",
-                            "keyIngredients",
-                          ],
-                          additionalProperties: false,
+                          buyUrl: {
+                            type: "string",
+                            description:
+                              "A direct, working URL where the user can buy or view the dupe. Prefer the retailer's product page. If a precise product page URL isn't known, use a retailer search URL such as https://www.amazon.com/s?k=<product+name+brand> or https://www.target.com/s?searchTerm=<product+name+brand>. Always return a valid https URL.",
+                          },
+                          keyIngredients: { type: "array", items: { type: "string" } },
+                          matchScore: { type: "number", minimum: 0, maximum: 100 },
+                          dupeType: {
+                            type: "string",
+                            enum: ["Lookalike packaging", "Formula dupe", "Both", "Neither"],
+                          },
+                          packagingSimilarity: { type: "number", minimum: 0, maximum: 100 },
+                          riskLevel: {
+                            type: "string",
+                            enum: ["Lower risk", "Comparable", "Higher risk"],
+                          },
+                          riskFactors: { type: "array", items: { type: "string" } },
+                          missingActives: { type: "array", items: { type: "string" } },
+                          safetyNote: { type: "string" },
+                          sharedIngredients: { type: "array", items: { type: "string" } },
+                          uniqueToOriginal: { type: "array", items: { type: "string" } },
+                          uniqueToDupe: { type: "array", items: { type: "string" } },
+                          contextMatch: { type: "string" },
+                          notes: { type: "string" },
                         },
-                        { type: "null" },
-                      ],
+                        required: [
+                          "productName",
+                          "brand",
+                          "category",
+                          "estimatedPriceUsd",
+                          "whereToBuy",
+                          "buyUrl",
+                          "keyIngredients",
+                          "matchScore",
+                        ],
+                        additionalProperties: false,
+                      },
                     },
                     matchScore: { type: "number", minimum: 0, maximum: 100 },
                     verdict: {
