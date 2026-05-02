@@ -89,11 +89,18 @@ export function Scanner() {
       setStage("results");
 
       // Persist scan to history (best-effort, don't block UI).
-      const p = persistScan({ data: { analysis: result, thumbnailDataUrl: small } });
+      // Wrap with catch to coerce any thrown Response (e.g. expired auth) into a safe value
+      // so the rejection never surfaces as an unhandled `[object Response]` error.
+      const p = persistScan({ data: { analysis: result, thumbnailDataUrl: small } }).catch(
+        (e) => {
+          console.warn("Failed to persist scan", e);
+          return { id: null as string | null };
+        },
+      );
       persistPromiseRef.current = p;
       p.then((r) => {
         if (r.id) setScanId(r.id);
-      }).catch((e) => console.warn("Failed to persist scan", e));
+      });
     },
     [scan, persistScan],
   );
