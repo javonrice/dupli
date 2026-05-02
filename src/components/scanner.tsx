@@ -299,10 +299,14 @@ function ResultsScreen({
             disabled={!canSave}
             aria-label={isSaved ? "Remove from saved" : "Save"}
             aria-pressed={isSaved}
-            className="tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground disabled:opacity-40"
+            className={
+              isSaved
+                ? "tap flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-40"
+                : "tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground disabled:opacity-40"
+            }
           >
             <Bookmark
-              className="h-4 w-4"
+              className="h-[18px] w-[18px]"
               strokeWidth={2}
               fill={isSaved ? "currentColor" : "none"}
             />
