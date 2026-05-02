@@ -741,8 +741,7 @@ function pickBestProductImage(
 // --- Internal dupe DB cross-reference ----------------------------------------
 // Quietly enriches an analysis with verified data from our products+dupes
 // tables. Source (SkinSort) is never surfaced to the user.
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { slugify } from "./skinsort-slugs";
+
 
 async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
   if (!analysis.original?.brand || !analysis.original?.productName) return;
