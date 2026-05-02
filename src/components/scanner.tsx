@@ -143,6 +143,7 @@ export function Scanner() {
         <ResultsScreen
           analysis={analysis}
           preview={preview}
+          scanId={scanId}
           isSaved={isSaved}
           canSave={!!scanId}
           onToggleSave={handleToggleSave}
