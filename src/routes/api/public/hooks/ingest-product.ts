@@ -132,7 +132,13 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
           });
         }
 
-        let body: { brandSlug?: string; productSlug?: string; queueId?: string };
+        let body: {
+          brandSlug?: string;
+          productSlug?: string;
+          queueId?: string;
+          mode?: "full" | "vendors";
+          productId?: string;
+        };
         try {
           body = (await request.json()) as typeof body;
         } catch {
@@ -143,6 +149,47 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
         const productSlug = body.productSlug ? slugify(body.productSlug) : "";
         if (!brandSlug || !productSlug) {
           return new Response(JSON.stringify({ error: "missing slugs" }), { status: 400 });
+        }
+
+        // Vendors-only mode: skip dupe parsing, just refresh prices for one product.
+        if (body.mode === "vendors") {
+          let productId = body.productId ?? "";
+          if (!productId) {
+            const { data: prod } = await supabaseAdmin
+              .from("products")
+              .select("id")
+              .eq("brand_slug", brandSlug)
+              .eq("product_slug", productSlug)
+              .maybeSingle();
+            productId = prod?.id ?? "";
+          }
+          if (!productId) {
+            if (body.queueId) {
+              await supabaseAdmin
+                .from("ingestion_queue")
+                .update({
+                  status: "failed",
+                  last_error: "product not found for vendors mode",
+                  processed_at: new Date().toISOString(),
+                })
+                .eq("id", body.queueId);
+            }
+            return new Response(
+              JSON.stringify({ ok: false, reason: "product_not_found" }),
+              { status: 200 },
+            );
+          }
+          const written = await ingestVendors(productId, brandSlug, productSlug);
+          if (body.queueId) {
+            await supabaseAdmin
+              .from("ingestion_queue")
+              .update({ status: "done", processed_at: new Date().toISOString() })
+              .eq("id", body.queueId);
+          }
+          return new Response(
+            JSON.stringify({ ok: true, mode: "vendors", productId, vendorsWritten: written }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
         }
 
         const url = buildSkinsortUrl(brandSlug, productSlug);
