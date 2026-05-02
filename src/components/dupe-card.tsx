@@ -1,5 +1,5 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, Sparkles } from "lucide-react";
+import { Check, TrendingDown, AlertCircle, Sparkles, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
 
 function priceTag(n: number) {
   if (n < 10) return `$${n.toFixed(2)}`;
@@ -9,6 +9,7 @@ function priceTag(n: number) {
 const verdictStyles: Record<DupeAnalysis["verdict"], { icon: typeof Check; bg: string; fg: string }> = {
   "Worth the hype": { icon: Check, bg: "bg-success", fg: "text-success-foreground" },
   Mixed: { icon: AlertCircle, bg: "bg-foreground", fg: "text-background" },
+  "Risky dupe": { icon: AlertTriangle, bg: "bg-warning", fg: "text-warning-foreground" },
   Skip: { icon: AlertCircle, bg: "bg-destructive", fg: "text-destructive-foreground" },
   "No dupe found": { icon: AlertCircle, bg: "bg-muted-foreground", fg: "text-background" },
 };
