@@ -787,25 +787,11 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     `[dupedb] HIT via ${product.matchStrategy}: "${brand} / ${productName}" -> "${product.brand_name} / ${product.product_name}"`,
   );
 
-  const { data: dupeRows } = await supabaseAdmin
-    .from("dupes")
-    .select(
-      `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
-    )
-    .eq("original_product_id", product.id)
-    .order("overall_match", { ascending: false })
-    .limit(1);
-
-  let top: {
-    overall_match: number;
-    ingredient_match: number | null;
-    shared_ingredients_count: number | null;
-    rationale: string | null;
-  } | undefined = (dupeRows ?? [])[0];
-  let topDupe = ((dupeRows ?? [])[0] as unknown as {
-    dupe?: { brand_name: string; product_name: string; category: string | null; image_url: string | null } | null;
-  })?.dupe ?? undefined;
+  // The dupe graph is stored directionally but real-world dupes are symmetric:
+  // if A is a dupe of B, then B is also a dupe of A. Query BOTH directions.
+  const bidirectional = await fetchBestCounterpart(product.id);
+  let top = bidirectional?.top;
+  let topDupe = bidirectional?.counterpart;
 
   // TIER 5: sibling fallback. The matched product has no dupe edges, but a
   // sibling SKU in the same brand might. Walk the graph from there.
