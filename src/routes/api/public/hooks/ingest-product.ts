@@ -122,9 +122,16 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
               .update({ status: "failed", last_error: "parse failed" })
               .eq("id", body.queueId);
           }
-          return new Response(JSON.stringify({ ok: false, reason: "parse_failed" }), {
-            status: 200,
-          });
+          return new Response(
+            JSON.stringify({
+              ok: false,
+              reason: "parse_failed",
+              htmlLen: html.length,
+              titleSnippet: (html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ?? "").slice(0, 200),
+              hasBorder2: html.includes("border-2 border-warm-gray-500"),
+            }),
+            { status: 200 },
+          );
         }
 
         const originalId = await upsertProduct({
