@@ -1,6 +1,8 @@
 // Lovable AI vision: identify a beauty product AND suggest a dupe in one call.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { slugify } from "./skinsort-slugs";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
