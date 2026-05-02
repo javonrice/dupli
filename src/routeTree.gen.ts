@@ -15,7 +15,7 @@ import { Route as AppIndexRouteImport } from './routes/_app/index'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
-import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
+import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
 import { Route as AppScanIdShareRouteImport } from './routes/_app/scan.$id.share'
 
 const LoginRoute = LoginRouteImport.update({
@@ -47,15 +47,15 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
   path: '/history',
   getParentRoute: () => AppRoute,
 } as any)
-const AppScanIdRoute = AppScanIdRouteImport.update({
-  id: '/scan/$id',
-  path: '/scan/$id',
+const AppScanIdIndexRoute = AppScanIdIndexRouteImport.update({
+  id: '/scan/$id/',
+  path: '/scan/$id/',
   getParentRoute: () => AppRoute,
 } as any)
 const AppScanIdShareRoute = AppScanIdShareRouteImport.update({
-  id: '/share',
-  path: '/share',
-  getParentRoute: () => AppScanIdRoute,
+  id: '/scan/$id/share',
+  path: '/scan/$id/share',
+  getParentRoute: () => AppRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -64,8 +64,8 @@ export interface FileRoutesByFullPath {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
-  '/scan/$id': typeof AppScanIdRouteWithChildren
   '/scan/$id/share': typeof AppScanIdShareRoute
+  '/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -73,8 +73,8 @@ export interface FileRoutesByTo {
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
   '/': typeof AppIndexRoute
-  '/scan/$id': typeof AppScanIdRouteWithChildren
   '/scan/$id/share': typeof AppScanIdShareRoute
+  '/scan/$id': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -84,8 +84,8 @@ export interface FileRoutesById {
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
   '/_app/': typeof AppIndexRoute
-  '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/scan/$id/share': typeof AppScanIdShareRoute
+  '/_app/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -95,8 +95,8 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
-    | '/scan/$id'
     | '/scan/$id/share'
+    | '/scan/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -104,8 +104,8 @@ export interface FileRouteTypes {
     | '/profile'
     | '/saved'
     | '/'
-    | '/scan/$id'
     | '/scan/$id/share'
+    | '/scan/$id'
   id:
     | '__root__'
     | '/_app'
@@ -114,8 +114,8 @@ export interface FileRouteTypes {
     | '/_app/profile'
     | '/_app/saved'
     | '/_app/'
-    | '/_app/scan/$id'
     | '/_app/scan/$id/share'
+    | '/_app/scan/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -167,41 +167,30 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppHistoryRouteImport
       parentRoute: typeof AppRoute
     }
-    '/_app/scan/$id': {
-      id: '/_app/scan/$id'
+    '/_app/scan/$id/': {
+      id: '/_app/scan/$id/'
       path: '/scan/$id'
-      fullPath: '/scan/$id'
-      preLoaderRoute: typeof AppScanIdRouteImport
+      fullPath: '/scan/$id/'
+      preLoaderRoute: typeof AppScanIdIndexRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/scan/$id/share': {
       id: '/_app/scan/$id/share'
-      path: '/share'
+      path: '/scan/$id/share'
       fullPath: '/scan/$id/share'
       preLoaderRoute: typeof AppScanIdShareRouteImport
-      parentRoute: typeof AppScanIdRoute
+      parentRoute: typeof AppRoute
     }
   }
 }
-
-interface AppScanIdRouteChildren {
-  AppScanIdShareRoute: typeof AppScanIdShareRoute
-}
-
-const AppScanIdRouteChildren: AppScanIdRouteChildren = {
-  AppScanIdShareRoute: AppScanIdShareRoute,
-}
-
-const AppScanIdRouteWithChildren = AppScanIdRoute._addFileChildren(
-  AppScanIdRouteChildren,
-)
 
 interface AppRouteChildren {
   AppHistoryRoute: typeof AppHistoryRoute
   AppProfileRoute: typeof AppProfileRoute
   AppSavedRoute: typeof AppSavedRoute
   AppIndexRoute: typeof AppIndexRoute
-  AppScanIdRoute: typeof AppScanIdRouteWithChildren
+  AppScanIdShareRoute: typeof AppScanIdShareRoute
+  AppScanIdIndexRoute: typeof AppScanIdIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -209,7 +198,8 @@ const AppRouteChildren: AppRouteChildren = {
   AppProfileRoute: AppProfileRoute,
   AppSavedRoute: AppSavedRoute,
   AppIndexRoute: AppIndexRoute,
-  AppScanIdRoute: AppScanIdRouteWithChildren,
+  AppScanIdShareRoute: AppScanIdShareRoute,
+  AppScanIdIndexRoute: AppScanIdIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

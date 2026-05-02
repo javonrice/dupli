@@ -6,7 +6,7 @@ import { getScan, setSaved } from "@/server/scans.functions";
 import { ResultsScreen } from "@/components/scanner";
 import type { DupeAnalysis } from "@/server/scan.functions";
 
-export const Route = createFileRoute("/_app/scan/$id")({
+export const Route = createFileRoute("/_app/scan/$id/")({
   component: ScanDetailPage,
   head: () => ({
     meta: [{ title: "Scan — Dupli" }],
