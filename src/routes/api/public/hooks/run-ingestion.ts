@@ -5,8 +5,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const DEFAULT_BATCH = 8;
-const MAX_BATCH = 20;
+const DEFAULT_BATCH = 50;
+const MAX_BATCH = 200;
+// When more than this many items remain after a drain, immediately fire
+// another drain (fan-out) so the queue clears in minutes, not hours.
+const SELF_CASCADE = true;
 
 export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
   server: {
@@ -83,6 +86,19 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
           }).catch((e) => {
             console.error("[ingestion] fan-out fetch failed", pick.id, e);
           });
+        }
+
+        // If we picked a full batch, more work likely remains — kick another
+        // drain immediately (fire-and-forget) so the queue cascades down fast.
+        if (SELF_CASCADE && picks.length >= batch) {
+          fetch(`${origin}/api/public/hooks/run-ingestion`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${expected}`,
+            },
+            body: JSON.stringify({ batch }),
+          }).catch((e) => console.error("[ingestion] cascade fetch failed", e));
         }
 
         return new Response(
