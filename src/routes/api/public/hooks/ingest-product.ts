@@ -284,6 +284,11 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
           if (!error) dupesWritten++;
         }
 
+        // Always fetch vendors for the original product (one extra HTTP call).
+        // Dupes get their own vendor pass via mode: "vendors" jobs to keep
+        // each worker invocation under timeout.
+        const vendorsWritten = await ingestVendors(originalId, brandSlug, productSlug);
+
         if (body.queueId) {
           await supabaseAdmin
             .from("ingestion_queue")
@@ -297,6 +302,7 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
             productId: originalId,
             dupesWritten,
             dupesParsed: parsed.dupes.length,
+            vendorsWritten,
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
