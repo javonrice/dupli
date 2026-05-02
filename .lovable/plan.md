@@ -1,75 +1,199 @@
-## What's changing
+## The headline
 
-Right now the scanner is built around one idea: "find a cheaper version of this product." Your TikTok screenshots show that real-world dupe culture is actually about two different things:
+Build a real, portable, indexed dupe database in Supabase — not a CSV, not a JSON dump, not a markdown blob. The DB is **the asset**. Dupli reads from it; you can also point any future product (extension, API, partner integration, sellable dataset) at the same tables.
 
-1. **Lookalike packaging** — the Dollar Tree bottle is *designed to look like* La Roche‑Posay, eos, Vaseline, Summer Fridays. The visual mimicry IS the dupe.
-2. **Risk vs. reward** — a cheaper lookalike isn't automatically a win. It might be missing the active that made the original work, OR it might add irritants (fragrance, alcohol, harsh acids without buffering) that the original carefully avoided.
+I tested SkinSort directly: pages are static HTML, no auth, no JavaScript needed, ~50 dupes per page with overall % match, ingredient % match, attribute % match, ingredients-in-common count, "free from" tags, "good for" tags, image URLs, and a written rationale. Better data than what our scanner currently invents.
 
-So we'll teach the scanner to think like someone walking the Dollar Tree aisle, not like a savings calculator.
+**SkinSort is invisible to users.** Stored as `source: 'skinsort'` internally; never shown in the UI.
 
-## New analysis dimensions
+---
 
-Every scan will produce these new fields (in addition to what's already there):
+## Speed estimate
 
-- **dupeType**: `"Lookalike packaging"` | `"Formula dupe"` | `"Both"` | `"Neither"` — explains *why* it qualifies as a dupe
-- **packagingSimilarity**: 0–100 — how much the dupe's packaging mimics the original (color, shape, font, layout)
-- **riskLevel**: `"Lower risk"` | `"Comparable"` | `"Higher risk"` — whether switching to the dupe is safer, the same, or riskier than the original
-- **riskFactors**: short list of specific concerns in the dupe (e.g. "Added fragrance", "Higher % glycolic acid without buffering", "Denatured alcohol high in INCI list", "No SPF despite mimicking sunscreen packaging")
-- **missingActives**: actives the original has that the dupe doesn't (e.g. "Niacinamide", "Ceramides") — what you give up
-- **safetyNote**: one plain-English sentence an esthetician would say out loud ("Fine for body, I wouldn't put this on a compromised face barrier.")
+- ~60–80k product pages on SkinSort (50 dupes per page = ~3M pairs, matching their claim)
+- 1 fetch + parse ≈ 2 sec; 50 dupe rows per fetch
+- At a polite 1 req/sec: full corpus in **17–22 hours** (one weekend)
+- Top ~5,000 most-popular products (covers the long tail of real scans): **~1.5 hours**
 
-The verdict enum gets one more option: **`"Risky dupe"`** — cheap and lookalike, but the formula tradeoff is bad enough we shouldn't recommend it.
+After backfill, a weekly delta crawl keeps it fresh in ~1–2 hours.
 
-## Prompt rewrite
+---
 
-The system prompt for Gemini gets reframed:
+## Database design (the part you care about)
 
-- Stop optimizing for "cheapest match." Start asking "is this a credible swap, and what does the user lose or risk by swapping?"
-- Treat **visual packaging mimicry** as a first-class signal. If the user photographed an XtraCare body balm in a navy tube with white wave that obviously copies Vaseline, the dupe IS Vaseline — even if the price gap is small.
-- For Dollar Tree / drugstore lookalikes specifically, score packaging similarity honestly (color palette, bottle shape, typography, label layout).
-- Score risk separately from match. A 90% formula match can still be "Higher risk" if the dupe swaps a buffered acid for an unbuffered one.
-- Never inflate the verdict. "Skip" and the new "Risky dupe" exist for a reason.
+Designed so that anything you build later can drop in and use it: REST endpoint, second app, partner data feed, exported snapshot, anything. Three tables, normalized, fully indexed.
 
-## UI changes (results screen + share card)
+### `products` — the canonical product registry
 
-**DupeCard gets a new top section** above the verdict bar:
+Every brand+product combination becomes ONE row. Both originals and dupes live here — a "dupe" is just a product that's referenced from the dupes table. Reusable across your entire ecosystem.
 
 ```text
-┌──────────────────────────────────────────┐
-│  LOOKALIKE PACKAGING  ·  92% visual      │
-│  ⚠ Higher risk than the original         │
-└──────────────────────────────────────────┘
+id                  uuid pk
+brand_slug          text not null         -- 'cerave'
+product_slug        text not null         -- 'moisturizing-cream'
+brand_name          text not null         -- 'CeraVe' (display)
+product_name        text not null         -- 'Moisturizing Cream' (display)
+category            text                  -- 'General Moisturizer'
+image_url           text                  -- storage.skinsort.com/...
+source_url          text                  -- skinsort URL (internal only)
+ingredients_count   int
+free_from           text[]                -- ['fragrances','parabens']
+good_for            text[]                -- ['dry skin','anti aging']
+contains            text[]                -- ['silicones','sulfates']
+search_vector       tsvector              -- generated, for full-text search
+last_ingested_at    timestamptz
+created_at          timestamptz default now()
+
+unique (brand_slug, product_slug)
+index on lower(brand_name)
+index on search_vector USING GIN     -- fast text search
+index on free_from USING GIN         -- fast tag filtering
+index on good_for USING GIN
+index on category
 ```
 
-**Below the formula breakdown**, a new "Risk check" panel:
+### `dupes` — the pair table
 
-- Shaded amber when `Higher risk`, neutral when `Comparable`, soft green when `Lower risk`
-- Lists `riskFactors` as chips with a small warning icon
-- Lists `missingActives` under "What you give up"
-- Closes with the `safetyNote` in italic, attributed to the esthetician voice
+```text
+id                       uuid pk
+original_product_id      uuid references products(id) on delete cascade
+dupe_product_id          uuid references products(id) on delete cascade
+overall_match            int     -- 0-100
+ingredient_match         int     -- 0-100
+attribute_match          int     -- 0-100
+shared_ingredients_count int
+rationale                text    -- the "Dupe Explained" paragraph
+rank                     int     -- position 1-50 on source page
+source                   text default 'skinsort'
+created_at               timestamptz default now()
 
-**ShareCard** gets a small "Risk: Higher / Comparable / Lower" pill next to the verdict pill, so when someone shares the card on TikTok the warning travels with it.
+unique (original_product_id, dupe_product_id)
+index on (original_product_id, overall_match desc)   -- "give me top dupes for X"
+index on (dupe_product_id, overall_match desc)       -- "what's this a dupe OF?"
+index on overall_match desc                          -- "show top dupes globally"
+```
 
-**ScanListItem** (history + saved): if `riskLevel === "Higher risk"`, show a tiny amber dot next to the match score so risky dupes are visible at a glance in the list.
+This bidirectional indexing means **both lookup directions are O(log n)** — same speed whether the user scans the original or the dupe.
 
-## Backend / data
+### `ingestion_queue` — the worker's todo list
 
-- No DB migration. The `scans.analysis` column is already `jsonb`, so new fields land there automatically. Older scans without the new fields render gracefully (fields are optional in the type and the UI uses conditional rendering).
-- Update the `DupeAnalysis` TypeScript type and the `analyze_dupe` tool JSON schema in `src/server/scan.functions.ts` to include the new fields as required outputs.
-- `saveScan` keeps writing the full analysis blob; no changes needed there.
-- The new verdict `"Risky dupe"` gets its own style entry in `verdictStyles` (amber background, warning icon).
+```text
+id              uuid pk
+brand_slug      text
+product_slug    text
+reason          text     -- 'seed' | 'user_scan_miss' | 'refresh'
+status          text     -- 'pending' | 'processing' | 'done' | 'failed'
+priority        int      -- higher = sooner; user scan misses get +10
+attempts        int default 0
+last_error      text
+created_at      timestamptz default now()
+processed_at    timestamptz
 
-## Files I'll touch
+unique (brand_slug, product_slug, status) where status = 'pending'
+index on (status, priority desc, created_at)
+```
 
-- `src/server/scan.functions.ts` — extend `DupeAnalysis` type, expand the system prompt, add the new fields to the tool schema
-- `src/components/dupe-card.tsx` — add the lookalike/risk header band, risk-check panel, "Risky dupe" verdict style
-- `src/components/share-card.tsx` — add risk pill next to verdict pill
-- `src/components/scan-list-item.tsx` — amber risk dot when `riskLevel === "Higher risk"`
+### Why this design is portable & fast
 
-## What I won't do (yet)
+- **Normalized** — one row per product, no duplication. A single brand rename updates one row, not 50.
+- **Slugs are stable IDs** — `cerave/moisturizing-cream` works as a public URL key if you ever expose an API.
+- **Indexed for every realistic query**:
+  - "Top dupes for product X" — covered
+  - "What's this product a dupe of?" — covered (reverse lookup)
+  - "Search products by name" — full-text index
+  - "All products good for dry skin without fragrance" — GIN array indexes
+  - "All dupes with 90%+ match" — partial index possible
+- **RLS read-open, write-locked** — any signed-in user / any future app of yours can SELECT; only your service role writes. Means you can publish a public read API tomorrow without re-architecting.
+- **No Dupli-specific columns in the asset tables** — the dupe DB is reusable. App-specific stuff (user scans, saved scans) stays in the existing tables.
 
-- I won't add a separate "Compare to a brand I name" flow — the camera still drives everything.
-- I won't change history/saved schemas. The richer data lives inside the existing `analysis` jsonb.
-- I won't add an ingredient-by-ingredient hazard database. The risk read comes from the AI's reasoning over the formula it identified, not a static lookup.
+---
 
-After you approve, I'll implement and you can scan one of the Dollar Tree screenshots to see the new risk-aware verdict in action.
+## How it works (runtime)
+
+```text
+User scans product photo
+      ↓
+scanProduct (existing) — AI identifies brand + product
+      ↓
+NEW: lookupDupes(brand, productName)
+   1. Slugify → query products + dupes (single indexed JOIN)
+   2. Hit?  Return real verified dupes (sub-50ms)
+      Miss? Fall back to AI's invented dupe + enqueue for ingestion
+      ↓
+DupeAnalysis returned to UI — UI never knows where the data came from
+```
+
+Separate, **always-offline** ingestion worker fills the DB. Users never trigger SkinSort traffic.
+
+---
+
+## Build phases
+
+### Phase 1 — Foundation (1 day)
+- Migration: create `products`, `dupes`, `ingestion_queue` with all indexes + RLS
+- `src/server/dupes.functions.ts` — `lookupDupes(brand, productName)` server function
+- Wire `scanProduct` to call `lookupDupes` first, AI fallback second
+- Auto-enqueue every miss
+
+### Phase 2 — Ingestion (1 day)
+- `src/server/skinsort-parser.ts` — parses the SkinSort markdown into typed dupe records (already validated against real pages — the format is consistent)
+- `src/server/skinsort-slugs.ts` — brand+product → URL; falls back to a `site:skinsort.com` Google search via Lovable AI's `google_search` tool when the direct slug 404s; caches the resolved slug
+- `src/routes/api/public/hooks/ingest-product.ts` — accepts one queue item, fetches, parses, upserts ~50 rows. Token-protected via `INGESTION_TOKEN` secret.
+- `src/routes/api/public/hooks/run-ingestion.ts` — drains N queue items with rate limiting, jitter, and 429 backoff
+
+### Phase 3 — Seed crawl (overnight; no dev work)
+- One-time script to seed `ingestion_queue` from SkinSort's brand index pages
+- pg_cron triggers `run-ingestion` every minute, processes ~60 items per minute (1 req/sec)
+- Stop the cron when queue is drained
+
+### Phase 4 — Continuous expansion (passive)
+- Every user scan miss inserts into queue with `priority = 10`
+- pg_cron flushes the queue every hour at low rate (covers misses immediately, refreshes cheaply)
+
+---
+
+## Portability — using the DB elsewhere later
+
+Because the schema is clean and indexed, here's what's already free without extra work:
+
+| Future use case                                    | What you need to add                                                         |
+| -------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Browser extension that overlays dupes on Sephora   | Just the existing `lookupDupes` server fn — already public-readable          |
+| Public REST API (`GET /api/v1/products/:slug/dupes`) | One thin route file, ~30 lines                                                |
+| Sellable CSV / Parquet snapshot                    | One SQL `COPY` statement → `/mnt/documents/`                                  |
+| Partner data feed                                  | Postgres logical replication, or scheduled snapshot to S3                     |
+| New mobile app                                     | Reuse the same Lovable Cloud DB; same `lookupDupes` function                  |
+| Search by ingredient                               | Add `ingredients text[]` column + GIN index (one migration)                   |
+| Price overlay                                      | Add `prices` table referencing `products(id)`; fill from a separate source    |
+
+The **products** and **dupes** tables stay clean. App-specific concerns never pollute them.
+
+---
+
+## Performance targets
+
+- `lookupDupes(brand, productName)`: **< 50ms** p95 (slug PK hit + indexed dupe scan)
+- Full-text product search: **< 100ms** p95 on 80k products
+- Tag filter ("dry skin + no fragrance"): **< 100ms** p95 (GIN indexes)
+- Ingestion: **0% impact on user-facing reads** (writes are isolated to background worker)
+
+---
+
+## Rate-limit safety on the ingestion side
+
+- Custom `User-Agent` identifying our app
+- 1 req/sec default with ±200ms jitter
+- Exponential backoff on 429/5xx
+- Hard pause if 3 consecutive 429s
+- Daily cap (configurable, default 20k requests/day)
+- Resume from queue position on failure — never lose progress
+
+---
+
+## What I need from you to start
+
+1. **Confirm "DB is the asset" approach** — you own the schema, can use it anywhere.
+2. **Seed scope to start with**: top ~5,000 products (1.5 hr) before going for the full corpus this weekend? Or start the full corpus immediately?
+3. Anything else you want stored per product right away (e.g. a free-text `notes` column reserved for your own annotations later)?
+
+Approve and I'll switch to build mode and ship Phase 1 + 2.
