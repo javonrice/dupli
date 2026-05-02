@@ -338,6 +338,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      set_ingestion_token_db_secret: {
+        Args: { p_token: string }
+        Returns: string
+      }
       set_ingestion_token_secret: { Args: { p_token: string }; Returns: string }
       verify_ingestion_token: { Args: { p_token: string }; Returns: boolean }
     }
