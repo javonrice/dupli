@@ -32,13 +32,13 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
         }
         const batch = Math.min(Math.max(body.batch ?? DEFAULT_BATCH, 1), 15);
 
-        // Reclaim items stuck in "processing" from a previous worker that timed out.
-        const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
+        // Reclaim items stuck in "processing" — a previous worker timed out.
+        // Safe because cron runs sequentially (every minute) and each invocation
+        // completes within its own timeout budget.
         await supabaseAdmin
           .from("ingestion_queue")
           .update({ status: "pending" })
-          .eq("status", "processing")
-          .lt("created_at", staleCutoff);
+          .eq("status", "processing");
 
         // Pick up N pending items, mark them processing atomically.
         const { data: picks, error: pickErr } = await supabaseAdmin
