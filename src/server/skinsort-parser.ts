@@ -14,6 +14,16 @@ export type ParsedProduct = {
   freeFrom: string[];
   goodFor: string[];
   contains: string[];
+  ingredients: string[];
+  variantId: number | null;
+};
+
+export type ParsedVendor = {
+  merchant: string;
+  url: string;
+  priceUsd: number | null;
+  currency: string;
+  rank: number;
 };
 
 export type ParsedDupe = {
