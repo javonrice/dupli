@@ -301,7 +301,7 @@ export const scanProduct = createServerFn({ method: "POST" })
                   },
                   required: [
                     "original",
-                    "dupe",
+                    "dupes",
                     "matchScore",
                     "verdict",
                     "notes",
@@ -315,7 +315,7 @@ export const scanProduct = createServerFn({ method: "POST" })
           ],
           tool_choice: { type: "function", function: { name: "analyze_dupe" } },
           temperature: 0.2,
-          max_tokens: 2400,
+          max_tokens: 5500,
         }),
       });
 
