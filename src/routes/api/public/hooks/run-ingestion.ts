@@ -159,7 +159,18 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
         const auth = request.headers.get("authorization") ?? "";
         const token = auth.replace(/^Bearer\s+/i, "");
         const expected = process.env.INGESTION_TOKEN;
-        if (!expected || token !== expected) {
+
+        let authorized = !!expected && token === expected;
+        if (!authorized && token) {
+          // Fallback: token may be the cron-vault token. Verify via SECURITY
+          // DEFINER SQL function so we don't expose vault read access.
+          const { data: ok } = await (supabaseAdmin.rpc as any)(
+            "verify_ingestion_token",
+            { p_token: token },
+          );
+          authorized = !!ok;
+        }
+        if (!authorized) {
           return new Response(JSON.stringify({ error: "unauthorized" }), { status: 401 });
         }
 
