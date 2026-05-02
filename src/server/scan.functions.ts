@@ -24,11 +24,26 @@ export type DupeSuggestion = {
   buyUrl: string;
   keyIngredients: string[];
   imageUrl?: string;
+  // Per-candidate comparison fields (mirrors top-level for the #1 pick).
+  matchScore?: number;
+  dupeType?: "Lookalike packaging" | "Formula dupe" | "Both" | "Neither";
+  packagingSimilarity?: number;
+  riskLevel?: "Lower risk" | "Comparable" | "Higher risk";
+  riskFactors?: string[];
+  missingActives?: string[];
+  safetyNote?: string;
+  sharedIngredients?: string[];
+  uniqueToOriginal?: string[];
+  uniqueToDupe?: string[];
+  contextMatch?: string;
+  notes?: string;
 };
 
 export type DupeAnalysis = {
   original: ScannedProduct;
   dupe: DupeSuggestion | null;
+  /** All AI-ranked candidates, sorted best -> worst. dupe === dupes[0] when present. */
+  dupes?: DupeSuggestion[];
   matchScore: number; // 0-100
   verdict: "Worth the hype" | "Mixed" | "Skip" | "Risky dupe" | "No dupe found";
   notes: string;
