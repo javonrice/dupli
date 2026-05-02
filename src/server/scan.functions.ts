@@ -744,7 +744,11 @@ function pickBestProductImage(
 
 
 async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
-  if (!analysis.original?.brand || !analysis.original?.productName) return;
+  if (!analysis.original?.brand || !analysis.original?.productName) {
+    // No identification — clear AI dupe, force "no dupe found".
+    forceNoDupe(analysis);
+    return;
+  }
 
   const brandSlug = slugify(analysis.original.brand);
   const productSlug = slugify(analysis.original.productName);
@@ -757,15 +761,15 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     .maybeSingle();
 
   if (!product) {
-    // Miss — enqueue for background ingestion. Conflict on pending unique idx is silent.
-    await supabaseAdmin
-      .from("ingestion_queue")
-      .insert({
-        brand_slug: brandSlug,
-        product_slug: productSlug,
-        reason: "user_scan_miss",
-        priority: 10,
-      });
+    // Miss — enqueue for background ingestion, then strip the AI dupe so the
+    // user only ever sees DB-backed results. (Temporary "DB-only" mode.)
+    await supabaseAdmin.from("ingestion_queue").insert({
+      brand_slug: brandSlug,
+      product_slug: productSlug,
+      reason: "user_scan_miss",
+      priority: 10,
+    });
+    forceNoDupe(analysis);
     return;
   }
 
@@ -786,24 +790,45 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     | null
     | undefined;
 
-  // If our verified top dupe is materially better than the AI's guess, swap it in.
-  if (top && topDupe && top.overall_match >= analysis.matchScore) {
-    analysis.dupe = {
-      productName: topDupe.product_name,
-      brand: topDupe.brand_name,
-      category: topDupe.category ?? analysis.dupe?.category ?? "Beauty product",
-      estimatedPriceUsd: analysis.dupe?.estimatedPriceUsd ?? 0,
-      whereToBuy: analysis.dupe?.whereToBuy ?? "Online",
-      buyUrl:
-        analysis.dupe?.buyUrl ??
-        `https://www.amazon.com/s?k=${encodeURIComponent(`${topDupe.brand_name} ${topDupe.product_name}`)}`,
-      keyIngredients: analysis.dupe?.keyIngredients ?? [],
-      imageUrl: topDupe.image_url ?? analysis.dupe?.imageUrl,
-    };
-    analysis.matchScore = top.overall_match;
-    analysis.confidence = "high";
-    if (top.rationale && (!analysis.notes || analysis.notes.length < 40)) {
-      analysis.notes = top.rationale;
-    }
+  if (!top || !topDupe) {
+    // Product is in DB but has no dupes recorded — still show "no dupe".
+    forceNoDupe(analysis);
+    return;
   }
+
+  // Always use the verified dupe — AI guess is discarded in DB-only mode.
+  analysis.dupe = {
+    productName: topDupe.product_name,
+    brand: topDupe.brand_name,
+    category: topDupe.category ?? "Beauty product",
+    estimatedPriceUsd: 0,
+    whereToBuy: "Online",
+    buyUrl: `https://www.amazon.com/s?k=${encodeURIComponent(`${topDupe.brand_name} ${topDupe.product_name}`)}`,
+    keyIngredients: [],
+    imageUrl: topDupe.image_url ?? undefined,
+  };
+  analysis.matchScore = top.overall_match;
+  analysis.confidence = "high";
+  if (top.rationale) {
+    analysis.notes = top.rationale;
+  }
+  // Clear AI-invented comparison fields that no longer apply to the verified dupe.
+  analysis.sharedIngredients = [];
+  analysis.uniqueToOriginal = [];
+  analysis.uniqueToDupe = [];
+  if (analysis.verdict === "No dupe found") analysis.verdict = "Worth the hype";
+}
+
+function forceNoDupe(analysis: DupeAnalysis): void {
+  analysis.dupe = null;
+  analysis.matchScore = 0;
+  analysis.verdict = "No dupe found";
+  analysis.sharedIngredients = [];
+  analysis.uniqueToOriginal = [];
+  analysis.uniqueToDupe = [];
+  analysis.riskFactors = [];
+  analysis.missingActives = [];
+  analysis.packagingSimilarity = 0;
+  analysis.dupeType = "Neither";
+  analysis.notes = "No verified dupe in our database for this product yet. We've queued it — try again in a minute.";
 }
