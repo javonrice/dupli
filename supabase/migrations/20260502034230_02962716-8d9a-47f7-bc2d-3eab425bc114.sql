@@ -1,0 +1,1 @@
+UPDATE public.ingestion_queue SET status = 'pending' WHERE status = 'processing';
