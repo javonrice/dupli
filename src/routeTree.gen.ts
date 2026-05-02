@@ -17,6 +17,8 @@ import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
 import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
+import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
+import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
 import { Route as AppScanIdShareRouteImport } from './routes/_app/scan.$id.share'
 
 const LoginRoute = LoginRouteImport.update({
@@ -58,6 +60,18 @@ const AppScanIdIndexRoute = AppScanIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppScanIdRoute,
 } as any)
+const ApiPublicHooksRunIngestionRoute =
+  ApiPublicHooksRunIngestionRouteImport.update({
+    id: '/api/public/hooks/run-ingestion',
+    path: '/api/public/hooks/run-ingestion',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicHooksIngestProductRoute =
+  ApiPublicHooksIngestProductRouteImport.update({
+    id: '/api/public/hooks/ingest-product',
+    path: '/api/public/hooks/ingest-product',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppScanIdShareRoute = AppScanIdShareRouteImport.update({
   id: '/share',
   path: '/share',
@@ -72,6 +86,8 @@ export interface FileRoutesByFullPath {
   '/saved': typeof AppSavedRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/scan/$id/share': typeof AppScanIdShareRoute
+  '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
+  '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -81,6 +97,8 @@ export interface FileRoutesByTo {
   '/saved': typeof AppSavedRoute
   '/': typeof AppIndexRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
+  '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
+  '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/scan/$id': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesById {
@@ -93,6 +111,8 @@ export interface FileRoutesById {
   '/_app/': typeof AppIndexRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/scan/$id/share': typeof AppScanIdShareRoute
+  '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
+  '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/_app/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -105,6 +125,8 @@ export interface FileRouteTypes {
     | '/saved'
     | '/scan/$id'
     | '/scan/$id/share'
+    | '/api/public/hooks/ingest-product'
+    | '/api/public/hooks/run-ingestion'
     | '/scan/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -114,6 +136,8 @@ export interface FileRouteTypes {
     | '/saved'
     | '/'
     | '/scan/$id/share'
+    | '/api/public/hooks/ingest-product'
+    | '/api/public/hooks/run-ingestion'
     | '/scan/$id'
   id:
     | '__root__'
@@ -125,12 +149,16 @@ export interface FileRouteTypes {
     | '/_app/'
     | '/_app/scan/$id'
     | '/_app/scan/$id/share'
+    | '/api/public/hooks/ingest-product'
+    | '/api/public/hooks/run-ingestion'
     | '/_app/scan/$id/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
+  ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -191,6 +219,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScanIdIndexRouteImport
       parentRoute: typeof AppScanIdRoute
     }
+    '/api/public/hooks/run-ingestion': {
+      id: '/api/public/hooks/run-ingestion'
+      path: '/api/public/hooks/run-ingestion'
+      fullPath: '/api/public/hooks/run-ingestion'
+      preLoaderRoute: typeof ApiPublicHooksRunIngestionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/hooks/ingest-product': {
+      id: '/api/public/hooks/ingest-product'
+      path: '/api/public/hooks/ingest-product'
+      fullPath: '/api/public/hooks/ingest-product'
+      preLoaderRoute: typeof ApiPublicHooksIngestProductRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/scan/$id/share': {
       id: '/_app/scan/$id/share'
       path: '/share'
@@ -236,6 +278,8 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
+  ApiPublicHooksRunIngestionRoute: ApiPublicHooksRunIngestionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
