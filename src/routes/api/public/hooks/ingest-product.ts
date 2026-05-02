@@ -5,6 +5,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { buildSkinsortUrl, slugify } from "@/server/skinsort-slugs";
 import { parseSkinsortPage } from "@/server/skinsort-parser";
+import {
+  buildVendorsUrl,
+  parseSkinsortVendors,
+  type ParsedVendor,
+} from "@/server/skinsort-vendors-parser";
 
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
