@@ -4,6 +4,7 @@ import { Link } from "@tanstack/react-router";
 
 export function ScanListItem({ scan, linkable = true }: { scan: ScanRow; linkable?: boolean }) {
   const thumb = scan.thumbnail_data_url ?? scan.original_image_url;
+  const isHigherRisk = scan.analysis?.riskLevel === "Higher risk";
   const date = new Date(scan.created_at);
   const dateLabel = date.toLocaleDateString(undefined, {
     month: "short",
