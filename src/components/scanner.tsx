@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw, Bookmark, Share2 } from "lucide-react";
 import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
 import { saveScan, setSaved } from "@/server/scans.functions";
@@ -47,6 +47,9 @@ export function Scanner() {
   const toggleSaved = useServerFn(setSaved);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const persistPromiseRef = useRef<Promise<{ id: string | null }> | null>(null);
+  const navigate = useNavigate();
+  const [preparingShare, setPreparingShare] = useState(false);
 
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
@@ -86,14 +89,35 @@ export function Scanner() {
       setStage("results");
 
       // Persist scan to history (best-effort, don't block UI).
-      persistScan({ data: { analysis: result, thumbnailDataUrl: small } })
-        .then((r) => {
-          if (r.id) setScanId(r.id);
-        })
-        .catch((e) => console.warn("Failed to persist scan", e));
+      const p = persistScan({ data: { analysis: result, thumbnailDataUrl: small } });
+      persistPromiseRef.current = p;
+      p.then((r) => {
+        if (r.id) setScanId(r.id);
+      }).catch((e) => console.warn("Failed to persist scan", e));
     },
     [scan, persistScan],
   );
+
+  const handleShare = useCallback(async () => {
+    if (preparingShare) return;
+    if (scanId) {
+      navigate({ to: "/scan/$id/share", params: { id: scanId } });
+      return;
+    }
+    setPreparingShare(true);
+    try {
+      const r = await (persistPromiseRef.current ?? Promise.resolve({ id: null as string | null }));
+      if (r?.id) {
+        navigate({ to: "/scan/$id/share", params: { id: r.id } });
+      } else {
+        console.warn("Cannot share: scan not persisted");
+      }
+    } catch (e) {
+      console.warn("Failed to prepare share", e);
+    } finally {
+      setPreparingShare(false);
+    }
+  }, [scanId, preparingShare, navigate]);
 
   const handleToggleSave = useCallback(async () => {
     if (!scanId || savingBookmark) return;
@@ -148,6 +172,8 @@ export function Scanner() {
           canSave={!!scanId}
           onToggleSave={handleToggleSave}
           onReset={reset}
+          onShare={handleShare}
+          preparingShare={preparingShare}
         />
       )}
     </>
@@ -281,6 +307,8 @@ export function ResultsScreen({
   isSaved,
   canSave,
   onToggleSave,
+  onShare,
+  preparingShare,
 }: {
   analysis: DupeAnalysis;
   preview: string | null;
@@ -289,6 +317,8 @@ export function ResultsScreen({
   isSaved: boolean;
   canSave: boolean;
   onToggleSave: () => void | Promise<void>;
+  onShare?: () => void | Promise<void>;
+  preparingShare?: boolean;
 }) {
   // Hide the bottom tab bar while results are shown for extra spacing.
   useHideTabBar();
@@ -344,12 +374,18 @@ export function ResultsScreen({
               </Link>
             ) : (
               <button
-                disabled
-                aria-label="Preparing share"
-                className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground opacity-60"
+                type="button"
+                onClick={() => onShare?.()}
+                disabled={preparingShare}
+                aria-label="Share this dupe as image"
+                className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground disabled:opacity-60"
               >
-                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />
-                Share
+                {preparingShare ? (
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />
+                ) : (
+                  <Share2 className="h-[16px] w-[16px]" strokeWidth={2.25} />
+                )}
+                Share this dupe
               </button>
             ))}
           {link ? (
