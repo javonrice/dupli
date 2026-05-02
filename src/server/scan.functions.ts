@@ -783,11 +783,15 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     .order("overall_match", { ascending: false })
     .limit(1);
 
-  let top = (dupeRows ?? [])[0];
-  let topDupe = top?.dupe as
-    | { brand_name: string; product_name: string; category: string | null; image_url: string | null }
-    | null
-    | undefined;
+  let top: {
+    overall_match: number;
+    ingredient_match: number | null;
+    shared_ingredients_count: number | null;
+    rationale: string | null;
+  } | undefined = (dupeRows ?? [])[0];
+  let topDupe = ((dupeRows ?? [])[0] as unknown as {
+    dupe?: { brand_name: string; product_name: string; category: string | null; image_url: string | null } | null;
+  })?.dupe ?? undefined;
 
   // TIER 5: sibling fallback. The matched product has no dupe edges, but a
   // sibling SKU in the same brand might. Walk the graph from there.
