@@ -45,8 +45,17 @@ export function ScanListItem({ scan, linkable = true }: { scan: ScanRow; linkabl
         )}
       </div>
       {typeof scan.match_score === "number" && (
-        <div className="ml-1 shrink-0 rounded-full bg-foreground px-2.5 py-1 text-[11px] font-bold text-background tabular-nums">
-          {scan.match_score}%
+        <div className="ml-1 flex shrink-0 items-center gap-1.5">
+          {isHigherRisk && (
+            <span
+              aria-label="Higher risk than original"
+              title="Higher risk than original"
+              className="h-2 w-2 rounded-full bg-warning"
+            />
+          )}
+          <div className="rounded-full bg-foreground px-2.5 py-1 text-[11px] font-bold text-background tabular-nums">
+            {scan.match_score}%
+          </div>
         </div>
       )}
     </div>
