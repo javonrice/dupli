@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw, Bookmark } from "lucide-react";
+import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw, Bookmark, Share2 } from "lucide-react";
 import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
 import { saveScan, setSaved } from "@/server/scans.functions";
+import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import { DupeCard } from "@/components/dupe-card";
 import { IOSScreen } from "@/components/ios-screen";
+import { ShareCard } from "@/components/share-card";
 import { googleShoppingLink } from "@/lib/retailer-links";
 import wordmark from "@/assets/dupli-wordmark.png";
 
@@ -288,93 +290,209 @@ export function ResultsScreen({
   const dupe = analysis.dupe;
   const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
 
+  const proxyImage = useServerFn(fetchImageAsDataUrl);
+  const shareCardRef = useRef<HTMLDivElement | null>(null);
+  const [shareOriginalImg, setShareOriginalImg] = useState<string | null>(null);
+  const [shareDupeImg, setShareDupeImg] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
+  const [shareError, setShareError] = useState<string | null>(null);
+
+  // Pre-fetch product images as data URLs in the background so the share
+  // card export is instant when the user taps Share.
+  useEffect(() => {
+    let cancelled = false;
+    const loadOne = async (url: string | undefined): Promise<string | null> => {
+      if (!url) return null;
+      // Skip if it's already a data URL.
+      if (url.startsWith("data:")) return url;
+      try {
+        const r = await proxyImage({ data: { url } });
+        return r.dataUrl;
+      } catch {
+        return null;
+      }
+    };
+    (async () => {
+      const [orig, dup] = await Promise.all([
+        loadOne(analysis.original.imageUrl ?? preview ?? undefined),
+        loadOne(analysis.dupe?.imageUrl),
+      ]);
+      if (cancelled) return;
+      setShareOriginalImg(orig ?? preview);
+      setShareDupeImg(dup);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [analysis, preview, proxyImage]);
+
+  const handleShare = useCallback(async () => {
+    if (sharing) return;
+    setSharing(true);
+    setShareError(null);
+    try {
+      const node = shareCardRef.current;
+      if (!node) throw new Error("Share card not ready");
+      // Dynamic import keeps html-to-image out of the initial bundle.
+      const { toPng } = await import("html-to-image");
+      const dataUrl = await toPng(node, {
+        cacheBust: true,
+        pixelRatio: 2,
+        width: 1080,
+        height: 1350,
+      });
+      const safeName =
+        (analysis.dupe?.productName ?? analysis.original.productName)
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 40) || "dupe";
+      const a = document.createElement("a");
+      a.href = dataUrl;
+      a.download = `dupli-${safeName}.png`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      console.error("Share export failed", e);
+      setShareError(e instanceof Error ? e.message : "Couldn't generate image");
+    } finally {
+      setSharing(false);
+    }
+  }, [analysis, sharing]);
+
   return (
-    <IOSScreen
-      title="Result"
-      back={{ onClick: onReset }}
-      trailing={
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onToggleSave}
-            disabled={!canSave}
-            aria-label={isSaved ? "Remove from saved" : "Save"}
-            aria-pressed={isSaved}
-            className={
-              isSaved
-                ? "tap flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-40"
-                : "tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground disabled:opacity-40"
-            }
-          >
-            <Bookmark
-              className="h-[18px] w-[18px]"
-              strokeWidth={2}
-              fill={isSaved ? "currentColor" : "none"}
-            />
-          </button>
-          <button
-            onClick={onReset}
-            aria-label="New scan"
-            className="tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground"
-          >
-            <RotateCw className="h-4 w-4" strokeWidth={2} />
-          </button>
-        </div>
-      }
-      bottomBar={
-        link ? (
-          <a
-            href={link.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="tap flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
-          >
-            <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={2} />
-            Shop on Google
-            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-          </a>
-        ) : (
-          <button
-            onClick={onReset}
-            className="tap flex h-[50px] w-full items-center justify-center rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
-          >
-            Scan another product
-          </button>
-        )
-      }
-    >
-      <div className="space-y-4 px-4 pb-6 pt-3">
-        {preview && (
-          <div className="flex items-center gap-3 rounded-[16px] border border-border bg-card p-3 shadow-soft">
-            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-border bg-secondary/40">
-              <img
-                src={preview}
-                alt="Your scan"
-                className="h-full w-full object-cover"
+    <>
+      {/* Off-screen render target for the share card */}
+      <div
+        aria-hidden
+        style={{
+          position: "fixed",
+          top: 0,
+          left: -100000,
+          pointerEvents: "none",
+          opacity: 0,
+        }}
+      >
+        <ShareCard
+          ref={shareCardRef}
+          analysis={analysis}
+          originalImage={shareOriginalImg}
+          dupeImage={shareDupeImg}
+        />
+      </div>
+
+      <IOSScreen
+        title="Result"
+        back={{ onClick: onReset }}
+        trailing={
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onToggleSave}
+              disabled={!canSave}
+              aria-label={isSaved ? "Remove from saved" : "Save"}
+              aria-pressed={isSaved}
+              className={
+                isSaved
+                  ? "tap flex h-9 w-9 items-center justify-center rounded-full bg-foreground text-background disabled:opacity-40"
+                  : "tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground disabled:opacity-40"
+              }
+            >
+              <Bookmark
+                className="h-[18px] w-[18px]"
+                strokeWidth={2}
+                fill={isSaved ? "currentColor" : "none"}
               />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Your scan
-              </div>
-              <p className="mt-0.5 truncate font-display text-[15px] font-semibold text-foreground">
-                {analysis.original.productName}
-              </p>
-              <p className="truncate text-[12px] text-muted-foreground">
-                {analysis.original.brand}
-              </p>
-            </div>
+            </button>
             <button
               onClick={onReset}
-              className="tap flex h-9 items-center justify-center gap-1.5 rounded-full bg-secondary px-3 text-[12px] font-semibold text-foreground"
+              aria-label="New scan"
+              className="tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground"
             >
-              <RotateCw className="h-3.5 w-3.5" strokeWidth={2.25} />
-              New scan
+              <RotateCw className="h-4 w-4" strokeWidth={2} />
             </button>
           </div>
-        )}
-        <DupeCard analysis={analysis} />
-      </div>
-    </IOSScreen>
+        }
+        bottomBar={
+          <div className="flex flex-col gap-2">
+            {shareError && (
+              <div className="text-center text-[11px] font-medium text-destructive">
+                {shareError}
+              </div>
+            )}
+            <div className="flex items-stretch gap-2">
+              {dupe && (
+                <button
+                  onClick={handleShare}
+                  disabled={sharing}
+                  aria-label="Share this dupe as image"
+                  className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground disabled:opacity-60"
+                >
+                  {sharing ? (
+                    <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />
+                  ) : (
+                    <Share2 className="h-[16px] w-[16px]" strokeWidth={2.25} />
+                  )}
+                  {sharing ? "Saving…" : "Share"}
+                </button>
+              )}
+              {link ? (
+                <a
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="tap flex h-[50px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
+                >
+                  <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={2} />
+                  Shop on Google
+                  <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+                </a>
+              ) : (
+                <button
+                  onClick={onReset}
+                  className="tap flex h-[50px] flex-1 items-center justify-center rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
+                >
+                  Scan another product
+                </button>
+              )}
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-4 px-4 pb-6 pt-3">
+          {preview && (
+            <div className="flex items-center gap-3 rounded-[16px] border border-border bg-card p-3 shadow-soft">
+              <div className="h-16 w-16 shrink-0 overflow-hidden rounded-[12px] border border-border bg-secondary/40">
+                <img
+                  src={preview}
+                  alt="Your scan"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                  Your scan
+                </div>
+                <p className="mt-0.5 truncate font-display text-[15px] font-semibold text-foreground">
+                  {analysis.original.productName}
+                </p>
+                <p className="truncate text-[12px] text-muted-foreground">
+                  {analysis.original.brand}
+                </p>
+              </div>
+              <button
+                onClick={onReset}
+                className="tap flex h-9 items-center justify-center gap-1.5 rounded-full bg-secondary px-3 text-[12px] font-semibold text-foreground"
+              >
+                <RotateCw className="h-3.5 w-3.5" strokeWidth={2.25} />
+                New scan
+              </button>
+            </div>
+          )}
+          <DupeCard analysis={analysis} />
+        </div>
+      </IOSScreen>
+    </>
   );
 }
 
