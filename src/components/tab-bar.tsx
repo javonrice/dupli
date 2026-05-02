@@ -57,5 +57,5 @@ export function TabBar() {
 
 /** Spacer so content above the fixed tab bar isn't covered. */
 export function TabBarSpacer() {
-  return <div className="pb-safe h-[58px]" aria-hidden />;
+  return <div style={{ height: "var(--tab-bar-h)" }} aria-hidden />;
 }
