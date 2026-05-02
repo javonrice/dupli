@@ -5,8 +5,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const DEFAULT_BATCH = 8;
-const MAX_BATCH = 20;
+const DEFAULT_BATCH = 50;
+const MAX_BATCH = 200;
+// When more than this many items remain after a drain, immediately fire
+// another drain (fan-out) so the queue clears in minutes, not hours.
+const SELF_CASCADE = true;
 
 export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
   server: {
