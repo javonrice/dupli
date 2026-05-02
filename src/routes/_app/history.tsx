@@ -21,14 +21,20 @@ function HistoryPage() {
   const [scans, setScans] = useState<ScanRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setError(null);
+    setScans(null);
     list({})
       .then((r) => {
         if (r.error) setError(r.error);
         else setScans(r.scans);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"));
+      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load history"));
   }, [list]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   return (
     <div className="flex min-h-screen-safe flex-col bg-background">
