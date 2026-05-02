@@ -99,17 +99,18 @@ export function Scanner() {
     [scan, persistScan],
   );
 
-  const handleShare = useCallback(async () => {
+  const handleShare = useCallback(async (dupeIdx?: number) => {
     if (preparingShare) return;
+    const search = dupeIdx && dupeIdx > 0 ? { dupe: dupeIdx } : undefined;
     if (scanId) {
-      navigate({ to: "/scan/$id/share", params: { id: scanId } });
+      navigate({ to: "/scan/$id/share", params: { id: scanId }, search });
       return;
     }
     setPreparingShare(true);
     try {
       const r = await (persistPromiseRef.current ?? Promise.resolve({ id: null as string | null }));
       if (r?.id) {
-        navigate({ to: "/scan/$id/share", params: { id: r.id } });
+        navigate({ to: "/scan/$id/share", params: { id: r.id }, search });
       } else {
         console.warn("Cannot share: scan not persisted");
       }
