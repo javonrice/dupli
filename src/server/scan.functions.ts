@@ -869,7 +869,7 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     imageUrl: topDupe.image_url ?? undefined,
     priceSource: dupeVendor?.priceUsd != null ? "skinsort_vendor" : "estimate",
     priceMerchant: dupeVendor?.merchant,
-    vendors: dupeData.vendors.map((v) => ({
+    vendors: dupeData.vendors.map((v: { merchant: string; url: string; priceUsd: number | null }) => ({
       merchant: v.merchant,
       url: v.url,
       priceUsd: v.priceUsd,
