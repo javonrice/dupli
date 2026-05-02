@@ -20,6 +20,7 @@ import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index
 import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
 import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
 import { Route as AppScanIdShareRouteImport } from './routes/_app/scan.$id.share'
+import { Route as AppCommunityBrandProductRouteImport } from './routes/_app/community.$brand.$product'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -77,6 +78,12 @@ const AppScanIdShareRoute = AppScanIdShareRouteImport.update({
   path: '/share',
   getParentRoute: () => AppScanIdRoute,
 } as any)
+const AppCommunityBrandProductRoute =
+  AppCommunityBrandProductRouteImport.update({
+    id: '/community/$brand/$product',
+    path: '/community/$brand/$product',
+    getParentRoute: () => AppRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AppIndexRoute
@@ -85,6 +92,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
+  '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
@@ -96,6 +104,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
   '/': typeof AppIndexRoute
+  '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
@@ -110,6 +119,7 @@ export interface FileRoutesById {
   '/_app/saved': typeof AppSavedRoute
   '/_app/': typeof AppIndexRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
+  '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/_app/scan/$id/share': typeof AppScanIdShareRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/saved'
     | '/scan/$id'
+    | '/community/$brand/$product'
     | '/scan/$id/share'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/saved'
     | '/'
+    | '/community/$brand/$product'
     | '/scan/$id/share'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
@@ -148,6 +160,7 @@ export interface FileRouteTypes {
     | '/_app/saved'
     | '/_app/'
     | '/_app/scan/$id'
+    | '/_app/community/$brand/$product'
     | '/_app/scan/$id/share'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
@@ -240,6 +253,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScanIdShareRouteImport
       parentRoute: typeof AppScanIdRoute
     }
+    '/_app/community/$brand/$product': {
+      id: '/_app/community/$brand/$product'
+      path: '/community/$brand/$product'
+      fullPath: '/community/$brand/$product'
+      preLoaderRoute: typeof AppCommunityBrandProductRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -263,6 +283,7 @@ interface AppRouteChildren {
   AppSavedRoute: typeof AppSavedRoute
   AppIndexRoute: typeof AppIndexRoute
   AppScanIdRoute: typeof AppScanIdRouteWithChildren
+  AppCommunityBrandProductRoute: typeof AppCommunityBrandProductRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -271,6 +292,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppSavedRoute: AppSavedRoute,
   AppIndexRoute: AppIndexRoute,
   AppScanIdRoute: AppScanIdRouteWithChildren,
+  AppCommunityBrandProductRoute: AppCommunityBrandProductRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
