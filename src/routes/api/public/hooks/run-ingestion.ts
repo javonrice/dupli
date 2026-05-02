@@ -38,7 +38,7 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
         // Pick up N pending items, mark them processing atomically.
         const { data: picks, error: pickErr } = await supabaseAdmin
           .from("ingestion_queue")
-          .select("id, brand_slug, product_slug")
+          .select("id, brand_slug, product_slug, mode, product_id")
           .eq("status", "pending")
           .not("product_slug", "is", null)
           .order("priority", { ascending: false })
@@ -77,6 +77,8 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
               brandSlug: pick.brand_slug,
               productSlug: pick.product_slug,
               queueId: pick.id,
+              mode: pick.mode ?? "full",
+              productId: pick.product_id ?? undefined,
             }),
           }).catch((e) => {
             console.error("[ingestion] fan-out fetch failed", pick.id, e);
