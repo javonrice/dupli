@@ -14,6 +14,159 @@ export type Database = {
   }
   public: {
     Tables: {
+      dupes: {
+        Row: {
+          attribute_match: number | null
+          created_at: string
+          dupe_product_id: string
+          id: string
+          ingredient_match: number | null
+          original_product_id: string
+          overall_match: number
+          rank: number | null
+          rationale: string | null
+          shared_ingredients_count: number | null
+          source: string
+        }
+        Insert: {
+          attribute_match?: number | null
+          created_at?: string
+          dupe_product_id: string
+          id?: string
+          ingredient_match?: number | null
+          original_product_id: string
+          overall_match: number
+          rank?: number | null
+          rationale?: string | null
+          shared_ingredients_count?: number | null
+          source?: string
+        }
+        Update: {
+          attribute_match?: number | null
+          created_at?: string
+          dupe_product_id?: string
+          id?: string
+          ingredient_match?: number | null
+          original_product_id?: string
+          overall_match?: number
+          rank?: number | null
+          rationale?: string | null
+          shared_ingredients_count?: number | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dupes_dupe_product_id_fkey"
+            columns: ["dupe_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dupes_original_product_id_fkey"
+            columns: ["original_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingestion_queue: {
+        Row: {
+          attempts: number
+          brand_slug: string
+          created_at: string
+          id: string
+          last_error: string | null
+          priority: number
+          processed_at: string | null
+          product_slug: string | null
+          reason: string
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          brand_slug: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          priority?: number
+          processed_at?: string | null
+          product_slug?: string | null
+          reason?: string
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          brand_slug?: string
+          created_at?: string
+          id?: string
+          last_error?: string | null
+          priority?: number
+          processed_at?: string | null
+          product_slug?: string | null
+          reason?: string
+          status?: string
+        }
+        Relationships: []
+      }
+      products: {
+        Row: {
+          brand_name: string
+          brand_slug: string
+          category: string | null
+          contains: string[]
+          created_at: string
+          free_from: string[]
+          good_for: string[]
+          id: string
+          image_url: string | null
+          ingredients_count: number | null
+          last_ingested_at: string | null
+          product_name: string
+          product_slug: string
+          search_vector: unknown
+          source_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          brand_name: string
+          brand_slug: string
+          category?: string | null
+          contains?: string[]
+          created_at?: string
+          free_from?: string[]
+          good_for?: string[]
+          id?: string
+          image_url?: string | null
+          ingredients_count?: number | null
+          last_ingested_at?: string | null
+          product_name: string
+          product_slug: string
+          search_vector?: unknown
+          source_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          brand_name?: string
+          brand_slug?: string
+          category?: string | null
+          contains?: string[]
+          created_at?: string
+          free_from?: string[]
+          good_for?: string[]
+          id?: string
+          image_url?: string | null
+          ingredients_count?: number | null
+          last_ingested_at?: string | null
+          product_name?: string
+          product_slug?: string
+          search_vector?: unknown
+          source_url?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
