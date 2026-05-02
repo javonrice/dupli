@@ -323,9 +323,43 @@ export function ResultsScreen({
   // Hide the bottom tab bar while results are shown for extra spacing.
   useHideTabBar();
 
-  const dupe = analysis.dupe;
-  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  // The AI returns up to 7 ranked candidates. Index 0 is the headline pick;
+  // the rest live in the "Also could be a dupe" rail and can be promoted by tapping.
+  const candidates: DupeSuggestion[] =
+    analysis.dupes && analysis.dupes.length > 0
+      ? analysis.dupes
+      : analysis.dupe
+        ? [analysis.dupe]
+        : [];
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const safeIdx = Math.min(selectedIdx, Math.max(0, candidates.length - 1));
+  const displayedAnalysis: DupeAnalysis = (() => {
+    if (candidates.length === 0 || safeIdx === 0) return analysis;
+    const c = candidates[safeIdx];
+    return {
+      ...analysis,
+      dupe: c,
+      matchScore: typeof c.matchScore === "number" ? c.matchScore : analysis.matchScore,
+      sharedIngredients: c.sharedIngredients ?? analysis.sharedIngredients,
+      uniqueToOriginal: c.uniqueToOriginal ?? analysis.uniqueToOriginal,
+      uniqueToDupe: c.uniqueToDupe ?? analysis.uniqueToDupe,
+      contextMatch: c.contextMatch ?? analysis.contextMatch,
+      dupeType: c.dupeType ?? analysis.dupeType,
+      packagingSimilarity:
+        typeof c.packagingSimilarity === "number"
+          ? c.packagingSimilarity
+          : analysis.packagingSimilarity,
+      riskLevel: c.riskLevel ?? analysis.riskLevel,
+      riskFactors: c.riskFactors ?? analysis.riskFactors,
+      missingActives: c.missingActives ?? analysis.missingActives,
+      safetyNote: c.safetyNote ?? analysis.safetyNote,
+      notes: c.notes && c.notes.trim() ? c.notes : analysis.notes,
+    };
+  })();
 
+  const dupe = displayedAnalysis.dupe;
+  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  const alternates = candidates.slice(1);
   return (
     <IOSScreen
       title="Result"
