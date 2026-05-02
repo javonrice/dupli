@@ -1,67 +1,90 @@
-# Why scans feel weak (the actual problem)
+# Real data, not estimates: scrape SkinSort on demand
 
-The database isn't worthless — we just aren't reaching it. Three concrete issues from logs + DB inspection:
+## What changes
 
-1. **Brand mismatch.** AI returns `NYX Professional Makeup`, DB stores `nyx-cosmetics`. Our slug variants only handle the `the-` prefix, so we get **0 candidates** and skip straight to a global FTS that finds a different brand at 0.52.
-2. **The Ordinary scan only scored 0.60** because it matched in Tier 3 (cross-brand FTS) instead of Tier 2 (same brand). Tier 2 missed because the AI returned `Niacinamide 10% + Zinc 1% Oil Control Serum` while the DB row is `Niacinamide 10% + Zinc 1%` — Jaccard distance got dragged down by the extra "oil control serum" tokens, falling under our 0.4 floor.
-3. **We never use the 109,263 dupe edges intelligently.** When a product has no rank-1 dupe we give up. We should fall through to "products with the most shared ingredients in the same DB-defined family."
+Stop guessing prices and ingredients with the AI. Pull the same source SkinSort uses, store it in our DB the first time we see a product, and reuse it on every later scan.
 
-What we have to work with: 46,689 products, **109,263 SkinSort dupe edges** with `ingredient_match` / `attribute_match` / `shared_ingredients_count` / `rationale`, full `search_vector` on every product, brand storefront images on 99% of rows. We do **not** have populated `category`, `free_from`, `good_for`, `contains`, or per-product ingredient lists — so any "bottle type" / "formula" matching has to be derived from product names + the dupe graph SkinSort already computed for us.
+## Where the data actually lives on SkinSort
 
-# The plan: a 5-tier resolver, then a graph walk
+I dug through the markup. Every SkinSort product page is fully server-rendered HTML and contains exactly what we need:
 
-No extra AI call needed. The lookup itself stays deterministic SQL; AI is only the fallback if all 5 tiers fail.
+1. **Full INCI ingredients list** — `https://skinsort.com/products/{brand}/{slug}` → `<div id="ingredients_list">` with one `<a href="/ingredients/{name}">` per ingredient, in order.
+2. **Real retailer prices** — `https://skinsort.com/products/{brand}/{slug}/us/vendors` → a list of `<a href="...">` rows, each with merchant logo (Target, Ulta, Amazon, Dermstore, etc.), the deep link to the retailer product page, and the **actual current price** like `$15.99`. This is the real shopping link, not a search query.
+3. **Category + good-for/free-from** — already in the same product HTML; we already partially parse this.
+4. **Variant id** — every product has a stable numeric id (e.g. `2216`) used in the vendors URL.
 
-## Tier 1 — Exact slug (unchanged)
-`brand_slug` IN variants AND `product_slug` = exact. Already works when the AI happens to be exact.
+So we can know, for every SkinSort product: real ingredients, real prices, real retailer URLs.
 
-## Tier 2 — Brand alias resolution (NEW, fixes NYX class of bugs)
-Replace the tiny `the-/no-the-` variant list with a real normalizer that strips and adds common brand suffix noise the AI loves to append:
+## How we use it
 
-- strip: `professional`, `makeup`, `cosmetics`, `beauty`, `skincare`, `skin-care`, `paris`, `london`, `new-york`, `co`, `inc`
-- also try the first 1-2 tokens of the brand alone (`nyx-professional-makeup` → `nyx`)
-- also try `the-` prefix toggle (already there)
+### A. Extend the parser and DB
 
-Build a `Set<string>` of every plausible slug, then `WHERE brand_slug IN (...)`. With this, NYX hits, L'Oréal Paris hits, Maybelline New York hits, etc.
+- Extend `parseSkinsortPage` (and add a sibling `parseSkinsortVendors`) in `src/server/skinsort-parser.ts` to also extract:
+  - `ingredients: string[]` — ordered INCI list from `#ingredients_list`
+  - `variantId: number | null` — pulled from the `vendors_product_{id}` turbo-frame id
+  - `vendors: { merchant, url, priceUsd, currency }[]` — from `/us/vendors`
+- DB migration on `products`:
+  - add `ingredients text[] not null default '{}'`
+  - add `variant_id integer`
+  - add `last_priced_at timestamptz`
+- New table `product_vendors`:
+  - `id uuid pk`, `product_id uuid` (fk products), `merchant text`, `url text`, `price_usd numeric(10,2)`, `currency text default 'USD'`, `rank int`, `fetched_at timestamptz default now()`, unique (product_id, merchant)
+- RLS: readable by authenticated, writable only by service role (matches existing pattern).
 
-## Tier 3 — Brand-scoped fuzzy (current Tier 2, with smarter scoring)
-Same brand candidates, but rank with:
+### B. Just-in-time scraper, cached forever (well — for 7 days for prices)
 
-- Jaccard on tokens (current)
-- **plus** trigram similarity on the full normalized name (catches "Niacinamide 10% + Zinc 1%" ≈ "Niacinamide 10% + Zinc 1% Oil Control Serum")
-- **plus** a "core actives" bonus: if both names contain the same headline ingredient token (`niacinamide`, `retinol`, `salicylic`, `vitamin-c`, `hyaluronic`, etc.), +0.15
-- drop floor from 0.4 → 0.35 once these signals are in
+New helper in `src/server/skinsort-scraper.server.ts`:
 
-This is the single biggest win for "almost the right name in the right brand."
+- `ensureProductData(productId)` — runs server-side from the scan handler.
+  1. Read the product row. Get `source_url` (or build it from `brand_slug`/`product_slug`).
+  2. If `ingredients` is empty, fetch the product page, parse INCI list, write back.
+  3. If `last_priced_at` is null OR older than 7 days, fetch `/us/vendors`, replace rows in `product_vendors`, set `last_priced_at = now()`.
+  4. Return `{ ingredients, vendors }`.
+- All work runs in parallel for the original and the dupe and is wrapped in `try/catch` — a SkinSort failure must never break a scan.
+- Use a tight timeout (8 s) and a 7-day TTL for price refresh.
+- Respect a small in-memory rate-limiter (e.g. 4 concurrent fetches per worker) to be a polite citizen.
 
-## Tier 4 — Cross-brand FTS (current Tier 3, raised floor)
-Keep at 0.6 minimum overall. Already prevents the "Life / Niacinamide" misfire.
+### C. Wire it into the scan response
 
-## Tier 5 — NEW: Sibling product fallback
-When Tiers 1-4 return a product but that product has **no rows in `dupes`** (or the AI's brand was unknown but Tier 3 still found a brand match), pivot to the dupe graph:
+In `src/server/scan.functions.ts`, replace the lossy DB-merge block (lines ~814-839) so that when we have a verified DB hit:
 
-1. Take the matched product.
-2. Look up its top 5 `dupes` rows ordered by `overall_match DESC`.
-3. If still empty, find products with the **highest token overlap on product name within a different brand** and a similar headline-active token, then surface the one our database itself rates highest.
+- Brand / name / image / matchScore / rationale come from the DB (verified).
+- Call `ensureProductData(originalId)` and `ensureProductData(dupeId)` in parallel.
+- `original.estimatedPriceUsd` and `dupe.estimatedPriceUsd` come from the cheapest in-stock vendor in `product_vendors`. Field stays for compatibility but the value is now real. Add a sibling `priceSource: "skinsort_vendor"` and `priceMerchant: "Target"` so the UI can label it.
+- Compute `sharedIngredients`, `uniqueToOriginal`, `uniqueToDupe` from the two real INCI lists (case-insensitive set diff/intersect, cap each list at ~6 most meaningful items, drop water/fragrance/phenoxyethanol from the "in both" tier).
+- `dupe.buyUrl` and `dupe.whereToBuy` come from the top vendor row (real retailer product page, not a search URL).
+- Add a new optional field on `DupeAnalysis.dupe`: `vendors: { merchant, url, priceUsd }[]` so the UI can show the full list.
 
-We already have these 109k edges precomputed by SkinSort — use them as the source of truth for matchScore (they range 70-100, much more confident than our current 0.6 fuzzy score).
+If SkinSort fetch fails or returns nothing for a product, we fall back to today's behavior (AI's estimate, generic search link) — but log it so we can backfill later.
 
-## Score surfacing
-Right now we display `top.overall_match` (0-100 from SkinSort) but only when Tier 1/2 hit. Make every successful tier surface the SkinSort score from the dupe row, never the fuzzy lookup score. The lookup score is for *ranking candidates*, not for telling the user how good the dupe is. That's why The Ordinary said "60" — we showed the FTS confidence instead of the dupe's real 90+ ingredient match.
+### D. UI updates in `src/components/dupe-card.tsx`
 
-## Don't queue garbage
-If the AI returns a brand starting with `Unbranded`, `Generic`, `Store Brand`, or empty/unknown, skip ingestion-queue insertion entirely. We saw `Unbranded (Dollar General)` queued — that will never resolve.
+- Show real price for both sides; if either is 0, show `—` instead of `$0`.
+- Only render "Save X%" when both prices are real and dupe < original.
+- Keep the existing in-both / unique chip rows — they'll now have real data.
+- Replace the single "Shop on Google" CTA with a small vendor row: each vendor as a chip ("Target $15.99", "Ulta $16.99", "Amazon $17.49"), tappable, opens the real retailer URL. Primary CTA = cheapest vendor.
 
-# What we are intentionally NOT doing
+### E. Backfill existing rows (optional, opportunistic)
 
-- **No second AI call for matching.** The user explicitly wanted to wait on that. The 5-tier resolver above should handle 80%+ of the misses we're seeing without spending more credits.
-- **No schema change.** The columns we'd want for "bottle type / category" matching (`category`, `contains`) are empty across all 46k rows. Backfilling them is a separate, larger ingestion project — flag it for later, don't block this fix on it.
-- **No re-ingestion.** SkinSort already gave us the dupe graph; we just need to walk it.
+No bulk job. Every scan that hits a product with empty ingredients / stale prices triggers `ensureProductData`, which writes back. Over a few weeks the popular catalog warms itself.
 
-# Files touched
-- `src/server/scan.functions.ts` — replace `brandSlugVariants`, `findProductSmart`, `rankBySimilarity`, and the `crossReferenceDupeDb` score-surfacing block. Add the unbranded-skip guard.
+## What this is NOT
 
-# Acceptance check (on you to retry after deploy)
-- Scan an NYX product → logs show `nyx-cosmetics` in variants, Tier 2/3 hits, score reflects SkinSort's 80+ overall_match, not 0.60.
-- Re-scan The Ordinary Niacinamide → matches `the-ordinary` in Tier 2 (not Tier 3), score shows the real SkinSort dupe rating.
-- Scan something genuinely not in DB → logs show "no-match" diagnostics with full variant list, no `Unbranded` rows queued.
+- No new API key. SkinSort pages are public HTML.
+- No AI for ingredients or pricing — those are now sourced from real data.
+- AI is still used for: the narrative `notes`, `bestFor`, risk panel, and as a fallback when SkinSort is missing the product.
+
+## Files touched
+
+- `src/server/skinsort-parser.ts` — add ingredients + variant id + vendors parsing
+- `src/server/skinsort-scraper.server.ts` — NEW — `ensureProductData` with cache + TTL
+- `src/server/scan.functions.ts` — replace DB-merge block; add `vendors`, `priceMerchant`, `priceSource` to `DupeAnalysis`
+- `src/components/dupe-card.tsx` — vendor chip row, real-price guards
+- New migration: `products.ingredients`, `products.variant_id`, `products.last_priced_at`, new `product_vendors` table with RLS
+
+## Verification
+
+After deploying:
+1. Re-scan the Cremo Body Wash from your screenshot. Expect real prices on both sides, real ingredient overlap chips, and a "Target $X.XX" / "Ulta $X.XX" row instead of "Shop on Google".
+2. Re-scan it 5 minutes later. Expect a noticeably faster response (cached) and zero SkinSort hits in logs.
+3. Scan a product SkinSort doesn't have. Expect graceful fallback to today's behavior (no crash, log line `[skinsort] miss: …`).
