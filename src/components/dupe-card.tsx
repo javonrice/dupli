@@ -161,6 +161,61 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
           </div>
         )}
 
+      {/* Risk check */}
+      {showRiskPanel && (
+        <div className={`space-y-3 border-t border-border px-5 py-4 ${riskTone.bg}`}>
+          <div className="flex items-center gap-1.5">
+            <riskTone.Icon className="h-3.5 w-3.5 text-foreground" strokeWidth={2.5} />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground">
+              Risk check
+            </span>
+          </div>
+
+          {riskFactors && riskFactors.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Concerns in the dupe
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {riskFactors.map((f) => (
+                  <span
+                    key={f}
+                    className="inline-flex items-center gap-1 rounded-full bg-background px-2.5 py-1 text-[11px] font-medium text-foreground"
+                  >
+                    <AlertTriangle className="h-3 w-3 text-warning" strokeWidth={2.5} />
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {missingActives && missingActives.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                What you give up
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {missingActives.map((m) => (
+                  <span
+                    key={m}
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                  >
+                    {m}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {safetyNote && (
+            <p className="text-xs italic leading-relaxed text-foreground/85">
+              "{safetyNote}"
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Notes */}
       <div className="space-y-3 border-t border-border px-5 py-4">
         <p className="text-sm leading-relaxed text-foreground">{notes}</p>
