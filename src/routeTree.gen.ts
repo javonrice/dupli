@@ -20,7 +20,6 @@ import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index
 import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
 import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
 import { Route as ApiPublicHooksEnqueueVendorBackfillRouteImport } from './routes/api/public/hooks/enqueue-vendor-backfill'
-import { Route as ApiPublicHooksBootstrapCronTokenRouteImport } from './routes/api/public/hooks/bootstrap-cron-token'
 import { Route as AppScanIdShareRouteImport } from './routes/_app/scan.$id.share'
 import { Route as AppCommunityBrandProductRouteImport } from './routes/_app/community.$brand.$product'
 
@@ -81,12 +80,6 @@ const ApiPublicHooksEnqueueVendorBackfillRoute =
     path: '/api/public/hooks/enqueue-vendor-backfill',
     getParentRoute: () => rootRouteImport,
   } as any)
-const ApiPublicHooksBootstrapCronTokenRoute =
-  ApiPublicHooksBootstrapCronTokenRouteImport.update({
-    id: '/api/public/hooks/bootstrap-cron-token',
-    path: '/api/public/hooks/bootstrap-cron-token',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AppScanIdShareRoute = AppScanIdShareRouteImport.update({
   id: '/share',
   path: '/share',
@@ -108,7 +101,6 @@ export interface FileRoutesByFullPath {
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
-  '/api/public/hooks/bootstrap-cron-token': typeof ApiPublicHooksBootstrapCronTokenRoute
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
@@ -122,7 +114,6 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
-  '/api/public/hooks/bootstrap-cron-token': typeof ApiPublicHooksBootstrapCronTokenRoute
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
@@ -139,7 +130,6 @@ export interface FileRoutesById {
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/_app/scan/$id/share': typeof AppScanIdShareRoute
-  '/api/public/hooks/bootstrap-cron-token': typeof ApiPublicHooksBootstrapCronTokenRoute
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
@@ -156,7 +146,6 @@ export interface FileRouteTypes {
     | '/scan/$id'
     | '/community/$brand/$product'
     | '/scan/$id/share'
-    | '/api/public/hooks/bootstrap-cron-token'
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
@@ -170,7 +159,6 @@ export interface FileRouteTypes {
     | '/'
     | '/community/$brand/$product'
     | '/scan/$id/share'
-    | '/api/public/hooks/bootstrap-cron-token'
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
@@ -186,7 +174,6 @@ export interface FileRouteTypes {
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
     | '/_app/scan/$id/share'
-    | '/api/public/hooks/bootstrap-cron-token'
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
@@ -196,7 +183,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
-  ApiPublicHooksBootstrapCronTokenRoute: typeof ApiPublicHooksBootstrapCronTokenRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
   ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
@@ -281,13 +267,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksEnqueueVendorBackfillRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/hooks/bootstrap-cron-token': {
-      id: '/api/public/hooks/bootstrap-cron-token'
-      path: '/api/public/hooks/bootstrap-cron-token'
-      fullPath: '/api/public/hooks/bootstrap-cron-token'
-      preLoaderRoute: typeof ApiPublicHooksBootstrapCronTokenRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app/scan/$id/share': {
       id: '/_app/scan/$id/share'
       path: '/share'
@@ -342,7 +321,6 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
-  ApiPublicHooksBootstrapCronTokenRoute: ApiPublicHooksBootstrapCronTokenRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:
     ApiPublicHooksEnqueueVendorBackfillRoute,
   ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
