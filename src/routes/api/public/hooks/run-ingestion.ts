@@ -88,6 +88,19 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
           });
         }
 
+        // If we picked a full batch, more work likely remains — kick another
+        // drain immediately (fire-and-forget) so the queue cascades down fast.
+        if (SELF_CASCADE && picks.length >= batch) {
+          fetch(`${origin}/api/public/hooks/run-ingestion`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${expected}`,
+            },
+            body: JSON.stringify({ batch }),
+          }).catch((e) => console.error("[ingestion] cascade fetch failed", e));
+        }
+
         return new Response(
           JSON.stringify({ ok: true, dispatched: picks.length, ids }),
           { status: 200, headers: { "content-type": "application/json" } },
