@@ -15,7 +15,11 @@ const verdictStyles: Record<DupeAnalysis["verdict"], { icon: typeof Check; bg: s
 };
 
 export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
-  const { original, dupe, matchScore, verdict, notes, bestFor, sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch } = analysis;
+  const {
+    original, dupe, matchScore, verdict, notes, bestFor,
+    sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch,
+    dupeType, packagingSimilarity, riskLevel, riskFactors, missingActives, safetyNote,
+  } = analysis;
   const v = verdictStyles[verdict];
   const Icon = v.icon;
 
@@ -24,8 +28,45 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       ? Math.max(0, Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100))
       : 0;
 
+  const showLookalikeBand =
+    !!dupe && (
+      (dupeType && dupeType !== "Neither") ||
+      (typeof packagingSimilarity === "number" && packagingSimilarity > 0) ||
+      (riskLevel && riskLevel !== "Comparable")
+    );
+
+  const riskTone =
+    riskLevel === "Higher risk"
+      ? { bg: "bg-warning-soft", fg: "text-foreground", chipBg: "bg-warning", chipFg: "text-warning-foreground", Icon: AlertTriangle }
+      : riskLevel === "Lower risk"
+        ? { bg: "bg-success-soft", fg: "text-foreground", chipBg: "bg-success", chipFg: "text-success-foreground", Icon: ShieldCheck }
+        : { bg: "bg-secondary/40", fg: "text-foreground", chipBg: "bg-foreground", chipFg: "text-background", Icon: ShieldCheck };
+
+  const showRiskPanel =
+    !!dupe && (!!riskLevel || (riskFactors && riskFactors.length > 0) || (missingActives && missingActives.length > 0) || !!safetyNote);
+
   return (
     <article className="overflow-hidden rounded-[20px] border border-border bg-card shadow-soft">
+      {/* Lookalike + risk band */}
+      {showLookalikeBand && (
+        <div className={`flex items-center justify-between gap-3 px-5 py-2.5 ${riskLevel === "Higher risk" ? "bg-warning-soft" : riskLevel === "Lower risk" ? "bg-success-soft" : "bg-secondary/40"}`}>
+          <div className="flex min-w-0 items-center gap-2">
+            <Eye className="h-3.5 w-3.5 shrink-0 text-foreground/70" strokeWidth={2.25} />
+            <span className="truncate text-[10px] font-semibold uppercase tracking-widest text-foreground">
+              {dupeType ?? "Dupe"}
+              {typeof packagingSimilarity === "number" && packagingSimilarity > 0 && (
+                <span className="ml-1.5 font-bold tabular-nums">· {packagingSimilarity}% visual</span>
+              )}
+            </span>
+          </div>
+          {riskLevel && (
+            <div className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${riskTone.chipBg} ${riskTone.chipFg}`}>
+              <riskTone.Icon className="h-3 w-3" strokeWidth={2.5} />
+              {riskLevel}
+            </div>
+          )}
+        </div>
+      )}
       {/* Verdict bar */}
       <div className="flex items-center justify-between border-b border-border bg-secondary/60 px-5 py-3">
         <div className="flex items-center gap-2">
