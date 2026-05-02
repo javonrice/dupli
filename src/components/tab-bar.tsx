@@ -20,8 +20,9 @@ export function TabBar() {
   const { pathname } = useLocation();
   const hidden = useTabBarHidden();
 
-  // Hide on scan detail + share routes (and via imperative useHideTabBar).
-  const routeHidden = /^\/scan\//.test(pathname);
+  // Hide on scan detail + share routes and the community detail route
+  // (and via imperative useHideTabBar).
+  const routeHidden = /^\/(scan|community)\//.test(pathname);
   if (hidden || routeHidden) return null;
 
   return (
