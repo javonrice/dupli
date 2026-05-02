@@ -35,7 +35,7 @@ export function IOSScreen({
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-screen-safe flex-col bg-background no-bounce">
+    <div className="flex h-screen-minus-tabbar flex-col bg-background no-bounce">
       {/* Nav bar */}
       <div className="pt-safe sticky top-0 z-30 bg-background/85 backdrop-blur-xl">
         <div className="hairline-b flex h-14 items-center justify-between px-4">
