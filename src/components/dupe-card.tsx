@@ -216,6 +216,31 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
         </div>
       )}
 
+      {/* Real retailer prices */}
+      {dupe?.vendors && dupe.vendors.length > 0 && (
+        <div className="space-y-2 border-t border-border bg-secondary/30 px-5 py-4">
+          <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+            Where to buy
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {dupe.vendors.slice(0, 6).map((v) => (
+              <a
+                key={v.merchant}
+                href={v.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-foreground hover:bg-secondary"
+              >
+                <span>{v.merchant}</span>
+                {v.priceUsd != null && v.priceUsd > 0 && (
+                  <span className="font-bold tabular-nums">${v.priceUsd.toFixed(2)}</span>
+                )}
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Notes */}
       <div className="space-y-3 border-t border-border px-5 py-4">
         <p className="text-sm leading-relaxed text-foreground">{notes}</p>
