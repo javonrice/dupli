@@ -298,15 +298,9 @@ export const scanProduct = createServerFn({ method: "POST" })
       }
       const parsed = normalizeAnalysis(JSON.parse(argsRaw) as Partial<DupeAnalysis>);
 
-      // Quietly cross-reference our internal dupe DB. If we have verified data
-      // for this product, swap in the highest-rated verified dupe and use the
-      // verified match score. If we don't, enqueue the product for ingestion
-      // so future scans of the same product are backed by real data.
-      try {
-        await crossReferenceDupeDb(parsed);
-      } catch (err) {
-        console.warn("[dupedb] cross-reference failed, ignoring:", err);
-      }
+      // NOTE: DB cross-reference intentionally disabled — keep results pure AI for now.
+      // The SkinSort-backed dupes table is populated but not consulted.
+      // To re-enable, restore the call to crossReferenceDupeDb(parsed) here.
 
       // Best-effort: enrich both the original and the dupe with real product photos in parallel.
       // Wrap each lookup so a thrown error (network / ranker / malformed data) never wipes a valid analysis.
