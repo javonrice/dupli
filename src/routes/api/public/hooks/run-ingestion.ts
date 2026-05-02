@@ -7,7 +7,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 const DEFAULT_BATCH = 8; // keep total under ~30s worker budget
 const MIN_DELAY_MS = 250;
 const JITTER_MS = 200;
-const STALE_PROCESSING_MS = 5 * 60 * 1000; // reclaim items stuck >5min
+
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
