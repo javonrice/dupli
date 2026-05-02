@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, Loader2, Share2 } from "lucide-react";
+import { Loader2, Share2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getScan } from "@/server/scans.functions";
 import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
