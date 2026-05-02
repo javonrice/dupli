@@ -886,17 +886,105 @@ async function findProductSmart(
   return null;
 }
 
+/**
+ * Junk-brand guard. AI sometimes returns generic placeholders like
+ * "Unbranded (Dollar General)" or "Generic" — these will never resolve to
+ * a real DB row, so we skip queuing them for ingestion.
+ */
+function isJunkBrand(brand: string): boolean {
+  const b = brand.trim().toLowerCase();
+  if (!b) return true;
+  return (
+    b.startsWith("unbranded") ||
+    b.startsWith("generic") ||
+    b.startsWith("store brand") ||
+    b.startsWith("private label") ||
+    b === "unknown" ||
+    b === "n/a" ||
+    b === "none"
+  );
+}
+
+/**
+ * Aggressive brand-slug normalizer. AI commonly appends suffixes the DB
+ * doesn't carry ("NYX Professional Makeup" -> DB has "nyx-cosmetics").
+ * We generate every plausible slug and let the SQL `IN` filter sort it out.
+ */
+const BRAND_SUFFIX_NOISE = new Set([
+  "professional",
+  "makeup",
+  "make-up",
+  "cosmetics",
+  "cosmetic",
+  "beauty",
+  "skincare",
+  "skin-care",
+  "skin",
+  "care",
+  "paris",
+  "london",
+  "new-york",
+  "newyork",
+  "ny",
+  "usa",
+  "co",
+  "inc",
+  "ltd",
+  "llc",
+  "company",
+  "official",
+]);
+
 function brandSlugVariants(brand: string): string[] {
   const base = slugify(brand);
   const variants = new Set<string>();
-  if (base) variants.add(base);
+  if (!base) return [];
+  variants.add(base);
+
+  // Toggle "the-" prefix
   if (base.startsWith("the-")) variants.add(base.replace(/^the-/, ""));
-  else if (base) variants.add(`the-${base}`);
-  return Array.from(variants);
+  else variants.add(`the-${base}`);
+
+  // Strip trailing noise tokens iteratively
+  const tokens = base.split("-").filter(Boolean);
+  let stripped = [...tokens];
+  while (stripped.length > 1 && BRAND_SUFFIX_NOISE.has(stripped[stripped.length - 1])) {
+    stripped.pop();
+    if (stripped.length > 0) {
+      variants.add(stripped.join("-"));
+      if (stripped[0] !== "the") variants.add(`the-${stripped.join("-")}`);
+    }
+  }
+
+  // Strip ANY noise tokens (not just trailing)
+  const denoised = tokens.filter((t) => !BRAND_SUFFIX_NOISE.has(t));
+  if (denoised.length > 0 && denoised.length < tokens.length) {
+    variants.add(denoised.join("-"));
+  }
+
+  // First 1-2 tokens alone (handles "nyx-professional-makeup" -> "nyx")
+  if (tokens.length >= 1) variants.add(tokens[0]);
+  if (tokens.length >= 2) variants.add(`${tokens[0]}-${tokens[1]}`);
+
+  return Array.from(variants).filter((v) => v.length >= 2);
 }
 
 const STOPWORDS = new Set([
   "the", "and", "for", "with", "of", "to", "in", "on", "a", "an",
+]);
+
+// Headline actives — when both names contain the same one, that's a strong signal.
+const HEADLINE_ACTIVES = new Set([
+  "niacinamide", "retinol", "retinal", "retinaldehyde", "tretinoin",
+  "salicylic", "glycolic", "lactic", "mandelic", "azelaic",
+  "hyaluronic", "ceramide", "ceramides", "peptide", "peptides",
+  "vitamin", "ascorbic", "tocopherol",
+  "benzoyl", "adapalene",
+  "spf", "sunscreen",
+  "collagen", "squalane", "squalene",
+  "panthenol", "centella", "cica",
+  "bakuchiol", "kojic", "arbutin",
+  "caffeine", "zinc", "copper", "sulfur",
 ]);
 
 function tokenize(s: string): string[] {
@@ -904,6 +992,23 @@ function tokenize(s: string): string[] {
     .toLowerCase()
     .split(/[^a-z0-9]+/)
     .filter((t) => t.length > 1 && !STOPWORDS.has(t));
+}
+
+/** Trigram set for fuzzy string similarity. */
+function trigrams(s: string): Set<string> {
+  const cleaned = `  ${s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim()}  `;
+  const set = new Set<string>();
+  for (let i = 0; i < cleaned.length - 2; i++) set.add(cleaned.slice(i, i + 3));
+  return set;
+}
+
+function trigramSimilarity(a: string, b: string): number {
+  const ta = trigrams(a);
+  const tb = trigrams(b);
+  if (ta.size === 0 || tb.size === 0) return 0;
+  let inter = 0;
+  for (const t of ta) if (tb.has(t)) inter++;
+  return inter / (ta.size + tb.size - inter);
 }
 
 function rankBySimilarity<T extends { brand_name: string; product_name: string }>(
@@ -914,6 +1019,7 @@ function rankBySimilarity<T extends { brand_name: string; product_name: string }
   const qTokens = new Set(tokenize(query));
   if (qTokens.size === 0) return null;
   const brandHintLower = brandHint?.toLowerCase() ?? "";
+  const qActives = new Set([...qTokens].filter((t) => HEADLINE_ACTIVES.has(t)));
 
   let best: { product: T; score: number } | null = null;
   for (const c of candidates) {
@@ -925,11 +1031,25 @@ function rankBySimilarity<T extends { brand_name: string; product_name: string }
     const union = qTokens.size + cTokens.size - intersection;
     const jaccard = union === 0 ? 0 : intersection / union;
 
+    // Trigram catches "Niacinamide 10% + Zinc 1%" ≈ "Niacinamide 10% + Zinc 1% Oil Control Serum"
+    const trig = trigramSimilarity(query, c.product_name);
+
+    // Shared headline active (niacinamide, retinol, spf, etc.)
+    let activeBonus = 0;
+    for (const a of qActives) {
+      if (cTokens.has(a)) {
+        activeBonus = 0.15;
+        break;
+      }
+    }
+
     const brandBonus =
       brandHintLower && c.brand_name.toLowerCase() === brandHintLower ? 0.25 : 0;
-    const lenPenalty = Math.abs(qTokens.size - cTokens.size) * 0.05;
+    const lenPenalty = Math.abs(qTokens.size - cTokens.size) * 0.03;
 
-    const score = jaccard + brandBonus - lenPenalty;
+    // Blend jaccard + trigram (max of the two carries; average smooths)
+    const lexical = Math.max(jaccard, trig * 0.9);
+    const score = lexical + brandBonus + activeBonus - lenPenalty;
     if (!best || score > best.score) best = { product: c, score };
   }
   return best;
