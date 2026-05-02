@@ -824,27 +824,32 @@ async function findProductSmart(
   | null
 > {
   const brandSlug = slugify(brand);
+  const brandSlugs = brandSlugVariants(brand);
   const productSlug = slugify(productName);
 
   // TIER 1: exact slug
   const { data: exact } = await supabaseAdmin
     .from("products")
     .select("id, brand_name, product_name")
-    .eq("brand_slug", brandSlug)
+    .in("brand_slug", brandSlugs)
     .eq("product_slug", productSlug)
     .maybeSingle();
   if (exact) return { ...exact, matchStrategy: "exact" };
 
   // TIER 2: same brand, fuzzy match on product name (token-set Jaccard)
-  if (brandSlug) {
+  let tier2Count = 0;
+  let tier2Best: { product: { id: string; brand_name: string; product_name: string }; score: number } | null = null;
+  if (brandSlugs.length > 0) {
     const { data: brandProducts } = await supabaseAdmin
       .from("products")
       .select("id, brand_name, product_name")
-      .eq("brand_slug", brandSlug)
+      .in("brand_slug", brandSlugs)
       .limit(500);
 
+    tier2Count = brandProducts?.length ?? 0;
     if (brandProducts && brandProducts.length > 0) {
       const ranked = rankBySimilarity(productName, brandProducts);
+      tier2Best = ranked;
       if (ranked && ranked.score >= 0.4) {
         return { ...ranked.product, matchStrategy: `brand_fuzzy(${ranked.score.toFixed(2)})` };
       }
@@ -862,13 +867,28 @@ async function findProductSmart(
 
     if (ftsHits && ftsHits.length > 0) {
       const ranked = rankBySimilarity(productName, ftsHits, brand);
-      if (ranked && ranked.score >= 0.5) {
+      if (ranked && ranked.score >= 0.6) {
         return { ...ranked.product, matchStrategy: `fts_global(${ranked.score.toFixed(2)})` };
       }
     }
   }
 
+  console.log(
+    `[dupedb] no-match diagnostics: brand="${brand}" slug="${brandSlug}" variants="${brandSlugs.join(",")}" tier2_candidates=${tier2Count} tier2_best=${
+      tier2Best ? `"${tier2Best.product.brand_name} / ${tier2Best.product.product_name}" @ ${tier2Best.score.toFixed(2)}` : "none"
+    }`,
+  );
+
   return null;
+}
+
+function brandSlugVariants(brand: string): string[] {
+  const base = slugify(brand);
+  const variants = new Set<string>();
+  if (base) variants.add(base);
+  if (base.startsWith("the-")) variants.add(base.replace(/^the-/, ""));
+  else if (base) variants.add(`the-${base}`);
+  return Array.from(variants);
 }
 
 const STOPWORDS = new Set([
@@ -902,7 +922,7 @@ function rankBySimilarity<T extends { brand_name: string; product_name: string }
     const jaccard = union === 0 ? 0 : intersection / union;
 
     const brandBonus =
-      brandHintLower && c.brand_name.toLowerCase() === brandHintLower ? 0.15 : 0;
+      brandHintLower && c.brand_name.toLowerCase() === brandHintLower ? 0.25 : 0;
     const lenPenalty = Math.abs(qTokens.size - cTokens.size) * 0.05;
 
     const score = jaccard + brandBonus - lenPenalty;
