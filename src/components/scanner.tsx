@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw } from "lucide-react";
+import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw, Bookmark } from "lucide-react";
 import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
+import { saveScan, setSaved } from "@/server/scans.functions";
 import { DupeCard } from "@/components/dupe-card";
 import { IOSScreen } from "@/components/ios-screen";
 import { googleShoppingLink } from "@/lib/retailer-links";
