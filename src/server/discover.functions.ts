@@ -125,7 +125,7 @@ export const getDupeOfTheDay = createServerFn({ method: "GET" }).handler(
       .select(DUPE_SELECT)
       .gte("overall_match", 80)
       .order("overall_match", { ascending: false })
-      .limit(500);
+      .limit(2000);
 
     if (error || !data?.length) {
       console.warn("getDupeOfTheDay query failed", error);
