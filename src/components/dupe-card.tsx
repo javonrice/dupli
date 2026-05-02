@@ -242,7 +242,7 @@ function ProductSide({
   muted = false,
 }: {
   label: string;
-  item: { brand: string; productName: string; category: string; estimatedPriceUsd: number; imageUrl?: string };
+  item: { brand: string; productName: string; category: string; estimatedPriceUsd: number; imageUrl?: string; priceMerchant?: string };
   muted?: boolean;
 }) {
   return (
