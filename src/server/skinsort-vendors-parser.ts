@@ -91,5 +91,5 @@ export function parseSkinsortVendors(html: string): ParsedVendor[] {
 }
 
 export function buildVendorsUrl(brandSlug: string, productSlug: string): string {
-  return `https://skinsort.com/products/${brandSlug}/${productSlug}/us/vendors`;
+  return `https://skinsort.com/products/${brandSlug}/${productSlug}/vendors`;
 }
