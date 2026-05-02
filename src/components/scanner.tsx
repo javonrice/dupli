@@ -374,12 +374,18 @@ export function ResultsScreen({
               </Link>
             ) : (
               <button
-                disabled
-                aria-label="Preparing share"
-                className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground opacity-60"
+                type="button"
+                onClick={() => onShare?.()}
+                disabled={preparingShare}
+                aria-label="Share this dupe as image"
+                className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground disabled:opacity-60"
               >
-                <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />
-                Share
+                {preparingShare ? (
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.25} />
+                ) : (
+                  <Share2 className="h-[16px] w-[16px]" strokeWidth={2.25} />
+                )}
+                Share this dupe
               </button>
             ))}
           {link ? (
