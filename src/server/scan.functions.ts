@@ -391,7 +391,12 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
       ? [input.dupe]
       : [];
 
-  const dupes: DupeSuggestion[] = rawDupes.slice(0, 7).map((d) => ({
+  const dupes: DupeSuggestion[] = rawDupes
+    .slice(0, 7)
+    // Re-sort by matchScore desc so the highest-percentage dupe is always the headline,
+    // regardless of how the model ordered its array.
+    .sort((a, b) => (Number(b?.matchScore) || 0) - (Number(a?.matchScore) || 0))
+    .map((d) => ({
     productName: safeText(d?.productName, "Suggested alternative"),
     brand: safeText(d?.brand, "Unknown brand"),
     category: safeText(d?.category, "Beauty product"),
