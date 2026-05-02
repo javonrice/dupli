@@ -793,16 +793,16 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
   let top = bidirectional?.top;
   let topDupe = bidirectional?.counterpart;
 
-  // TIER 5: sibling fallback. The matched product has no dupe edges, but a
-  // sibling SKU in the same brand might. Walk the graph from there.
+  // TIER 5: sibling fallback. The matched product has no edges in EITHER
+  // direction, but a sibling SKU in the same brand might. Walk the graph.
   if (!top || !topDupe) {
     const sibling = await findSiblingWithDupes(product);
     if (sibling) {
       console.log(
-        `[dupedb] sibling-fallback: "${product.product_name}" -> "${sibling.product.product_name}" -> dupe`,
+        `[dupedb] sibling-fallback: "${product.product_name}" -> "${sibling.product.product_name}" -> "${sibling.counterpart.product_name}"`,
       );
       top = sibling.top;
-      topDupe = sibling.topDupe;
+      topDupe = sibling.counterpart;
     }
   }
 
