@@ -326,7 +326,6 @@ function ProductCard({
           <img
             src={image}
             alt=""
-            crossOrigin="anonymous"
             style={{
               width: "100%",
               height: "100%",

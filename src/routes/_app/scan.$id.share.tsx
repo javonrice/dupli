@@ -108,9 +108,32 @@ function SharePage() {
     try {
       const node = cardRef.current;
       if (!node) throw new Error("Share card not ready");
+
+      // Wait for every <img> inside the card to be fully decoded. Without
+      // this, html-to-image can snapshot before product images paint and the
+      // exported PNG ends up with empty image slots.
+      const imgs = Array.from(node.querySelectorAll("img"));
+      await Promise.all(
+        imgs.map(async (img) => {
+          if (img.complete && img.naturalWidth > 0) return;
+          try {
+            await img.decode();
+          } catch {
+            await new Promise<void>((resolve) => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            });
+          }
+        }),
+      );
+
       const { toPng } = await import("html-to-image");
+      // Run the export twice — the first pass primes the image cache so the
+      // second pass reliably includes all <img> content. Cheap insurance
+      // against the first-frame-empty bug on iOS Safari.
+      await toPng(node, { cacheBust: false, pixelRatio: 2, width: 1080, height: 1350 });
       const dataUrl = await toPng(node, {
-        cacheBust: true,
+        cacheBust: false,
         pixelRatio: 2,
         width: 1080,
         height: 1350,
