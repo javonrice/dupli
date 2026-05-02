@@ -474,7 +474,85 @@ export function ResultsScreen({
             </button>
           </div>
         )}
-        <DupeCard analysis={analysis} />
+        <DupeCard analysis={displayedAnalysis} />
+
+        {alternates.length > 0 && (
+          <section className="space-y-2 pt-1">
+            <div className="flex items-center justify-between px-1">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Also could be a dupe
+              </div>
+              <div className="text-[10px] font-medium text-muted-foreground">
+                {alternates.length} more
+              </div>
+            </div>
+            <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {candidates.map((c, i) => {
+                if (i === 0) return null;
+                const isActive = i === safeIdx;
+                return (
+                  <button
+                    key={`${c.brand}-${c.productName}-${i}`}
+                    type="button"
+                    onClick={() => setSelectedIdx(i)}
+                    className={`tap snap-start flex w-[160px] shrink-0 flex-col gap-2 rounded-[16px] border bg-card p-3 text-left shadow-soft transition ${
+                      isActive ? "border-foreground" : "border-border"
+                    }`}
+                    aria-pressed={isActive}
+                  >
+                    <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-[12px] border border-border bg-secondary/40">
+                      {c.imageUrl ? (
+                        <img
+                          src={c.imageUrl}
+                          alt={`${c.brand} ${c.productName}`}
+                          loading="lazy"
+                          className="h-full w-full object-contain"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <ShoppingBag
+                          className="h-6 w-6 text-muted-foreground/60"
+                          strokeWidth={1.5}
+                        />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {c.brand}
+                      </div>
+                      <div className="mt-0.5 line-clamp-2 font-display text-[13px] font-semibold leading-tight text-foreground">
+                        {c.productName}
+                      </div>
+                    </div>
+                    <div className="mt-auto flex items-center justify-between">
+                      <span className="font-display text-[15px] font-bold tabular-nums">
+                        {c.estimatedPriceUsd < 10
+                          ? `$${c.estimatedPriceUsd.toFixed(2)}`
+                          : `$${Math.round(c.estimatedPriceUsd)}`}
+                      </span>
+                      {typeof c.matchScore === "number" && c.matchScore > 0 && (
+                        <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background">
+                          {c.matchScore}%
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {safeIdx > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIdx(0)}
+                className="tap mx-auto block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground underline-offset-4 hover:underline"
+              >
+                Back to top pick
+              </button>
+            )}
+          </section>
+        )}
       </div>
     </IOSScreen>
   );
