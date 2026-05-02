@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import { Loader2, Share2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getScan } from "@/server/scans.functions";
@@ -7,10 +8,13 @@ import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import { ShareCard } from "@/components/share-card";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
+import { selectDupe } from "@/lib/select-dupe";
 import type { DupeAnalysis } from "@/server/scan.functions";
 
 export const Route = createFileRoute("/_app/scan/$id/share")({
   component: SharePage,
+  // ?dupe=<idx> picks an alternate from the "Also could be a dupe" rail.
+  validateSearch: (s) => z.object({ dupe: z.coerce.number().int().min(0).optional() }).parse(s),
   head: () => ({
     meta: [{ title: "Share dupe — Dupli" }],
   }),
