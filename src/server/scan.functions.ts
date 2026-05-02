@@ -24,11 +24,26 @@ export type DupeSuggestion = {
   buyUrl: string;
   keyIngredients: string[];
   imageUrl?: string;
+  // Per-candidate comparison fields (mirrors top-level for the #1 pick).
+  matchScore?: number;
+  dupeType?: "Lookalike packaging" | "Formula dupe" | "Both" | "Neither";
+  packagingSimilarity?: number;
+  riskLevel?: "Lower risk" | "Comparable" | "Higher risk";
+  riskFactors?: string[];
+  missingActives?: string[];
+  safetyNote?: string;
+  sharedIngredients?: string[];
+  uniqueToOriginal?: string[];
+  uniqueToDupe?: string[];
+  contextMatch?: string;
+  notes?: string;
 };
 
 export type DupeAnalysis = {
   original: ScannedProduct;
   dupe: DupeSuggestion | null;
+  /** All AI-ranked candidates, sorted best -> worst. dupe === dupes[0] when present. */
+  dupes?: DupeSuggestion[];
   matchScore: number; // 0-100
   verdict: "Worth the hype" | "Mixed" | "Skip" | "Risky dupe" | "No dupe found";
   notes: string;
@@ -82,18 +97,28 @@ export const scanProduct = createServerFn({ method: "POST" })
                 "  - 'Lower risk' = dupe is gentler / fewer irritants than original",
                 "  - 'Comparable' = roughly equivalent safety profile",
                 "  - 'Higher risk' = dupe introduces irritants the original avoided (added fragrance, denatured alcohol high in INCI, unbuffered acids, mislabeled SPF, harsh sulfates in a sensitive-skin category, etc.)",
-                "Step 8: Populate riskFactors with 0-4 SHORT specific concerns about the dupe ('Added fragrance', 'Denatured alcohol high in INCI', 'No SPF despite mimicking a sunscreen', 'Glycolic acid without buffering'). Empty if no concerns.",
-                "Step 9: Populate missingActives — 0-4 ingredients the ORIGINAL has that the dupe drops (what the user gives up). Empty if nothing meaningful is lost.",
-                "Step 10: safetyNote = ONE plain-English sentence an esthetician would say out loud about who/where this is OK to use ('Fine for body, I wouldn't put this on a compromised face barrier.').",
-                "Step 11: contextMatch = ONE sentence on WHY these match beyond ingredients (skin concern, texture, finish). Distinct from notes and safetyNote.",
+                "Step 1: Identify the product in the image (name, brand, category, typical retail price, key actives).",
+                "Step 2: Generate a SHORTLIST of 5-7 candidate dupes (cheaper alternatives or, if the scan is itself a cheap lookalike, the name-brand counterpart it mimics + other comparable picks). Each candidate must be a real, buyable product. Diversity matters — don't list near-duplicate retailer listings of the same SKU.",
+                "Step 3: For EACH candidate, provide brand, productName, category, estimatedPriceUsd, whereToBuy, a working buyUrl (retailer product page or retailer search URL), keyIngredients, dupeType, packagingSimilarity, matchScore, riskLevel, riskFactors, missingActives, sharedIngredients, uniqueToOriginal, uniqueToDupe, a one-sentence contextMatch, a one-sentence safetyNote, and a one-sentence notes.",
+                "Step 4: Score packagingSimilarity 0-100 honestly per candidate (color, shape, typography, label layout). Score matchScore 0-100 per candidate (formula + intended effect closeness).",
+                "Step 5: SORT the array best -> worst by overall fit (matchScore, then risk, then packaging similarity). The FIRST item must be your strongest pick — the rest of the app shows it as the headline dupe. Be honest: don't pad the list with weak picks if you only have 3 credible options (return what you have, minimum 1).",
+                "Step 6: Compare formulas. Use canonical INCI names. sharedIngredients/uniqueToOriginal/uniqueToDupe arrays: 0-6 items each, no repeats across lists, prioritize meaningful actives over water/fillers.",
+                "Step 7: Assess RISK per candidate.",
+                "  - 'Lower risk' = dupe is gentler / fewer irritants than original",
+                "  - 'Comparable' = roughly equivalent safety profile",
+                "  - 'Higher risk' = dupe introduces irritants the original avoided (added fragrance, denatured alcohol high in INCI, unbuffered acids, mislabeled SPF, harsh sulfates in a sensitive-skin category, etc.)",
+                "Step 8: riskFactors = 0-4 short specific concerns. missingActives = 0-4 actives the original has that the dupe drops.",
+                "Step 9: safetyNote = ONE plain-English sentence an esthetician would say out loud about who/where this dupe is OK to use.",
+                "Step 10: contextMatch = ONE sentence on WHY this candidate matches beyond ingredients (skin concern, texture, finish).",
+                "Step 11: TOP-LEVEL fields (matchScore, verdict, notes, bestFor, sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch, dupeType, packagingSimilarity, riskLevel, riskFactors, missingActives, safetyNote) MUST mirror the FIRST candidate exactly so existing screens render correctly.",
                 "Step 12: Verdict — be honest, never inflate:",
                 "  - 'Worth the hype' = credible swap, comparable or lower risk",
                 "  - 'Mixed' = some tradeoffs but defensible for the right user",
                 "  - 'Risky dupe' = clearly cheaper / lookalike but the formula tradeoff is bad enough we should warn the user",
                 "  - 'Skip' = not a real dupe, or actively worse in ways that matter",
-                "  - 'No dupe found' = no credible counterpart exists",
-                "If you genuinely cannot find a credible dupe, set dupe to null, verdict 'No dupe found', and leave comparison/risk lists empty.",
-                "Always call analyze_dupe exactly once. Never invent a fake brand, but do not fail just because the product is ordinary — give the best practical comparison you can.",
+                "  - 'No dupe found' = no credible counterpart exists (return empty dupes array in this case)",
+                "If you genuinely cannot find ANY credible dupe, set dupes to [], verdict 'No dupe found', and leave comparison/risk lists empty.",
+                "Always call analyze_dupe exactly once.",
               ].join(" "),
             },
             {
@@ -145,39 +170,60 @@ export const scanProduct = createServerFn({ method: "POST" })
                       ],
                       additionalProperties: false,
                     },
-                    dupe: {
-                      anyOf: [
-                        {
-                          type: "object",
-                          properties: {
-                            productName: { type: "string" },
-                            brand: { type: "string" },
-                            category: { type: "string" },
-                            estimatedPriceUsd: { type: "number" },
-                            whereToBuy: {
-                              type: "string",
-                              description: "Retailer name, e.g. Dollar Tree, Target, Amazon, CVS",
-                            },
-                            buyUrl: {
-                              type: "string",
-                              description:
-                                "A direct, working URL where the user can buy or view the dupe. Prefer the retailer's product page. If a precise product page URL isn't known, use a retailer search URL such as https://www.amazon.com/s?k=<product+name+brand> or https://www.target.com/s?searchTerm=<product+name+brand>. Always return a valid https URL.",
-                            },
-                            keyIngredients: { type: "array", items: { type: "string" } },
+                    dupes: {
+                      type: "array",
+                      minItems: 0,
+                      maxItems: 7,
+                      description:
+                        "Ranked list of 5-7 candidate dupes, sorted best -> worst. The first item is the headline dupe. Empty array if no credible dupe exists.",
+                      items: {
+                        type: "object",
+                        properties: {
+                          productName: { type: "string" },
+                          brand: { type: "string" },
+                          category: { type: "string" },
+                          estimatedPriceUsd: { type: "number" },
+                          whereToBuy: {
+                            type: "string",
+                            description: "Retailer name, e.g. Dollar Tree, Target, Amazon, CVS",
                           },
-                          required: [
-                            "productName",
-                            "brand",
-                            "category",
-                            "estimatedPriceUsd",
-                            "whereToBuy",
-                            "buyUrl",
-                            "keyIngredients",
-                          ],
-                          additionalProperties: false,
+                          buyUrl: {
+                            type: "string",
+                            description:
+                              "A direct, working URL where the user can buy or view the dupe. Prefer the retailer's product page. If a precise product page URL isn't known, use a retailer search URL such as https://www.amazon.com/s?k=<product+name+brand> or https://www.target.com/s?searchTerm=<product+name+brand>. Always return a valid https URL.",
+                          },
+                          keyIngredients: { type: "array", items: { type: "string" } },
+                          matchScore: { type: "number", minimum: 0, maximum: 100 },
+                          dupeType: {
+                            type: "string",
+                            enum: ["Lookalike packaging", "Formula dupe", "Both", "Neither"],
+                          },
+                          packagingSimilarity: { type: "number", minimum: 0, maximum: 100 },
+                          riskLevel: {
+                            type: "string",
+                            enum: ["Lower risk", "Comparable", "Higher risk"],
+                          },
+                          riskFactors: { type: "array", items: { type: "string" } },
+                          missingActives: { type: "array", items: { type: "string" } },
+                          safetyNote: { type: "string" },
+                          sharedIngredients: { type: "array", items: { type: "string" } },
+                          uniqueToOriginal: { type: "array", items: { type: "string" } },
+                          uniqueToDupe: { type: "array", items: { type: "string" } },
+                          contextMatch: { type: "string" },
+                          notes: { type: "string" },
                         },
-                        { type: "null" },
-                      ],
+                        required: [
+                          "productName",
+                          "brand",
+                          "category",
+                          "estimatedPriceUsd",
+                          "whereToBuy",
+                          "buyUrl",
+                          "keyIngredients",
+                          "matchScore",
+                        ],
+                        additionalProperties: false,
+                      },
                     },
                     matchScore: { type: "number", minimum: 0, maximum: 100 },
                     verdict: {
@@ -255,7 +301,7 @@ export const scanProduct = createServerFn({ method: "POST" })
                   },
                   required: [
                     "original",
-                    "dupe",
+                    "dupes",
                     "matchScore",
                     "verdict",
                     "notes",
@@ -269,7 +315,7 @@ export const scanProduct = createServerFn({ method: "POST" })
           ],
           tool_choice: { type: "function", function: { name: "analyze_dupe" } },
           temperature: 0.2,
-          max_tokens: 2400,
+          max_tokens: 5500,
         }),
       });
 
@@ -300,8 +346,8 @@ export const scanProduct = createServerFn({ method: "POST" })
       // The SkinSort-backed dupes table is populated but not consulted.
       // To re-enable, restore the call to crossReferenceDupeDb(parsed) here.
 
-      // Best-effort: enrich both the original and the dupe with real product photos in parallel.
-      // Wrap each lookup so a thrown error (network / ranker / malformed data) never wipes a valid analysis.
+      // Best-effort: enrich the original AND every dupe candidate with real product photos in parallel.
+      // Capped at 7 candidates by the schema. Each lookup is wrapped so a failure never wipes the analysis.
       const safeFind = async (b?: string | null, n?: string | null) => {
         try {
           return await findProductImage(b, n);
@@ -310,16 +356,20 @@ export const scanProduct = createServerFn({ method: "POST" })
           return undefined;
         }
       };
-      const [originalImg, dupeImg] = await Promise.all([
+      const candidates = parsed.dupes ?? [];
+      const lookups = await Promise.all([
         parsed.original
           ? safeFind(parsed.original.brand, parsed.original.productName)
           : Promise.resolve(undefined),
-        parsed.dupe
-          ? safeFind(parsed.dupe.brand, parsed.dupe.productName)
-          : Promise.resolve(undefined),
+        ...candidates.map((c) => safeFind(c.brand, c.productName)),
       ]);
+      const [originalImg, ...dupeImgs] = lookups;
       if (originalImg && parsed.original) parsed.original.imageUrl = originalImg;
-      if (dupeImg && parsed.dupe) parsed.dupe.imageUrl = dupeImg;
+      candidates.forEach((c, i) => {
+        if (dupeImgs[i]) c.imageUrl = dupeImgs[i];
+      });
+      // Re-sync the headline `dupe` (which is candidates[0]) so its imageUrl matches.
+      if (parsed.dupe && candidates[0]) parsed.dupe = candidates[0];
 
       return { result: parsed, error: null };
     } catch (e) {
@@ -330,10 +380,45 @@ export const scanProduct = createServerFn({ method: "POST" })
 
 function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
   const original = (input.original ?? {}) as Partial<ScannedProduct>;
-  const dupe = input.dupe ?? null;
   const verdicts = ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"] as const;
   const riskLevels = ["Lower risk", "Comparable", "Higher risk"] as const;
   const dupeTypes = ["Lookalike packaging", "Formula dupe", "Both", "Neither"] as const;
+
+  // Build the candidates array. Prefer new `dupes` field; fall back to legacy single `dupe`.
+  const rawDupes: Partial<DupeSuggestion>[] = Array.isArray(input.dupes)
+    ? input.dupes
+    : input.dupe
+      ? [input.dupe]
+      : [];
+
+  const dupes: DupeSuggestion[] = rawDupes.slice(0, 7).map((d) => ({
+    productName: safeText(d?.productName, "Suggested alternative"),
+    brand: safeText(d?.brand, "Unknown brand"),
+    category: safeText(d?.category, "Beauty product"),
+    estimatedPriceUsd: safeNumber(d?.estimatedPriceUsd),
+    whereToBuy: safeText(d?.whereToBuy, "Online"),
+    buyUrl: safeUrl(d?.buyUrl, d?.brand, d?.productName),
+    keyIngredients: safeList(d?.keyIngredients),
+    imageUrl: d?.imageUrl,
+    matchScore: clampScore(d?.matchScore),
+    dupeType: dupeTypes.includes(d?.dupeType as NonNullable<DupeAnalysis["dupeType"]>)
+      ? d?.dupeType
+      : "Formula dupe",
+    packagingSimilarity: clampScore(d?.packagingSimilarity),
+    riskLevel: riskLevels.includes(d?.riskLevel as NonNullable<DupeAnalysis["riskLevel"]>)
+      ? d?.riskLevel
+      : "Comparable",
+    riskFactors: safeList(d?.riskFactors),
+    missingActives: safeList(d?.missingActives),
+    safetyNote: safeText(d?.safetyNote, ""),
+    sharedIngredients: safeList(d?.sharedIngredients),
+    uniqueToOriginal: safeList(d?.uniqueToOriginal),
+    uniqueToDupe: safeList(d?.uniqueToDupe),
+    contextMatch: safeText(d?.contextMatch, ""),
+    notes: safeText(d?.notes, ""),
+  }));
+
+  const headline = dupes[0] ?? null;
 
   return {
     original: {
@@ -344,48 +429,41 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
       keyIngredients: safeList(original.keyIngredients),
       imageUrl: original.imageUrl,
     },
-    dupe: dupe
-      ? {
-          productName: safeText(dupe.productName, "Suggested alternative"),
-          brand: safeText(dupe.brand, "Unknown brand"),
-          category: safeText(dupe.category, "Beauty product"),
-          estimatedPriceUsd: safeNumber(dupe.estimatedPriceUsd),
-          whereToBuy: safeText(dupe.whereToBuy, "Online"),
-          buyUrl: safeUrl(dupe.buyUrl, dupe.brand, dupe.productName),
-          keyIngredients: safeList(dupe.keyIngredients),
-          imageUrl: dupe.imageUrl,
-        }
-      : null,
-    matchScore: clampScore(input.matchScore),
+    dupe: headline,
+    dupes,
+    // Top-level fields mirror the headline candidate when AI didn't fill them in.
+    matchScore: typeof input.matchScore === "number"
+      ? clampScore(input.matchScore)
+      : (headline?.matchScore ?? 0),
     verdict: verdicts.includes(input.verdict as DupeAnalysis["verdict"])
       ? (input.verdict as DupeAnalysis["verdict"])
-      : dupe
+      : headline
         ? "Mixed"
         : "No dupe found",
     notes: safeText(
-      input.notes,
+      input.notes ?? headline?.notes,
       "We found the closest practical comparison, but double-check the label if your skin is sensitive.",
     ),
     bestFor: safeList(input.bestFor),
     confidence: ["high", "medium", "low"].includes(input.confidence ?? "")
       ? (input.confidence as DupeAnalysis["confidence"])
       : "medium",
-    sharedIngredients: safeList(input.sharedIngredients),
-    uniqueToOriginal: safeList(input.uniqueToOriginal),
-    uniqueToDupe: safeList(input.uniqueToDupe),
-    contextMatch: safeText(input.contextMatch, ""),
+    sharedIngredients: safeList(input.sharedIngredients ?? headline?.sharedIngredients),
+    uniqueToOriginal: safeList(input.uniqueToOriginal ?? headline?.uniqueToOriginal),
+    uniqueToDupe: safeList(input.uniqueToDupe ?? headline?.uniqueToDupe),
+    contextMatch: safeText(input.contextMatch ?? headline?.contextMatch, ""),
     dupeType: dupeTypes.includes(input.dupeType as NonNullable<DupeAnalysis["dupeType"]>)
       ? input.dupeType
-      : dupe
-        ? "Formula dupe"
-        : "Neither",
-    packagingSimilarity: clampScore(input.packagingSimilarity),
+      : headline?.dupeType ?? (headline ? "Formula dupe" : "Neither"),
+    packagingSimilarity: typeof input.packagingSimilarity === "number"
+      ? clampScore(input.packagingSimilarity)
+      : (headline?.packagingSimilarity ?? 0),
     riskLevel: riskLevels.includes(input.riskLevel as NonNullable<DupeAnalysis["riskLevel"]>)
       ? input.riskLevel
-      : "Comparable",
-    riskFactors: safeList(input.riskFactors),
-    missingActives: safeList(input.missingActives),
-    safetyNote: safeText(input.safetyNote, ""),
+      : headline?.riskLevel ?? "Comparable",
+    riskFactors: safeList(input.riskFactors ?? headline?.riskFactors),
+    missingActives: safeList(input.missingActives ?? headline?.missingActives),
+    safetyNote: safeText(input.safetyNote ?? headline?.safetyNote, ""),
   };
 }
 

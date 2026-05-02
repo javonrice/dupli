@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw, Bookmark, Share2 } from "lucide-react";
-import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
+import { scanProduct, type DupeAnalysis, type DupeSuggestion } from "@/server/scan.functions";
 import { saveScan, setSaved } from "@/server/scans.functions";
 import { DupeCard } from "@/components/dupe-card";
 import { IOSScreen } from "@/components/ios-screen";
@@ -323,9 +323,43 @@ export function ResultsScreen({
   // Hide the bottom tab bar while results are shown for extra spacing.
   useHideTabBar();
 
-  const dupe = analysis.dupe;
-  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  // The AI returns up to 7 ranked candidates. Index 0 is the headline pick;
+  // the rest live in the "Also could be a dupe" rail and can be promoted by tapping.
+  const candidates: DupeSuggestion[] =
+    analysis.dupes && analysis.dupes.length > 0
+      ? analysis.dupes
+      : analysis.dupe
+        ? [analysis.dupe]
+        : [];
+  const [selectedIdx, setSelectedIdx] = useState(0);
+  const safeIdx = Math.min(selectedIdx, Math.max(0, candidates.length - 1));
+  const displayedAnalysis: DupeAnalysis = (() => {
+    if (candidates.length === 0 || safeIdx === 0) return analysis;
+    const c = candidates[safeIdx];
+    return {
+      ...analysis,
+      dupe: c,
+      matchScore: typeof c.matchScore === "number" ? c.matchScore : analysis.matchScore,
+      sharedIngredients: c.sharedIngredients ?? analysis.sharedIngredients,
+      uniqueToOriginal: c.uniqueToOriginal ?? analysis.uniqueToOriginal,
+      uniqueToDupe: c.uniqueToDupe ?? analysis.uniqueToDupe,
+      contextMatch: c.contextMatch ?? analysis.contextMatch,
+      dupeType: c.dupeType ?? analysis.dupeType,
+      packagingSimilarity:
+        typeof c.packagingSimilarity === "number"
+          ? c.packagingSimilarity
+          : analysis.packagingSimilarity,
+      riskLevel: c.riskLevel ?? analysis.riskLevel,
+      riskFactors: c.riskFactors ?? analysis.riskFactors,
+      missingActives: c.missingActives ?? analysis.missingActives,
+      safetyNote: c.safetyNote ?? analysis.safetyNote,
+      notes: c.notes && c.notes.trim() ? c.notes : analysis.notes,
+    };
+  })();
 
+  const dupe = displayedAnalysis.dupe;
+  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  const alternates = candidates.slice(1);
   return (
     <IOSScreen
       title="Result"
@@ -440,7 +474,85 @@ export function ResultsScreen({
             </button>
           </div>
         )}
-        <DupeCard analysis={analysis} />
+        <DupeCard analysis={displayedAnalysis} />
+
+        {alternates.length > 0 && (
+          <section className="space-y-2 pt-1">
+            <div className="flex items-center justify-between px-1">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                Also could be a dupe
+              </div>
+              <div className="text-[10px] font-medium text-muted-foreground">
+                {alternates.length} more
+              </div>
+            </div>
+            <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {candidates.map((c, i) => {
+                if (i === 0) return null;
+                const isActive = i === safeIdx;
+                return (
+                  <button
+                    key={`${c.brand}-${c.productName}-${i}`}
+                    type="button"
+                    onClick={() => setSelectedIdx(i)}
+                    className={`tap snap-start flex w-[160px] shrink-0 flex-col gap-2 rounded-[16px] border bg-card p-3 text-left shadow-soft transition ${
+                      isActive ? "border-foreground" : "border-border"
+                    }`}
+                    aria-pressed={isActive}
+                  >
+                    <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-[12px] border border-border bg-secondary/40">
+                      {c.imageUrl ? (
+                        <img
+                          src={c.imageUrl}
+                          alt={`${c.brand} ${c.productName}`}
+                          loading="lazy"
+                          className="h-full w-full object-contain"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <ShoppingBag
+                          className="h-6 w-6 text-muted-foreground/60"
+                          strokeWidth={1.5}
+                        />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {c.brand}
+                      </div>
+                      <div className="mt-0.5 line-clamp-2 font-display text-[13px] font-semibold leading-tight text-foreground">
+                        {c.productName}
+                      </div>
+                    </div>
+                    <div className="mt-auto flex items-center justify-between">
+                      <span className="font-display text-[15px] font-bold tabular-nums">
+                        {c.estimatedPriceUsd < 10
+                          ? `$${c.estimatedPriceUsd.toFixed(2)}`
+                          : `$${Math.round(c.estimatedPriceUsd)}`}
+                      </span>
+                      {typeof c.matchScore === "number" && c.matchScore > 0 && (
+                        <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background">
+                          {c.matchScore}%
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {safeIdx > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedIdx(0)}
+                className="tap mx-auto block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground underline-offset-4 hover:underline"
+              >
+                Back to top pick
+              </button>
+            )}
+          </section>
+        )}
       </div>
     </IOSScreen>
   );
