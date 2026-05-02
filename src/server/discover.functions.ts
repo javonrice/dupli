@@ -161,7 +161,7 @@ export const getTrendingDupes = createServerFn({ method: "GET" })
       .select(DUPE_SELECT)
       .gte("overall_match", 75)
       .order("overall_match", { ascending: false })
-      .limit(limit * 4);
+      .limit(limit * 12);
 
     if (error || !rows?.length) {
       console.warn("getTrendingDupes query failed", error);
