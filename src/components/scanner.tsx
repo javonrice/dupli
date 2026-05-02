@@ -270,7 +270,7 @@ function ScanningScreen({ preview }: { preview: string | null }) {
 
 /* ---------------- Results (scrollable Detail view) ---------------- */
 
-function ResultsScreen({
+export function ResultsScreen({
   analysis,
   preview,
   onReset,

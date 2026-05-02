@@ -80,6 +80,25 @@ export const listScans = createServerFn({ method: "GET" })
     return { scans: (data ?? []) as ScanRow[], error: null };
   });
 
+export const getScan = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(
+    async ({
+      data,
+      context,
+    }): Promise<{ scan: ScanRow | null; isSaved: boolean; error: string | null }> => {
+      const { supabase } = context;
+      const [{ data: row, error }, { data: savedRow }] = await Promise.all([
+        supabase.from("scans").select("*").eq("id", data.id).maybeSingle(),
+        supabase.from("saved_scans").select("scan_id").eq("scan_id", data.id).maybeSingle(),
+      ]);
+      if (error) return { scan: null, isSaved: false, error: error.message };
+      if (!row) return { scan: null, isSaved: false, error: "Scan not found" };
+      return { scan: row as ScanRow, isSaved: !!savedRow, error: null };
+    },
+  );
+
 export const deleteScan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
