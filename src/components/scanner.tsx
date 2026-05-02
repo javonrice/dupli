@@ -47,6 +47,9 @@ export function Scanner() {
   const toggleSaved = useServerFn(setSaved);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
+  const persistPromiseRef = useRef<Promise<{ id?: string }> | null>(null);
+  const navigate = useNavigate();
+  const [preparingShare, setPreparingShare] = useState(false);
 
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
