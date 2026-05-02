@@ -947,8 +947,7 @@ async function findSiblingWithDupes(matched: {
   }
   return null;
 }
-  return null;
-}
+
 
 // Smart 3-tier product lookup. AI rarely returns SkinSort's exact wording,
 // so exact slug match alone misses ~80% of real hits. We expand with
