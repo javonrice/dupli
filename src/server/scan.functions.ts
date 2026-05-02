@@ -745,35 +745,30 @@ function pickBestProductImage(
 
 async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
   if (!analysis.original?.brand || !analysis.original?.productName) {
-    // No identification — clear AI dupe, force "no dupe found".
     forceNoDupe(analysis);
     return;
   }
 
-  const brandSlug = slugify(analysis.original.brand);
-  const productSlug = slugify(analysis.original.productName);
-
-  const { data: product } = await supabaseAdmin
-    .from("products")
-    .select("id, brand_name, product_name, category, image_url, free_from, good_for, contains")
-    .eq("brand_slug", brandSlug)
-    .eq("product_slug", productSlug)
-    .maybeSingle();
+  const brand = analysis.original.brand;
+  const productName = analysis.original.productName;
+  const product = await findProductSmart(brand, productName);
 
   if (!product) {
-    // Miss — enqueue for background ingestion, then strip the AI dupe so the
-    // user only ever sees DB-backed results. (Temporary "DB-only" mode.)
     await supabaseAdmin.from("ingestion_queue").insert({
-      brand_slug: brandSlug,
-      product_slug: productSlug,
+      brand_slug: slugify(brand),
+      product_slug: slugify(productName),
       reason: "user_scan_miss",
       priority: 10,
     });
+    console.log(`[dupedb] MISS: "${brand} / ${productName}" (no fuzzy match)`);
     forceNoDupe(analysis);
     return;
   }
 
-  // Hit — pull the top verified dupe.
+  console.log(
+    `[dupedb] HIT via ${product.matchStrategy}: "${brand} / ${productName}" -> "${product.brand_name} / ${product.product_name}"`,
+  );
+
   const { data: dupeRows } = await supabaseAdmin
     .from("dupes")
     .select(
@@ -791,12 +786,14 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     | undefined;
 
   if (!top || !topDupe) {
-    // Product is in DB but has no dupes recorded — still show "no dupe".
     forceNoDupe(analysis);
     return;
   }
 
-  // Always use the verified dupe — AI guess is discarded in DB-only mode.
+  // Reflect the verified canonical name (so UI / share / history are accurate).
+  analysis.original.productName = product.product_name;
+  analysis.original.brand = product.brand_name;
+
   analysis.dupe = {
     productName: topDupe.product_name,
     brand: topDupe.brand_name,
@@ -809,14 +806,109 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
   };
   analysis.matchScore = top.overall_match;
   analysis.confidence = "high";
-  if (top.rationale) {
-    analysis.notes = top.rationale;
-  }
-  // Clear AI-invented comparison fields that no longer apply to the verified dupe.
+  if (top.rationale) analysis.notes = top.rationale;
   analysis.sharedIngredients = [];
   analysis.uniqueToOriginal = [];
   analysis.uniqueToDupe = [];
   if (analysis.verdict === "No dupe found") analysis.verdict = "Worth the hype";
+}
+
+// Smart 3-tier product lookup. AI rarely returns SkinSort's exact wording,
+// so exact slug match alone misses ~80% of real hits. We expand with
+// brand-scoped fuzzy match and a global FTS fallback.
+async function findProductSmart(
+  brand: string,
+  productName: string,
+): Promise<
+  | { id: string; brand_name: string; product_name: string; matchStrategy: string }
+  | null
+> {
+  const brandSlug = slugify(brand);
+  const productSlug = slugify(productName);
+
+  // TIER 1: exact slug
+  const { data: exact } = await supabaseAdmin
+    .from("products")
+    .select("id, brand_name, product_name")
+    .eq("brand_slug", brandSlug)
+    .eq("product_slug", productSlug)
+    .maybeSingle();
+  if (exact) return { ...exact, matchStrategy: "exact" };
+
+  // TIER 2: same brand, fuzzy match on product name (token-set Jaccard)
+  if (brandSlug) {
+    const { data: brandProducts } = await supabaseAdmin
+      .from("products")
+      .select("id, brand_name, product_name")
+      .eq("brand_slug", brandSlug)
+      .limit(500);
+
+    if (brandProducts && brandProducts.length > 0) {
+      const ranked = rankBySimilarity(productName, brandProducts);
+      if (ranked && ranked.score >= 0.4) {
+        return { ...ranked.product, matchStrategy: `brand_fuzzy(${ranked.score.toFixed(2)})` };
+      }
+    }
+  }
+
+  // TIER 3: cross-brand FTS via search_vector (handles wrong brand)
+  const ftsQuery = tokenize(productName).join(" | ");
+  if (ftsQuery) {
+    const { data: ftsHits } = await supabaseAdmin
+      .from("products")
+      .select("id, brand_name, product_name")
+      .textSearch("search_vector", ftsQuery, { config: "simple" })
+      .limit(50);
+
+    if (ftsHits && ftsHits.length > 0) {
+      const ranked = rankBySimilarity(productName, ftsHits, brand);
+      if (ranked && ranked.score >= 0.5) {
+        return { ...ranked.product, matchStrategy: `fts_global(${ranked.score.toFixed(2)})` };
+      }
+    }
+  }
+
+  return null;
+}
+
+const STOPWORDS = new Set([
+  "the", "and", "for", "with", "of", "to", "in", "on", "a", "an",
+]);
+
+function tokenize(s: string): string[] {
+  return s
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((t) => t.length > 1 && !STOPWORDS.has(t));
+}
+
+function rankBySimilarity<T extends { brand_name: string; product_name: string }>(
+  query: string,
+  candidates: T[],
+  brandHint?: string,
+): { product: T; score: number } | null {
+  const qTokens = new Set(tokenize(query));
+  if (qTokens.size === 0) return null;
+  const brandHintLower = brandHint?.toLowerCase() ?? "";
+
+  let best: { product: T; score: number } | null = null;
+  for (const c of candidates) {
+    const cTokens = new Set(tokenize(c.product_name));
+    if (cTokens.size === 0) continue;
+
+    let intersection = 0;
+    for (const t of qTokens) if (cTokens.has(t)) intersection++;
+    const union = qTokens.size + cTokens.size - intersection;
+    const jaccard = union === 0 ? 0 : intersection / union;
+
+    const brandBonus =
+      brandHintLower && c.brand_name.toLowerCase() === brandHintLower ? 0.15 : 0;
+    const lenPenalty = Math.abs(qTokens.size - cTokens.size) * 0.05;
+
+    const score = jaccard + brandBonus - lenPenalty;
+    if (!best || score > best.score) best = { product: c, score };
+  }
+  return best;
 }
 
 function forceNoDupe(analysis: DupeAnalysis): void {
@@ -830,5 +922,6 @@ function forceNoDupe(analysis: DupeAnalysis): void {
   analysis.missingActives = [];
   analysis.packagingSimilarity = 0;
   analysis.dupeType = "Neither";
-  analysis.notes = "No verified dupe in our database for this product yet. We've queued it — try again in a minute.";
+  analysis.notes =
+    "No verified dupe in our database for this product yet. We've queued it — try again in a minute.";
 }
