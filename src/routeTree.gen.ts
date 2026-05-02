@@ -19,6 +19,7 @@ import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
 import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
 import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
 import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
+import { Route as ApiPublicHooksEnqueueVendorBackfillRouteImport } from './routes/api/public/hooks/enqueue-vendor-backfill'
 import { Route as AppScanIdShareRouteImport } from './routes/_app/scan.$id.share'
 import { Route as AppCommunityBrandProductRouteImport } from './routes/_app/community.$brand.$product'
 
@@ -73,6 +74,12 @@ const ApiPublicHooksIngestProductRoute =
     path: '/api/public/hooks/ingest-product',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksEnqueueVendorBackfillRoute =
+  ApiPublicHooksEnqueueVendorBackfillRouteImport.update({
+    id: '/api/public/hooks/enqueue-vendor-backfill',
+    path: '/api/public/hooks/enqueue-vendor-backfill',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AppScanIdShareRoute = AppScanIdShareRouteImport.update({
   id: '/share',
   path: '/share',
@@ -94,6 +101,7 @@ export interface FileRoutesByFullPath {
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
+  '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/scan/$id/': typeof AppScanIdIndexRoute
@@ -106,6 +114,7 @@ export interface FileRoutesByTo {
   '/': typeof AppIndexRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
+  '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/scan/$id': typeof AppScanIdIndexRoute
@@ -121,6 +130,7 @@ export interface FileRoutesById {
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/_app/scan/$id/share': typeof AppScanIdShareRoute
+  '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/_app/scan/$id/': typeof AppScanIdIndexRoute
@@ -136,6 +146,7 @@ export interface FileRouteTypes {
     | '/scan/$id'
     | '/community/$brand/$product'
     | '/scan/$id/share'
+    | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
     | '/scan/$id/'
@@ -148,6 +159,7 @@ export interface FileRouteTypes {
     | '/'
     | '/community/$brand/$product'
     | '/scan/$id/share'
+    | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
     | '/scan/$id'
@@ -162,6 +174,7 @@ export interface FileRouteTypes {
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
     | '/_app/scan/$id/share'
+    | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
     | '/_app/scan/$id/'
@@ -170,6 +183,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
   ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
 }
@@ -246,6 +260,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksIngestProductRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/enqueue-vendor-backfill': {
+      id: '/api/public/hooks/enqueue-vendor-backfill'
+      path: '/api/public/hooks/enqueue-vendor-backfill'
+      fullPath: '/api/public/hooks/enqueue-vendor-backfill'
+      preLoaderRoute: typeof ApiPublicHooksEnqueueVendorBackfillRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/scan/$id/share': {
       id: '/_app/scan/$id/share'
       path: '/share'
@@ -300,6 +321,8 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  ApiPublicHooksEnqueueVendorBackfillRoute:
+    ApiPublicHooksEnqueueVendorBackfillRoute,
   ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
   ApiPublicHooksRunIngestionRoute: ApiPublicHooksRunIngestionRoute,
 }

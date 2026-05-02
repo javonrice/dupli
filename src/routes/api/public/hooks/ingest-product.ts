@@ -5,6 +5,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { buildSkinsortUrl, slugify } from "@/server/skinsort-slugs";
 import { parseSkinsortPage } from "@/server/skinsort-parser";
+import {
+  buildVendorsUrl,
+  parseSkinsortVendors,
+  type ParsedVendor,
+} from "@/server/skinsort-vendors-parser";
 
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -15,6 +20,60 @@ async function fetchSkinsort(url: string): Promise<{ status: number; body: strin
   });
   const body = res.ok ? await res.text() : "";
   return { status: res.status, body };
+}
+
+// Fetch + parse vendors for a product, then upsert them and recompute the
+// product's lowest_price_usd. Failure is non-fatal: if vendors are missing or
+// the fetch fails, we still keep the product/dupe rows.
+async function ingestVendors(
+  productId: string,
+  brandSlug: string,
+  productSlug: string,
+): Promise<number> {
+  const url = buildVendorsUrl(brandSlug, productSlug);
+  let html = "";
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+    });
+    if (!res.ok) return 0;
+    html = await res.text();
+  } catch {
+    return 0;
+  }
+
+  const vendors: ParsedVendor[] = parseSkinsortVendors(html);
+  if (vendors.length === 0) return 0;
+
+  const rows = vendors.map((v) => ({
+    product_id: productId,
+    merchant: v.merchant,
+    url: v.url,
+    price_usd: v.priceUsd,
+    currency: v.currency,
+    rank: v.rank,
+    fetched_at: new Date().toISOString(),
+  }));
+
+  const { error: upErr } = await supabaseAdmin
+    .from("product_vendors")
+    .upsert(rows, { onConflict: "product_id,merchant" });
+  if (upErr) {
+    console.error("vendor upsert failed", productId, upErr.message);
+    return 0;
+  }
+
+  // Recompute denormalized lowest price.
+  const prices = vendors
+    .map((v) => v.priceUsd)
+    .filter((p): p is number => typeof p === "number");
+  const lowest = prices.length > 0 ? Math.min(...prices) : null;
+  await supabaseAdmin
+    .from("products")
+    .update({ lowest_price_usd: lowest, last_priced_at: new Date().toISOString() })
+    .eq("id", productId);
+
+  return vendors.length;
 }
 
 async function upsertProduct(input: {
@@ -73,7 +132,13 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
           });
         }
 
-        let body: { brandSlug?: string; productSlug?: string; queueId?: string };
+        let body: {
+          brandSlug?: string;
+          productSlug?: string;
+          queueId?: string;
+          mode?: "full" | "vendors";
+          productId?: string;
+        };
         try {
           body = (await request.json()) as typeof body;
         } catch {
@@ -84,6 +149,47 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
         const productSlug = body.productSlug ? slugify(body.productSlug) : "";
         if (!brandSlug || !productSlug) {
           return new Response(JSON.stringify({ error: "missing slugs" }), { status: 400 });
+        }
+
+        // Vendors-only mode: skip dupe parsing, just refresh prices for one product.
+        if (body.mode === "vendors") {
+          let productId = body.productId ?? "";
+          if (!productId) {
+            const { data: prod } = await supabaseAdmin
+              .from("products")
+              .select("id")
+              .eq("brand_slug", brandSlug)
+              .eq("product_slug", productSlug)
+              .maybeSingle();
+            productId = prod?.id ?? "";
+          }
+          if (!productId) {
+            if (body.queueId) {
+              await supabaseAdmin
+                .from("ingestion_queue")
+                .update({
+                  status: "failed",
+                  last_error: "product not found for vendors mode",
+                  processed_at: new Date().toISOString(),
+                })
+                .eq("id", body.queueId);
+            }
+            return new Response(
+              JSON.stringify({ ok: false, reason: "product_not_found" }),
+              { status: 200 },
+            );
+          }
+          const written = await ingestVendors(productId, brandSlug, productSlug);
+          if (body.queueId) {
+            await supabaseAdmin
+              .from("ingestion_queue")
+              .update({ status: "done", processed_at: new Date().toISOString() })
+              .eq("id", body.queueId);
+          }
+          return new Response(
+            JSON.stringify({ ok: true, mode: "vendors", productId, vendorsWritten: written }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
         }
 
         const url = buildSkinsortUrl(brandSlug, productSlug);
@@ -178,6 +284,11 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
           if (!error) dupesWritten++;
         }
 
+        // Always fetch vendors for the original product (one extra HTTP call).
+        // Dupes get their own vendor pass via mode: "vendors" jobs to keep
+        // each worker invocation under timeout.
+        const vendorsWritten = await ingestVendors(originalId, brandSlug, productSlug);
+
         if (body.queueId) {
           await supabaseAdmin
             .from("ingestion_queue")
@@ -191,6 +302,7 @@ export const Route = createFileRoute("/api/public/hooks/ingest-product")({
             productId: originalId,
             dupesWritten,
             dupesParsed: parsed.dupes.length,
+            vendorsWritten,
           }),
           { status: 200, headers: { "content-type": "application/json" } },
         );
