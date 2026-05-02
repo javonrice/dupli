@@ -30,7 +30,7 @@ export type DupeAnalysis = {
   original: ScannedProduct;
   dupe: DupeSuggestion | null;
   matchScore: number; // 0-100
-  verdict: "Worth the hype" | "Mixed" | "Skip" | "No dupe found";
+  verdict: "Worth the hype" | "Mixed" | "Skip" | "Risky dupe" | "No dupe found";
   notes: string;
   bestFor: string[];
   confidence: "high" | "medium" | "low";
@@ -38,6 +38,13 @@ export type DupeAnalysis = {
   uniqueToOriginal?: string[];
   uniqueToDupe?: string[];
   contextMatch?: string;
+  // New: lookalike + risk dimensions
+  dupeType?: "Lookalike packaging" | "Formula dupe" | "Both" | "Neither";
+  packagingSimilarity?: number; // 0-100 — how much the dupe's packaging mimics the original
+  riskLevel?: "Lower risk" | "Comparable" | "Higher risk";
+  riskFactors?: string[]; // specific concerns introduced by the dupe
+  missingActives?: string[]; // actives the original has that the dupe drops
+  safetyNote?: string; // one plain-English esthetician sentence
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
@@ -61,21 +68,38 @@ export const scanProduct = createServerFn({ method: "POST" })
             {
               role: "system",
               content: [
-                "You are an expert licensed esthetician and product analyst.",
-                "Step 1: Identify the beauty/skincare product in the image (name, brand, category, typical retail price, key actives).",
-                "Step 2: Suggest the single best affordable dupe — a real product, widely available (drugstore, Dollar Tree, Target, Amazon, etc.). Prefer dupes that are meaningfully cheaper.",
-                "Step 3: Compare formulas. Populate sharedIngredients (actives present in BOTH formulas), uniqueToOriginal (only in the original), uniqueToDupe (only in the dupe). Use canonical INCI names (e.g. 'Niacinamide', 'Hyaluronic Acid'), 3-6 items per list, prioritize meaningful actives over fillers/water/preservatives, and never repeat the same ingredient across lists.",
-                "Step 4: Give a match score (0-100) reflecting how close the actives AND intended effect are.",
-                "Step 5: Write contextMatch — ONE sentence explaining WHY this is a real dupe beyond ingredients (skin concern, texture, finish, vibe). Keep distinct from notes.",
-                "Step 6: Give an honest esthetician verdict and short notes.",
-                "If you genuinely cannot find a credible dupe, set dupe to null, verdict to 'No dupe found', and leave the comparison lists empty.",
-                "Always call the analyze_dupe tool exactly once. Never invent a fake brand.",
+                "You are a licensed esthetician helping a real shopper standing in a Dollar Tree, drugstore, or beauty aisle decide whether a cheaper product is a credible swap for a name brand — and whether that swap is SAFE.",
+                "Dupe culture is about TWO things, not just price:",
+                "(a) LOOKALIKE PACKAGING — the cheap product is intentionally designed to mimic a name brand (color palette, bottle shape, font, label layout). Treat visual mimicry as a first-class signal. If the photo shows an obvious lookalike (e.g. an XtraCare body balm copying Vaseline, a Dermasil tube copying Summer Fridays, an XtraCare cleanser saying 'Compare to Neutrogena'), the dupe IS that name brand even when the price gap is small.",
+                "(b) FORMULA — does the cheaper product actually deliver the same actives at usable percentages, or does it strip them out / swap in cheaper, riskier substitutes?",
+                "Step 1: Identify the product in the image (name, brand, category, typical retail price, key actives).",
+                "Step 2: Identify what it is duping or being duped by — the real name-brand counterpart. Always provide a buyUrl (retailer product page, or a retailer search URL).",
+                "Step 3: Set dupeType: 'Lookalike packaging' (visual copy, formula differs), 'Formula dupe' (formula matches but packaging is its own thing), 'Both', or 'Neither'.",
+                "Step 4: Score packagingSimilarity 0-100 honestly based on color, shape, typography, label layout. A bottle that just shares a color gets ~30; a near-clone with matching font and silhouette gets 85+.",
+                "Step 5: Compare formulas. sharedIngredients (actives in BOTH), uniqueToOriginal (only original), uniqueToDupe (only dupe). Use canonical INCI names, 0-6 per list, never repeat across lists, prioritize meaningful actives over water/fillers.",
+                "Step 6: matchScore 0-100 based on how close the actives AND intended effect are.",
+                "Step 7: Assess RISK of switching to the dupe. Set riskLevel:",
+                "  - 'Lower risk' = dupe is gentler / fewer irritants than original",
+                "  - 'Comparable' = roughly equivalent safety profile",
+                "  - 'Higher risk' = dupe introduces irritants the original avoided (added fragrance, denatured alcohol high in INCI, unbuffered acids, mislabeled SPF, harsh sulfates in a sensitive-skin category, etc.)",
+                "Step 8: Populate riskFactors with 0-4 SHORT specific concerns about the dupe ('Added fragrance', 'Denatured alcohol high in INCI', 'No SPF despite mimicking a sunscreen', 'Glycolic acid without buffering'). Empty if no concerns.",
+                "Step 9: Populate missingActives — 0-4 ingredients the ORIGINAL has that the dupe drops (what the user gives up). Empty if nothing meaningful is lost.",
+                "Step 10: safetyNote = ONE plain-English sentence an esthetician would say out loud about who/where this is OK to use ('Fine for body, I wouldn't put this on a compromised face barrier.').",
+                "Step 11: contextMatch = ONE sentence on WHY these match beyond ingredients (skin concern, texture, finish). Distinct from notes and safetyNote.",
+                "Step 12: Verdict — be honest, never inflate:",
+                "  - 'Worth the hype' = credible swap, comparable or lower risk",
+                "  - 'Mixed' = some tradeoffs but defensible for the right user",
+                "  - 'Risky dupe' = clearly cheaper / lookalike but the formula tradeoff is bad enough we should warn the user",
+                "  - 'Skip' = not a real dupe, or actively worse in ways that matter",
+                "  - 'No dupe found' = no credible counterpart exists",
+                "If you genuinely cannot find a credible dupe, set dupe to null, verdict 'No dupe found', and leave comparison/risk lists empty.",
+                "Always call analyze_dupe exactly once. Never invent a fake brand.",
               ].join(" "),
             },
             {
               role: "user",
               content: [
-                { type: "text", text: "Identify this product and find the best affordable dupe." },
+                { type: "text", text: "Identify this product, find its name-brand counterpart (or the dupe being copied), and tell me whether the swap is safe." },
                 { type: "image_url", image_url: { url: data.imageDataUrl } },
               ],
             },
@@ -121,7 +145,7 @@ export const scanProduct = createServerFn({ method: "POST" })
                       ],
                     },
                     matchScore: { type: "number", minimum: 0, maximum: 100 },
-                    verdict: { type: "string", enum: ["Worth the hype", "Mixed", "Skip", "No dupe found"] },
+                    verdict: { type: "string", enum: ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"] },
                     notes: { type: "string", description: "1-2 sentences from a licensed esthetician's perspective." },
                     bestFor: { type: "array", items: { type: "string" }, description: "2-4 short use-case tags, e.g. 'Anti-aging', 'Dry skin'." },
                     confidence: { type: "string", enum: ["high", "medium", "low"] },
@@ -129,8 +153,14 @@ export const scanProduct = createServerFn({ method: "POST" })
                     uniqueToOriginal: { type: "array", items: { type: "string" }, description: "Notable actives only in the original (canonical INCI, 0-6 items). Empty array if no dupe." },
                     uniqueToDupe: { type: "array", items: { type: "string" }, description: "Notable actives only in the dupe (canonical INCI, 0-6 items). Empty array if no dupe." },
                     contextMatch: { type: "string", description: "ONE sentence on WHY these match beyond ingredients (skin concern, texture, finish). Empty string if no dupe." },
+                    dupeType: { type: "string", enum: ["Lookalike packaging", "Formula dupe", "Both", "Neither"], description: "Why this qualifies as a dupe. 'Neither' if no dupe found." },
+                    packagingSimilarity: { type: "number", minimum: 0, maximum: 100, description: "How visually similar the dupe's packaging is to the original (0-100). 0 if no dupe." },
+                    riskLevel: { type: "string", enum: ["Lower risk", "Comparable", "Higher risk"], description: "Switching risk. Use 'Comparable' as the safe default if no dupe." },
+                    riskFactors: { type: "array", items: { type: "string" }, description: "0-4 short specific concerns about the dupe ('Added fragrance', 'Denatured alcohol high in INCI'). Empty if none." },
+                    missingActives: { type: "array", items: { type: "string" }, description: "0-4 actives the original has that the dupe drops. Empty if nothing meaningful is lost." },
+                    safetyNote: { type: "string", description: "ONE plain-English esthetician sentence about who/where this dupe is OK to use. Empty string if no dupe." },
                   },
-                  required: ["original", "dupe", "matchScore", "verdict", "notes", "bestFor", "confidence", "sharedIngredients", "uniqueToOriginal", "uniqueToDupe", "contextMatch"],
+                  required: ["original", "dupe", "matchScore", "verdict", "notes", "bestFor", "confidence", "sharedIngredients", "uniqueToOriginal", "uniqueToDupe", "contextMatch", "dupeType", "packagingSimilarity", "riskLevel", "riskFactors", "missingActives", "safetyNote"],
                   additionalProperties: false,
                 },
               },

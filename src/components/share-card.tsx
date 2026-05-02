@@ -19,7 +19,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   { analysis, originalImage, dupeImage },
   ref,
 ) {
-  const { original, dupe, matchScore, verdict } = analysis;
+  const { original, dupe, matchScore, verdict, riskLevel } = analysis;
   const savings =
     dupe && original.estimatedPriceUsd > 0
       ? Math.max(
@@ -39,7 +39,16 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         ? "#f59e0b"
         : verdict === "Skip"
           ? "#ef4444"
-          : "#6b7280";
+          : verdict === "Risky dupe"
+            ? "#d97706"
+            : "#6b7280";
+
+  const riskColor =
+    riskLevel === "Higher risk"
+      ? "#d97706"
+      : riskLevel === "Lower risk"
+        ? "#10b981"
+        : "#6b7280";
 
   return (
     <div
@@ -75,30 +84,60 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           crossOrigin="anonymous"
           style={{ height: 56, width: "auto" }}
         />
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 12,
-            padding: "10px 20px",
-            borderRadius: 999,
-            backgroundColor: verdictColor,
-            color: "#fff",
-            fontSize: 22,
-            fontWeight: 700,
-            letterSpacing: "0.04em",
-            textTransform: "uppercase",
-          }}
-        >
-          <span
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {riskLevel && (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "10px 16px",
+                borderRadius: 999,
+                backgroundColor: "#ffffff",
+                border: `2px solid ${riskColor}`,
+                color: riskColor,
+                fontSize: 18,
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 999,
+                  backgroundColor: riskColor,
+                }}
+              />
+              Risk: {riskLevel.replace(" risk", "")}
+            </div>
+          )}
+          <div
             style={{
-              width: 10,
-              height: 10,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "10px 20px",
               borderRadius: 999,
-              backgroundColor: "#fff",
+              backgroundColor: verdictColor,
+              color: "#fff",
+              fontSize: 22,
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
             }}
-          />
-          {verdict}
+          >
+            <span
+              style={{
+                width: 10,
+                height: 10,
+                borderRadius: 999,
+                backgroundColor: "#fff",
+              }}
+            />
+            {verdict}
+          </div>
         </div>
       </div>
 

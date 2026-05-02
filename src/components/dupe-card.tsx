@@ -1,5 +1,5 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, Sparkles } from "lucide-react";
+import { Check, TrendingDown, AlertCircle, Sparkles, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
 
 function priceTag(n: number) {
   if (n < 10) return `$${n.toFixed(2)}`;
@@ -9,12 +9,17 @@ function priceTag(n: number) {
 const verdictStyles: Record<DupeAnalysis["verdict"], { icon: typeof Check; bg: string; fg: string }> = {
   "Worth the hype": { icon: Check, bg: "bg-success", fg: "text-success-foreground" },
   Mixed: { icon: AlertCircle, bg: "bg-foreground", fg: "text-background" },
+  "Risky dupe": { icon: AlertTriangle, bg: "bg-warning", fg: "text-warning-foreground" },
   Skip: { icon: AlertCircle, bg: "bg-destructive", fg: "text-destructive-foreground" },
   "No dupe found": { icon: AlertCircle, bg: "bg-muted-foreground", fg: "text-background" },
 };
 
 export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
-  const { original, dupe, matchScore, verdict, notes, bestFor, sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch } = analysis;
+  const {
+    original, dupe, matchScore, verdict, notes, bestFor,
+    sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch,
+    dupeType, packagingSimilarity, riskLevel, riskFactors, missingActives, safetyNote,
+  } = analysis;
   const v = verdictStyles[verdict];
   const Icon = v.icon;
 
@@ -23,8 +28,45 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       ? Math.max(0, Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100))
       : 0;
 
+  const showLookalikeBand =
+    !!dupe && (
+      (dupeType && dupeType !== "Neither") ||
+      (typeof packagingSimilarity === "number" && packagingSimilarity > 0) ||
+      (riskLevel && riskLevel !== "Comparable")
+    );
+
+  const riskTone =
+    riskLevel === "Higher risk"
+      ? { bg: "bg-warning-soft", fg: "text-foreground", chipBg: "bg-warning", chipFg: "text-warning-foreground", Icon: AlertTriangle }
+      : riskLevel === "Lower risk"
+        ? { bg: "bg-success-soft", fg: "text-foreground", chipBg: "bg-success", chipFg: "text-success-foreground", Icon: ShieldCheck }
+        : { bg: "bg-secondary/40", fg: "text-foreground", chipBg: "bg-foreground", chipFg: "text-background", Icon: ShieldCheck };
+
+  const showRiskPanel =
+    !!dupe && (!!riskLevel || (riskFactors && riskFactors.length > 0) || (missingActives && missingActives.length > 0) || !!safetyNote);
+
   return (
     <article className="overflow-hidden rounded-[20px] border border-border bg-card shadow-soft">
+      {/* Lookalike + risk band */}
+      {showLookalikeBand && (
+        <div className={`flex items-center justify-between gap-3 px-5 py-2.5 ${riskLevel === "Higher risk" ? "bg-warning-soft" : riskLevel === "Lower risk" ? "bg-success-soft" : "bg-secondary/40"}`}>
+          <div className="flex min-w-0 items-center gap-2">
+            <Eye className="h-3.5 w-3.5 shrink-0 text-foreground/70" strokeWidth={2.25} />
+            <span className="truncate text-[10px] font-semibold uppercase tracking-widest text-foreground">
+              {dupeType ?? "Dupe"}
+              {typeof packagingSimilarity === "number" && packagingSimilarity > 0 && (
+                <span className="ml-1.5 font-bold tabular-nums">· {packagingSimilarity}% visual</span>
+              )}
+            </span>
+          </div>
+          {riskLevel && (
+            <div className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${riskTone.chipBg} ${riskTone.chipFg}`}>
+              <riskTone.Icon className="h-3 w-3" strokeWidth={2.5} />
+              {riskLevel}
+            </div>
+          )}
+        </div>
+      )}
       {/* Verdict bar */}
       <div className="flex items-center justify-between border-b border-border bg-secondary/60 px-5 py-3">
         <div className="flex items-center gap-2">
@@ -118,6 +160,61 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
             )}
           </div>
         )}
+
+      {/* Risk check */}
+      {showRiskPanel && (
+        <div className={`space-y-3 border-t border-border px-5 py-4 ${riskTone.bg}`}>
+          <div className="flex items-center gap-1.5">
+            <riskTone.Icon className="h-3.5 w-3.5 text-foreground" strokeWidth={2.5} />
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground">
+              Risk check
+            </span>
+          </div>
+
+          {riskFactors && riskFactors.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Concerns in the dupe
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {riskFactors.map((f) => (
+                  <span
+                    key={f}
+                    className="inline-flex items-center gap-1 rounded-full bg-background px-2.5 py-1 text-[11px] font-medium text-foreground"
+                  >
+                    <AlertTriangle className="h-3 w-3 text-warning" strokeWidth={2.5} />
+                    {f}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {missingActives && missingActives.length > 0 && (
+            <div className="space-y-1.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                What you give up
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {missingActives.map((m) => (
+                  <span
+                    key={m}
+                    className="rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-medium text-muted-foreground"
+                  >
+                    {m}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {safetyNote && (
+            <p className="text-xs italic leading-relaxed text-foreground/85">
+              "{safetyNote}"
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Notes */}
       <div className="space-y-3 border-t border-border px-5 py-4">
