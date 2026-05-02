@@ -191,9 +191,18 @@ export const scanProduct = createServerFn({ method: "POST" })
       const parsed = JSON.parse(argsRaw) as DupeAnalysis;
 
       // Best-effort: enrich both the original and the dupe with real product photos in parallel.
+      // Wrap each lookup so a thrown error (network / ranker / malformed data) never wipes a valid analysis.
+      const safeFind = async (b?: string | null, n?: string | null) => {
+        try {
+          return await findProductImage(b, n);
+        } catch (err) {
+          console.warn("[findProductImage] threw, ignoring:", err);
+          return undefined;
+        }
+      };
       const [originalImg, dupeImg] = await Promise.all([
-        parsed.original ? findProductImage(parsed.original.brand, parsed.original.productName) : Promise.resolve(undefined),
-        parsed.dupe ? findProductImage(parsed.dupe.brand, parsed.dupe.productName) : Promise.resolve(undefined),
+        parsed.original ? safeFind(parsed.original.brand, parsed.original.productName) : Promise.resolve(undefined),
+        parsed.dupe ? safeFind(parsed.dupe.brand, parsed.dupe.productName) : Promise.resolve(undefined),
       ]);
       if (originalImg && parsed.original) parsed.original.imageUrl = originalImg;
       if (dupeImg && parsed.dupe) parsed.dupe.imageUrl = dupeImg;
@@ -213,20 +222,23 @@ export const scanProduct = createServerFn({ method: "POST" })
  * gets Cloudflare 525s when calling DDG).
  * Returns undefined on any failure so a missing image never breaks the scan.
  */
-async function findProductImage(brand: string, productName: string): Promise<string | undefined> {
-  const query = `${brand} ${productName}`.trim();
+async function findProductImage(brand?: string | null, productName?: string | null): Promise<string | undefined> {
+  const safeBrand = (brand ?? "").trim();
+  const safeName = (productName ?? "").trim();
+  const query = `${safeBrand} ${safeName}`.trim();
+  if (!query) return undefined;
   console.log("[findProductImage] looking up:", query);
 
   const ddg = await searchDuckDuckGoImages(query);
   if (ddg && ddg.length > 0) {
-    const best = pickBestProductImage(ddg, brand, productName);
+    const best = pickBestProductImage(ddg, safeBrand, safeName);
     console.log("[findProductImage] ddg found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
     return best.image;
   }
 
   const bing = await searchBingImages(query);
   if (bing && bing.length > 0) {
-    const best = pickBestProductImage(bing, brand, productName);
+    const best = pickBestProductImage(bing, safeBrand, safeName);
     console.log("[findProductImage] bing found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
     return best.image;
   }
