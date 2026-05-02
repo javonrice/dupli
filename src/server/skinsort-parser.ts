@@ -1,4 +1,4 @@
-// Parses a SkinSort product page HTML into typed product + dupe records.
+// Parses a SkinSort `/products/<brand>/<slug>/dupes` page HTML into typed product + dupe records.
 // SkinSort renders dupes server-side as static HTML, so a single fetch is enough.
 
 import { slugify } from "./skinsort-slugs";
@@ -49,126 +49,135 @@ function stripTags(s: string): string {
   return decodeEntities(s.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
 }
 
-function pickTitle(html: string): { brand: string; product: string } | null {
-  // Title format: "Brand Name - Product Name | SkinSort" (most common) or with " — "
+// Title formats observed:
+//   "50 Best Dupes for Moisturizing Cream by CeraVe" (dupes page)
+//   "CeraVe Moisturizing Cream (Ingredients Explained)" (product page)
+function pickProductDisplay(html: string): { brand: string; product: string } | null {
   const m = html.match(/<title[^>]*>([^<]+)<\/title>/i);
   if (!m) return null;
-  const t = decodeEntities(m[1]).replace(/\s*\|\s*SkinSort.*$/i, "").trim();
-  const sep = t.includes(" - ") ? " - " : t.includes(" — ") ? " — " : null;
-  if (!sep) return null;
-  const idx = t.indexOf(sep);
-  return {
-    brand: t.slice(0, idx).trim(),
-    product: t.slice(idx + sep.length).trim(),
-  };
+  const t = decodeEntities(m[1]).trim();
+
+  const dupesMatch = t.match(/^\d+\s+Best\s+Dupes\s+for\s+(.+?)\s+by\s+(.+?)(?:\s*\|.*)?$/i);
+  if (dupesMatch) {
+    return { product: dupesMatch[1].trim(), brand: dupesMatch[2].trim() };
+  }
+
+  const ingMatch = t.match(/^(.+?)\s+\(Ingredients Explained\)/i);
+  if (ingMatch) {
+    // Need to split brand vs product. Without a separator we can't be sure,
+    // so return the whole thing as product and hope the slug fallback fills brand.
+    return { brand: "", product: ingMatch[1].trim() };
+  }
+
+  return null;
 }
 
 function pickOgImage(html: string): string | null {
-  const m = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i);
+  const m =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ||
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i);
   return m ? m[1] : null;
 }
 
-function pickCategory(html: string): string | null {
-  // Category usually appears as a small breadcrumb / subtitle near the product name.
-  // Fallback: look for "Category" label.
-  const m = html.match(/Category[^<]*<[^>]+>\s*([^<]+)</i);
-  return m ? decodeEntities(m[1]).trim() : null;
-}
-
-function pickTagList(html: string, label: "Free From" | "Good For" | "Contains"): string[] {
-  // Tag sections are usually a heading followed by <a> or <span> chips.
-  const re = new RegExp(
-    `${label}[\\s\\S]{0,40}?<(?:ul|div)[^>]*>([\\s\\S]*?)</(?:ul|div)>`,
-    "i",
-  );
-  const m = html.match(re);
-  if (!m) return [];
-  const inner = m[1];
-  const items = Array.from(inner.matchAll(/<(?:a|li|span)[^>]*>([^<]+)<\/(?:a|li|span)>/gi))
-    .map((x) => decodeEntities(x[1]).trim().toLowerCase())
-    .filter((x) => x && x.length < 60);
-  return Array.from(new Set(items));
-}
-
 function pickIngredientsCount(html: string): number | null {
-  // SkinSort shows e.g. "47 ingredients" or "Ingredients (47)"
   const m =
     html.match(/Ingredients?\s*\((\d+)\)/i) ||
-    html.match(/(\d+)\s+ingredients?/i);
+    html.match(/\b(\d{1,3})\s+ingredients?\b/i);
   return m ? Number(m[1]) : null;
 }
 
+// Each dupe card looks like:
+//   <div id="brand-product" class="...border-2 border-warm-gray-500">
+//     ... <a href="/products/<brand>/<slug>"> ... <img alt="Brand Product" src="..."> ...
+//     <h2><span>Brand</span> Product Name</h2>
+//     <span class="text-4xl font-black">82%</span> match
+//     67% Attribute Match
+//     82% Ingredient Match
+//     <strong>19 ingredients in common</strong>
+//     Dupe Explained <p>...</p>
 function parseDupeBlocks(html: string): ParsedDupe[] {
-  // SkinSort dupe pages list dupes as cards with a /products/<brand>/<slug> link
-  // and a "NN%" overall match badge. We extract one entry per unique product link.
   const dupes: ParsedDupe[] = [];
-  const seen = new Set<string>();
-
-  // Find anchors to other product pages.
-  const linkRe =
-    /<a[^>]+href=["']\/products\/([^"'\/]+)\/([^"'\/?#]+)[^"']*["'][^>]*>([\s\S]*?)<\/a>/gi;
+  // Split on the dupe card opener. Each card has a unique id.
+  const cardRe =
+    /<div\s+id="([a-z0-9-]+)"\s+class="[^"]*border-2[^"]*">([\s\S]*?)(?=<div\s+id="[a-z0-9-]+"\s+class="[^"]*border-2|<\/body>|$)/gi;
 
   let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(html)) !== null) {
-    const brandSlug = m[1];
-    const productSlug = m[2];
-    const key = `${brandSlug}/${productSlug}`;
-    if (seen.has(key)) continue;
-    // Skip the product's own link by checking whether a "%" badge appears nearby.
-    const start = Math.max(0, m.index - 200);
-    const end = Math.min(html.length, m.index + m[0].length + 600);
-    const window = html.slice(start, end);
-    const pctMatch = window.match(/(\d{1,3})\s*%/);
-    if (!pctMatch) continue;
-    const overall = Math.min(100, Math.max(0, Number(pctMatch[1])));
-    if (overall <= 0 || overall > 100) continue;
+  let rank = 0;
+  const seen = new Set<string>();
 
+  while ((m = cardRe.exec(html)) !== null) {
+    const card = m[2];
+
+    // The dupe link is the FIRST /products/<brand>/<slug> anchor inside the card,
+    // labeled "The Dupe". Skip cards without a product link.
+    const linkRe = /href="\/products\/([a-z0-9-]+)\/([a-z0-9-]+)(?:\/[^"]*)?"/g;
+    const links: { brand: string; slug: string }[] = [];
+    let lm: RegExpExecArray | null;
+    while ((lm = linkRe.exec(card)) !== null) {
+      links.push({ brand: lm[1], slug: lm[2] });
+    }
+    if (links.length === 0) continue;
+    const dupeLink = links[0];
+    const key = `${dupeLink.brand}/${dupeLink.slug}`;
+    if (seen.has(key)) continue;
     seen.add(key);
 
-    const ingMatch = window.match(/(\d{1,3})\s*%\s*ingredients?/i);
-    const attrMatch = window.match(/(\d{1,3})\s*%\s*attributes?/i);
-    const sharedMatch = window.match(/(\d+)\s+shared\s+ingredients?/i);
-    const imgMatch = window.match(/<img[^>]+src=["']([^"']+)["']/i);
-    const altMatch = window.match(/<img[^>]+alt=["']([^"']+)["']/i);
+    // Overall match: <span class="text-4xl font-black"> 82% </span>
+    const overallMatch = card.match(
+      /<span\s+class="text-4xl[^"]*">\s*(\d{1,3})\s*%\s*<\/span>/i,
+    );
+    if (!overallMatch) continue;
+    const overall = Number(overallMatch[1]);
+    if (!Number.isFinite(overall) || overall <= 0 || overall > 100) continue;
 
-    // Try to derive display brand+product from the alt text or anchor inner text.
-    let displayBrand = "";
-    let displayProduct = "";
-    if (altMatch) {
-      const alt = decodeEntities(altMatch[1]);
-      const sep = alt.includes(" - ") ? " - " : alt.includes(" — ") ? " — " : null;
-      if (sep) {
-        const i = alt.indexOf(sep);
-        displayBrand = alt.slice(0, i).trim();
-        displayProduct = alt.slice(i + sep.length).trim();
-      } else {
-        displayProduct = alt.trim();
-      }
-    }
-    if (!displayProduct) {
-      displayProduct = stripTags(m[3]).slice(0, 200);
+    // Sub-scores: chips like "<div ...>67% Attribute Match</div>"
+    const attrMatch = card.match(/(\d{1,3})\s*%\s*Attribute\s+Match/i);
+    const ingMatch = card.match(/(\d{1,3})\s*%\s*Ingredient\s+Match/i);
+    const sharedMatch = card.match(/(\d+)\s+ingredients?\s+in\s+common/i);
+
+    // Image: first <img alt="..."> in the card
+    const imgMatch = card.match(/<img[^>]+alt="([^"]*)"[^>]+src="([^"]+)"/i);
+    const altText = imgMatch ? decodeEntities(imgMatch[1]) : "";
+    const imgUrl = imgMatch ? imgMatch[2] : null;
+
+    // Display name: <h2 ...><span ...>Brand</span> Product</h2>
+    const h2Match = card.match(
+      /<h2[^>]*>\s*<span[^>]*>\s*([^<]+?)\s*<\/span>\s*([^<]+?)\s*<\/h2>/i,
+    );
+    let displayBrand = h2Match ? decodeEntities(h2Match[1]).trim() : "";
+    let displayProduct = h2Match ? decodeEntities(h2Match[2]).trim() : "";
+    if (!displayProduct && altText) {
+      // Fallback: use alt text "Brand Product Name"
+      displayProduct = altText;
     }
     if (!displayBrand) {
-      // Fallback: humanize the brand slug.
-      displayBrand = brandSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      displayBrand = dupeLink.brand
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
     }
     if (!displayProduct) {
-      displayProduct = productSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+      displayProduct = dupeLink.slug
+        .replace(/-/g, " ")
+        .replace(/\b\w/g, (c) => c.toUpperCase());
     }
 
-    // Rationale: try to find a "Dupe Explained" / paragraph block near the card.
-    const rationaleMatch =
-      window.match(/Dupe Explained[\s\S]{0,40}?<p[^>]*>([\s\S]*?)<\/p>/i) ||
-      window.match(/<p[^>]*class=["'][^"']*rationale[^"']*["'][^>]*>([\s\S]*?)<\/p>/i);
-    const rationale = rationaleMatch ? stripTags(rationaleMatch[1]).slice(0, 1000) : null;
+    // Rationale: "Dupe Explained" section, first <p> after that label.
+    let rationale: string | null = null;
+    const expIdx = card.search(/Dupe\s+Explained/i);
+    if (expIdx > 0) {
+      const after = card.slice(expIdx);
+      const pMatch = after.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+      if (pMatch) rationale = stripTags(pMatch[1]).slice(0, 1500);
+    }
 
+    rank += 1;
     dupes.push({
-      rank: dupes.length + 1,
-      brandSlug,
-      productSlug,
+      rank,
+      brandSlug: dupeLink.brand,
+      productSlug: dupeLink.slug,
       brandName: displayBrand,
       productName: displayProduct,
-      imageUrl: imgMatch ? imgMatch[1] : null,
+      imageUrl: imgUrl,
       overallMatch: overall,
       ingredientMatch: ingMatch ? Number(ingMatch[1]) : null,
       attributeMatch: attrMatch ? Number(attrMatch[1]) : null,
@@ -187,31 +196,35 @@ export function parseSkinsortPage(
   fallbackBrandSlug: string,
   fallbackProductSlug: string,
 ): ParsedSkinsortPage | null {
-  const title = pickTitle(html);
-  if (!title) return null;
+  const dupes = parseDupeBlocks(html);
+  // No-dupes pages are still valid products — but for our DB they're useless.
+  // Require at least one dupe to consider the parse successful.
+  if (dupes.length === 0) return null;
 
-  const brandName = title.brand;
-  const productName = title.product;
-  const brandSlug = slugify(brandName) || fallbackBrandSlug;
-  const productSlug = slugify(productName) || fallbackProductSlug;
+  const display = pickProductDisplay(html);
+  const brandName =
+    (display?.brand && display.brand.length > 0
+      ? display.brand
+      : fallbackBrandSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()));
+  const productName =
+    display?.product ||
+    fallbackProductSlug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   const product: ParsedProduct = {
-    brandSlug,
-    productSlug,
+    brandSlug: slugify(brandName) || fallbackBrandSlug,
+    productSlug: fallbackProductSlug, // trust the URL slug, not the title
     brandName,
     productName,
-    category: pickCategory(html),
+    category: null,
     imageUrl: pickOgImage(html),
     ingredientsCount: pickIngredientsCount(html),
-    freeFrom: pickTagList(html, "Free From"),
-    goodFor: pickTagList(html, "Good For"),
-    contains: pickTagList(html, "Contains"),
+    freeFrom: [],
+    goodFor: [],
+    contains: [],
   };
 
-  // Dupes section: scope to the body to avoid header/nav links.
-  const bodyStart = html.search(/Top Dupes|Dupes for|Similar products/i);
-  const dupeHtml = bodyStart > 0 ? html.slice(bodyStart) : html;
-  const dupes = parseDupeBlocks(dupeHtml);
+  // Override brand slug back to the URL slug if it doesn't match (slug is canonical).
+  product.brandSlug = fallbackBrandSlug;
 
   return { product, dupes };
 }

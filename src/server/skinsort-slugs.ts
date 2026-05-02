@@ -13,7 +13,8 @@ export function slugify(input: string): string {
 }
 
 export function buildSkinsortUrl(brand: string, product: string): string {
-  return `https://skinsort.com/products/${slugify(brand)}/${slugify(product)}`;
+  // The /dupes suffix gives us the dupe list inline; ingredient/tag data lives there too.
+  return `https://skinsort.com/products/${slugify(brand)}/${slugify(product)}/dupes`;
 }
 
 export function buildSkinsortBrandUrl(brand: string): string {
