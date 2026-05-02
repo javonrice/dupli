@@ -106,7 +106,7 @@ export function Scanner() {
     }
     setPreparingShare(true);
     try {
-      const r = await (persistPromiseRef.current ?? Promise.resolve({ id: undefined as string | undefined }));
+      const r = await (persistPromiseRef.current ?? Promise.resolve({ id: null as string | null }));
       if (r?.id) {
         navigate({ to: "/scan/$id/share", params: { id: r.id } });
       } else {
