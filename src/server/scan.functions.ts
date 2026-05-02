@@ -886,7 +886,7 @@ async function fetchBestCounterpart(productId: string): Promise<CounterpartHit |
     .from("dupes")
     .select(
       `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       counterpart:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
+       counterpart:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, category, image_url )`,
     )
     .eq("original_product_id", productId)
     .order("overall_match", { ascending: false })
@@ -898,7 +898,7 @@ async function fetchBestCounterpart(productId: string): Promise<CounterpartHit |
     .from("dupes")
     .select(
       `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       counterpart:products!dupes_original_product_id_fkey ( brand_name, product_name, category, image_url )`,
+       counterpart:products!dupes_original_product_id_fkey ( id, brand_name, product_name, category, image_url )`,
     )
     .eq("dupe_product_id", productId)
     .order("overall_match", { ascending: false })
