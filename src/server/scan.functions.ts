@@ -783,11 +783,24 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     .order("overall_match", { ascending: false })
     .limit(1);
 
-  const top = (dupeRows ?? [])[0];
-  const topDupe = top?.dupe as
+  let top = (dupeRows ?? [])[0];
+  let topDupe = top?.dupe as
     | { brand_name: string; product_name: string; category: string | null; image_url: string | null }
     | null
     | undefined;
+
+  // TIER 5: sibling fallback. The matched product has no dupe edges, but a
+  // sibling SKU in the same brand might. Walk the graph from there.
+  if (!top || !topDupe) {
+    const sibling = await findSiblingWithDupes(product);
+    if (sibling) {
+      console.log(
+        `[dupedb] sibling-fallback: "${product.product_name}" -> "${sibling.product.product_name}" -> dupe`,
+      );
+      top = sibling.top;
+      topDupe = sibling.topDupe;
+    }
+  }
 
   if (!top || !topDupe) {
     forceNoDupe(analysis);
@@ -808,13 +821,75 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
     keyIngredients: [],
     imageUrl: topDupe.image_url ?? undefined,
   };
+  // Always surface SkinSort's verified overall_match (0-100), never the lookup
+  // confidence — the fuzzy score was for ranking, not for telling the user
+  // how good the dupe actually is.
   analysis.matchScore = top.overall_match;
-  analysis.confidence = "high";
+  analysis.confidence = top.overall_match >= 85 ? "high" : top.overall_match >= 70 ? "medium" : "low";
   if (top.rationale) analysis.notes = top.rationale;
   analysis.sharedIngredients = [];
   analysis.uniqueToOriginal = [];
   analysis.uniqueToDupe = [];
-  if (analysis.verdict === "No dupe found") analysis.verdict = "Worth the hype";
+  if (analysis.verdict === "No dupe found") {
+    analysis.verdict = top.overall_match >= 80 ? "Worth the hype" : "Mixed";
+  }
+}
+
+/**
+ * When the matched product itself has no rows in `dupes`, look for a sibling
+ * SKU in the same brand that shares the most name tokens AND has dupe edges.
+ * This lets us surface a credible dupe even for product variants SkinSort
+ * didn't compare directly.
+ */
+async function findSiblingWithDupes(matched: {
+  id: string;
+  brand_name: string;
+  product_name: string;
+}): Promise<
+  | {
+      product: { id: string; brand_name: string; product_name: string };
+      top: { overall_match: number; ingredient_match: number | null; shared_ingredients_count: number | null; rationale: string | null };
+      topDupe: { brand_name: string; product_name: string; category: string | null; image_url: string | null };
+    }
+  | null
+> {
+  const brandSlug = slugify(matched.brand_name);
+  const { data: siblings } = await supabaseAdmin
+    .from("products")
+    .select("id, brand_name, product_name")
+    .eq("brand_slug", brandSlug)
+    .neq("id", matched.id)
+    .limit(200);
+
+  if (!siblings || siblings.length === 0) return null;
+
+  // Rank siblings by name similarity to the matched product.
+  const ranked = siblings
+    .map((s) => ({ s, score: trigramSimilarity(matched.product_name, s.product_name) }))
+    .filter((r) => r.score >= 0.25)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  for (const { s } of ranked) {
+    const { data: rows } = await supabaseAdmin
+      .from("dupes")
+      .select(
+        `overall_match, ingredient_match, shared_ingredients_count, rationale,
+         dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
+      )
+      .eq("original_product_id", s.id)
+      .order("overall_match", { ascending: false })
+      .limit(1);
+    const top = (rows ?? [])[0];
+    const topDupe = top?.dupe as
+      | { brand_name: string; product_name: string; category: string | null; image_url: string | null }
+      | null
+      | undefined;
+    if (top && topDupe) {
+      return { product: s, top, topDupe };
+    }
+  }
+  return null;
 }
 
 // Smart 3-tier product lookup. AI rarely returns SkinSort's exact wording,
