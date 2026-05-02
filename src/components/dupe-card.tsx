@@ -24,8 +24,8 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
   const Icon = v.icon;
 
   const savings =
-    dupe && original.estimatedPriceUsd > 0
-      ? Math.max(0, Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100))
+    dupe && original.estimatedPriceUsd > 0 && dupe.estimatedPriceUsd > 0 && dupe.estimatedPriceUsd < original.estimatedPriceUsd
+      ? Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100)
       : 0;
 
   const showLookalikeBand =
