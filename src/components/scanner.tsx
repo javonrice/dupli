@@ -379,6 +379,7 @@ export function ResultsScreen({
               <Link
                 to="/scan/$id/share"
                 params={{ id: scanId }}
+                search={safeIdx > 0 ? { dupe: safeIdx } : undefined}
                 aria-label="Share this dupe as image"
                 className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground"
               >
@@ -388,7 +389,7 @@ export function ResultsScreen({
             ) : (
               <button
                 type="button"
-                onClick={() => onShare?.()}
+                onClick={() => onShare?.(safeIdx)}
                 disabled={preparingShare}
                 aria-label="Share this dupe as image"
                 className="tap flex h-[50px] shrink-0 items-center justify-center gap-1.5 rounded-[14px] border border-border bg-card px-4 text-[13px] font-semibold text-foreground disabled:opacity-60"
