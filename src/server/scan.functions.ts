@@ -854,7 +854,7 @@ async function findProductSmart(
     if (brandProducts && brandProducts.length > 0) {
       const ranked = rankBySimilarity(productName, brandProducts);
       tier2Best = ranked;
-      if (ranked && ranked.score >= 0.4) {
+      if (ranked && ranked.score >= 0.35) {
         return { ...ranked.product, matchStrategy: `brand_fuzzy(${ranked.score.toFixed(2)})` };
       }
     }
