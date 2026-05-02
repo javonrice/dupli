@@ -190,7 +190,7 @@ export const scanProduct = createServerFn({ method: "POST" })
       if (!argsRaw) {
         return { result: null, error: "Couldn't read the product. Try a clearer, well-lit photo." };
       }
-      const parsed = JSON.parse(argsRaw) as DupeAnalysis;
+      const parsed = normalizeAnalysis(JSON.parse(argsRaw) as Partial<DupeAnalysis>);
 
       // Best-effort: enrich both the original and the dupe with real product photos in parallel.
       // Wrap each lookup so a thrown error (network / ranker / malformed data) never wipes a valid analysis.
@@ -215,6 +215,73 @@ export const scanProduct = createServerFn({ method: "POST" })
       return { result: null, error: "Something went wrong. Please try again." };
     }
   });
+
+function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
+  const original = input.original ?? {} as Partial<ScannedProduct>;
+  const dupe = input.dupe ?? null;
+  const verdicts = ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"] as const;
+  const riskLevels = ["Lower risk", "Comparable", "Higher risk"] as const;
+  const dupeTypes = ["Lookalike packaging", "Formula dupe", "Both", "Neither"] as const;
+
+  return {
+    original: {
+      productName: safeText(original.productName, "Unknown product"),
+      brand: safeText(original.brand, "Unknown brand"),
+      category: safeText(original.category, "Beauty product"),
+      estimatedPriceUsd: safeNumber(original.estimatedPriceUsd),
+      keyIngredients: safeList(original.keyIngredients),
+      imageUrl: original.imageUrl,
+    },
+    dupe: dupe
+      ? {
+          productName: safeText(dupe.productName, "Suggested alternative"),
+          brand: safeText(dupe.brand, "Unknown brand"),
+          category: safeText(dupe.category, "Beauty product"),
+          estimatedPriceUsd: safeNumber(dupe.estimatedPriceUsd),
+          whereToBuy: safeText(dupe.whereToBuy, "Online"),
+          buyUrl: safeUrl(dupe.buyUrl, dupe.brand, dupe.productName),
+          keyIngredients: safeList(dupe.keyIngredients),
+          imageUrl: dupe.imageUrl,
+        }
+      : null,
+    matchScore: clampScore(input.matchScore),
+    verdict: verdicts.includes(input.verdict as DupeAnalysis["verdict"]) ? input.verdict as DupeAnalysis["verdict"] : dupe ? "Mixed" : "No dupe found",
+    notes: safeText(input.notes, "We found the closest practical comparison, but double-check the label if your skin is sensitive."),
+    bestFor: safeList(input.bestFor),
+    confidence: ["high", "medium", "low"].includes(input.confidence ?? "") ? input.confidence as DupeAnalysis["confidence"] : "medium",
+    sharedIngredients: safeList(input.sharedIngredients),
+    uniqueToOriginal: safeList(input.uniqueToOriginal),
+    uniqueToDupe: safeList(input.uniqueToDupe),
+    contextMatch: safeText(input.contextMatch, ""),
+    dupeType: dupeTypes.includes(input.dupeType as NonNullable<DupeAnalysis["dupeType"]>) ? input.dupeType : dupe ? "Formula dupe" : "Neither",
+    packagingSimilarity: clampScore(input.packagingSimilarity),
+    riskLevel: riskLevels.includes(input.riskLevel as NonNullable<DupeAnalysis["riskLevel"]>) ? input.riskLevel : "Comparable",
+    riskFactors: safeList(input.riskFactors),
+    missingActives: safeList(input.missingActives),
+    safetyNote: safeText(input.safetyNote, ""),
+  };
+}
+
+function safeText(value: unknown, fallback: string) {
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
+function safeList(value: unknown) {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string" && v.trim().length > 0).map((v) => v.trim()).slice(0, 6) : [];
+}
+
+function safeNumber(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
+}
+
+function clampScore(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value))) : 0;
+}
+
+function safeUrl(value: unknown, brand?: string, productName?: string) {
+  if (typeof value === "string" && /^https:\/\//i.test(value)) return value;
+  return `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(`${brand ?? ""} ${productName ?? ""}`.trim() || "beauty product dupe")}`;
+}
 
 /**
  * Best-effort product image lookup. Tries DuckDuckGo's image JSON endpoint
