@@ -1,0 +1,220 @@
+// Discovery hub server functions — read from the local products + dupes mirror.
+// All queries use the service-role admin client because products/dupes have
+// permissive read policies and we don't need per-user filtering for these
+// (recent scans is the exception and uses the user-scoped client).
+
+import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { ScanRow } from "@/server/scans.functions";
+
+export type CommunityDupe = {
+  /** Stable string id for React keys + share URLs (we use the dupe row id). */
+  id: string;
+  overallMatch: number;
+  ingredientMatch: number | null;
+  attributeMatch: number | null;
+  sharedIngredientsCount: number | null;
+  rationale: string | null;
+  original: {
+    brandSlug: string;
+    productSlug: string;
+    brand: string;
+    productName: string;
+    category: string | null;
+    imageUrl: string | null;
+  };
+  dupe: {
+    brandSlug: string;
+    productSlug: string;
+    brand: string;
+    productName: string;
+    category: string | null;
+    imageUrl: string | null;
+  };
+};
+
+type DupeJoinRow = {
+  id: string;
+  overall_match: number;
+  ingredient_match: number | null;
+  attribute_match: number | null;
+  shared_ingredients_count: number | null;
+  rationale: string | null;
+  original: {
+    brand_slug: string;
+    product_slug: string;
+    brand_name: string;
+    product_name: string;
+    category: string | null;
+    image_url: string | null;
+  } | null;
+  dupe: {
+    brand_slug: string;
+    product_slug: string;
+    brand_name: string;
+    product_name: string;
+    category: string | null;
+    image_url: string | null;
+  } | null;
+};
+
+const DUPE_SELECT = `
+  id, overall_match, ingredient_match, attribute_match, shared_ingredients_count, rationale,
+  original:products!dupes_original_product_id_fkey ( brand_slug, product_slug, brand_name, product_name, category, image_url ),
+  dupe:products!dupes_dupe_product_id_fkey ( brand_slug, product_slug, brand_name, product_name, category, image_url )
+`;
+
+function mapRow(row: DupeJoinRow): CommunityDupe | null {
+  if (!row.original || !row.dupe) return null;
+  // Drop pairings with no images — they look broken in the hub.
+  if (!row.original.image_url || !row.dupe.image_url) return null;
+  return {
+    id: row.id,
+    overallMatch: row.overall_match,
+    ingredientMatch: row.ingredient_match,
+    attributeMatch: row.attribute_match,
+    sharedIngredientsCount: row.shared_ingredients_count,
+    rationale: row.rationale,
+    original: {
+      brandSlug: row.original.brand_slug,
+      productSlug: row.original.product_slug,
+      brand: row.original.brand_name,
+      productName: row.original.product_name,
+      category: row.original.category,
+      imageUrl: row.original.image_url,
+    },
+    dupe: {
+      brandSlug: row.dupe.brand_slug,
+      productSlug: row.dupe.product_slug,
+      brand: row.dupe.brand_name,
+      productName: row.dupe.product_name,
+      category: row.dupe.category,
+      imageUrl: row.dupe.image_url,
+    },
+  };
+}
+
+/**
+ * Deterministic "Dupe of the Day" — picks one high-quality dupe per UTC day.
+ *
+ * Strategy: pull a small candidate window of strong matches (overall_match >= 80)
+ * and pick the index seeded by today's date. This stays consistent for every
+ * user on a given day without needing a cron job or extra storage.
+ */
+export const getDupeOfTheDay = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ dupe: CommunityDupe | null }> => {
+    // Window the candidates to keep things performant + high quality.
+    const { data, error } = await supabaseAdmin
+      .from("dupes")
+      .select(DUPE_SELECT)
+      .gte("overall_match", 80)
+      .order("overall_match", { ascending: false })
+      .limit(500);
+
+    if (error || !data?.length) {
+      console.warn("getDupeOfTheDay query failed", error);
+      return { dupe: null };
+    }
+
+    const mapped = (data as unknown as DupeJoinRow[])
+      .map(mapRow)
+      .filter((x): x is CommunityDupe => x !== null);
+    if (!mapped.length) return { dupe: null };
+
+    // Date-seeded pick (UTC, YYYYMMDD).
+    const today = new Date();
+    const seed =
+      today.getUTCFullYear() * 10000 +
+      (today.getUTCMonth() + 1) * 100 +
+      today.getUTCDate();
+    const idx = seed % mapped.length;
+    return { dupe: mapped[idx] };
+  },
+);
+
+/** Trending dupes — currently ranked by overall_match. Will swap to scan-frequency
+ *  once we have more user-generated scan data. */
+export const getTrendingDupes = createServerFn({ method: "GET" })
+  .inputValidator((data) => z.object({ limit: z.number().min(1).max(50).optional() }).parse(data))
+  .handler(async ({ data }): Promise<{ dupes: CommunityDupe[] }> => {
+    const limit = data.limit ?? 12;
+    // Pull a wider window so we can de-dupe by original product (avoid showing
+    // 6 dupes for the same Drunk Elephant cream).
+    const { data: rows, error } = await supabaseAdmin
+      .from("dupes")
+      .select(DUPE_SELECT)
+      .gte("overall_match", 75)
+      .order("overall_match", { ascending: false })
+      .limit(limit * 4);
+
+    if (error || !rows?.length) {
+      console.warn("getTrendingDupes query failed", error);
+      return { dupes: [] };
+    }
+
+    const seen = new Set<string>();
+    const out: CommunityDupe[] = [];
+    for (const r of rows as unknown as DupeJoinRow[]) {
+      const m = mapRow(r);
+      if (!m) continue;
+      const key = `${m.original.brandSlug}/${m.original.productSlug}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(m);
+      if (out.length >= limit) break;
+    }
+    return { dupes: out };
+  });
+
+/** Last N scans for the current user — powers "Pick up where you left off". */
+export const getRecentScans = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data) => z.object({ limit: z.number().min(1).max(10).optional() }).parse(data))
+  .handler(async ({ data, context }): Promise<{ scans: ScanRow[] }> => {
+    const limit = data.limit ?? 3;
+    const { data: rows, error } = await context.supabase
+      .from("scans")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) {
+      console.warn("getRecentScans failed", error);
+      return { scans: [] };
+    }
+    return { scans: (rows ?? []) as ScanRow[] };
+  });
+
+/** Look up a single community dupe pair by original brand+product slugs.
+ *  Used by the read-only community detail route. */
+export const getCommunityDupe = createServerFn({ method: "GET" })
+  .inputValidator((data) =>
+    z.object({ brandSlug: z.string().min(1), productSlug: z.string().min(1) }).parse(data),
+  )
+  .handler(async ({ data }): Promise<{ found: boolean; dupes: CommunityDupe[] }> => {
+    const { data: product } = await supabaseAdmin
+      .from("products")
+      .select("id")
+      .eq("brand_slug", data.brandSlug)
+      .eq("product_slug", data.productSlug)
+      .maybeSingle();
+
+    if (!product) return { found: false, dupes: [] };
+
+    const { data: rows, error } = await supabaseAdmin
+      .from("dupes")
+      .select(DUPE_SELECT)
+      .eq("original_product_id", product.id)
+      .order("overall_match", { ascending: false })
+      .limit(7);
+
+    if (error) {
+      console.warn("getCommunityDupe failed", error);
+      return { found: true, dupes: [] };
+    }
+
+    const mapped = (rows ?? []).map((r) => mapRow(r as unknown as DupeJoinRow))
+      .filter((x): x is CommunityDupe => x !== null);
+    return { found: true, dupes: mapped };
+  });
