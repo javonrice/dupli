@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw, Bookmark } from "lucide-react";
+import { Camera, Images, Loader2, ScanLine, X, ShoppingBag, ExternalLink, RotateCw, Bookmark, Share2 } from "lucide-react";
 import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
 import { saveScan, setSaved } from "@/server/scans.functions";
+import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import { DupeCard } from "@/components/dupe-card";
 import { IOSScreen } from "@/components/ios-screen";
+import { ShareCard } from "@/components/share-card";
 import { googleShoppingLink } from "@/lib/retailer-links";
 import wordmark from "@/assets/dupli-wordmark.png";
 
