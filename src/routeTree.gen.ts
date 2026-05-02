@@ -16,6 +16,7 @@ import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
 import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
+import { Route as AppPProductIdRouteImport } from './routes/_app/p.$productId'
 import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
 import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
 import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
@@ -55,6 +56,11 @@ const AppHistoryRoute = AppHistoryRouteImport.update({
 const AppScanIdRoute = AppScanIdRouteImport.update({
   id: '/scan/$id',
   path: '/scan/$id',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppPProductIdRoute = AppPProductIdRouteImport.update({
+  id: '/p/$productId',
+  path: '/p/$productId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppScanIdIndexRoute = AppScanIdIndexRouteImport.update({
@@ -98,6 +104,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
+  '/p/$productId': typeof AppPProductIdRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
@@ -112,6 +119,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
   '/': typeof AppIndexRoute
+  '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
@@ -127,6 +135,7 @@ export interface FileRoutesById {
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/p/$productId': typeof AppPProductIdRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/_app/scan/$id/share': typeof AppScanIdShareRoute
@@ -143,6 +152,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
+    | '/p/$productId'
     | '/scan/$id'
     | '/community/$brand/$product'
     | '/scan/$id/share'
@@ -157,6 +167,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/saved'
     | '/'
+    | '/p/$productId'
     | '/community/$brand/$product'
     | '/scan/$id/share'
     | '/api/public/hooks/enqueue-vendor-backfill'
@@ -171,6 +182,7 @@ export interface FileRouteTypes {
     | '/_app/profile'
     | '/_app/saved'
     | '/_app/'
+    | '/_app/p/$productId'
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
     | '/_app/scan/$id/share'
@@ -239,6 +251,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScanIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/p/$productId': {
+      id: '/_app/p/$productId'
+      path: '/p/$productId'
+      fullPath: '/p/$productId'
+      preLoaderRoute: typeof AppPProductIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/scan/$id/': {
       id: '/_app/scan/$id/'
       path: '/'
@@ -303,6 +322,7 @@ interface AppRouteChildren {
   AppProfileRoute: typeof AppProfileRoute
   AppSavedRoute: typeof AppSavedRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppPProductIdRoute: typeof AppPProductIdRoute
   AppScanIdRoute: typeof AppScanIdRouteWithChildren
   AppCommunityBrandProductRoute: typeof AppCommunityBrandProductRoute
 }
@@ -312,6 +332,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppProfileRoute: AppProfileRoute,
   AppSavedRoute: AppSavedRoute,
   AppIndexRoute: AppIndexRoute,
+  AppPProductIdRoute: AppPProductIdRoute,
   AppScanIdRoute: AppScanIdRouteWithChildren,
   AppCommunityBrandProductRoute: AppCommunityBrandProductRoute,
 }

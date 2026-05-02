@@ -18,20 +18,24 @@ export type CommunityDupe = {
   sharedIngredientsCount: number | null;
   rationale: string | null;
   original: {
+    id: string;
     brandSlug: string;
     productSlug: string;
     brand: string;
     productName: string;
     category: string | null;
     imageUrl: string | null;
+    lowestPriceUsd: number | null;
   };
   dupe: {
+    id: string;
     brandSlug: string;
     productSlug: string;
     brand: string;
     productName: string;
     category: string | null;
     imageUrl: string | null;
+    lowestPriceUsd: number | null;
   };
 };
 
@@ -43,33 +47,39 @@ type DupeJoinRow = {
   shared_ingredients_count: number | null;
   rationale: string | null;
   original: {
+    id: string;
     brand_slug: string;
     product_slug: string;
     brand_name: string;
     product_name: string;
     category: string | null;
     image_url: string | null;
+    lowest_price_usd: number | null;
   } | null;
   dupe: {
+    id: string;
     brand_slug: string;
     product_slug: string;
     brand_name: string;
     product_name: string;
     category: string | null;
     image_url: string | null;
+    lowest_price_usd: number | null;
   } | null;
 };
 
 const DUPE_SELECT = `
   id, overall_match, ingredient_match, attribute_match, shared_ingredients_count, rationale,
-  original:products!dupes_original_product_id_fkey ( brand_slug, product_slug, brand_name, product_name, category, image_url ),
-  dupe:products!dupes_dupe_product_id_fkey ( brand_slug, product_slug, brand_name, product_name, category, image_url )
+  original:products!dupes_original_product_id_fkey ( id, brand_slug, product_slug, brand_name, product_name, category, image_url, lowest_price_usd ),
+  dupe:products!dupes_dupe_product_id_fkey ( id, brand_slug, product_slug, brand_name, product_name, category, image_url, lowest_price_usd )
 `;
 
 function mapRow(row: DupeJoinRow): CommunityDupe | null {
   if (!row.original || !row.dupe) return null;
   // Drop pairings with no images — they look broken in the hub.
   if (!row.original.image_url || !row.dupe.image_url) return null;
+  // The dupe is the thing the user shops for — require it to have a price.
+  if (row.dupe.lowest_price_usd == null) return null;
   return {
     id: row.id,
     overallMatch: row.overall_match,
@@ -78,20 +88,24 @@ function mapRow(row: DupeJoinRow): CommunityDupe | null {
     sharedIngredientsCount: row.shared_ingredients_count,
     rationale: row.rationale,
     original: {
+      id: row.original.id,
       brandSlug: row.original.brand_slug,
       productSlug: row.original.product_slug,
       brand: row.original.brand_name,
       productName: row.original.product_name,
       category: row.original.category,
       imageUrl: row.original.image_url,
+      lowestPriceUsd: row.original.lowest_price_usd,
     },
     dupe: {
+      id: row.dupe.id,
       brandSlug: row.dupe.brand_slug,
       productSlug: row.dupe.product_slug,
       brand: row.dupe.brand_name,
       productName: row.dupe.product_name,
       category: row.dupe.category,
       imageUrl: row.dupe.image_url,
+      lowestPriceUsd: row.dupe.lowest_price_usd,
     },
   };
 }
@@ -111,7 +125,7 @@ export const getDupeOfTheDay = createServerFn({ method: "GET" }).handler(
       .select(DUPE_SELECT)
       .gte("overall_match", 80)
       .order("overall_match", { ascending: false })
-      .limit(500);
+      .limit(2000);
 
     if (error || !data?.length) {
       console.warn("getDupeOfTheDay query failed", error);
@@ -147,7 +161,7 @@ export const getTrendingDupes = createServerFn({ method: "GET" })
       .select(DUPE_SELECT)
       .gte("overall_match", 75)
       .order("overall_match", { ascending: false })
-      .limit(limit * 4);
+      .limit(limit * 12);
 
     if (error || !rows?.length) {
       console.warn("getTrendingDupes query failed", error);
@@ -217,4 +231,112 @@ export const getCommunityDupe = createServerFn({ method: "GET" })
     const mapped = (rows ?? []).map((r) => mapRow(r as unknown as DupeJoinRow))
       .filter((x): x is CommunityDupe => x !== null);
     return { found: true, dupes: mapped };
+  });
+
+// ============================================================
+// Per-product detail page
+// ============================================================
+
+export type ProductVendor = {
+  merchant: string;
+  url: string;
+  priceUsd: number | null;
+  currency: string;
+  rank: number;
+};
+
+export type ProductDetail = {
+  id: string;
+  brandSlug: string;
+  productSlug: string;
+  brand: string;
+  productName: string;
+  category: string | null;
+  imageUrl: string | null;
+  sourceUrl: string | null;
+  ingredients: string[];
+  ingredientsCount: number | null;
+  freeFrom: string[];
+  goodFor: string[];
+  contains: string[];
+  lowestPriceUsd: number | null;
+  vendors: ProductVendor[];
+  /** Other priced products that are dupes for THIS product. */
+  dupesForThis: CommunityDupe[];
+  /** Originals where THIS product is listed as a dupe. */
+  alsoDupeFor: CommunityDupe[];
+};
+
+export const getProductDetail = createServerFn({ method: "GET" })
+  .inputValidator((data) => z.object({ productId: z.string().uuid() }).parse(data))
+  .handler(async ({ data }): Promise<{ found: boolean; product: ProductDetail | null }> => {
+    const { data: product, error: prodErr } = await supabaseAdmin
+      .from("products")
+      .select(
+        "id, brand_slug, product_slug, brand_name, product_name, category, image_url, source_url, ingredients, ingredients_count, free_from, good_for, contains, lowest_price_usd",
+      )
+      .eq("id", data.productId)
+      .maybeSingle();
+
+    if (prodErr || !product) return { found: false, product: null };
+
+    const [vendorRes, dupesForThisRes, alsoDupeForRes] = await Promise.all([
+      supabaseAdmin
+        .from("product_vendors")
+        .select("merchant, url, price_usd, currency, rank")
+        .eq("product_id", product.id)
+        .order("price_usd", { ascending: true, nullsFirst: false }),
+      supabaseAdmin
+        .from("dupes")
+        .select(DUPE_SELECT)
+        .eq("original_product_id", product.id)
+        .order("overall_match", { ascending: false })
+        .limit(20),
+      supabaseAdmin
+        .from("dupes")
+        .select(DUPE_SELECT)
+        .eq("dupe_product_id", product.id)
+        .order("overall_match", { ascending: false })
+        .limit(20),
+    ]);
+
+    const vendors: ProductVendor[] = (vendorRes.data ?? []).map((v) => ({
+      merchant: v.merchant,
+      url: v.url,
+      priceUsd: v.price_usd == null ? null : Number(v.price_usd),
+      currency: v.currency,
+      rank: v.rank,
+    }));
+
+    const dupesForThis = (dupesForThisRes.data ?? [])
+      .map((r) => mapRow(r as unknown as DupeJoinRow))
+      .filter((x): x is CommunityDupe => x !== null);
+
+    const alsoDupeFor = (alsoDupeForRes.data ?? [])
+      .map((r) => mapRow(r as unknown as DupeJoinRow))
+      .filter((x): x is CommunityDupe => x !== null);
+
+    return {
+      found: true,
+      product: {
+        id: product.id,
+        brandSlug: product.brand_slug,
+        productSlug: product.product_slug,
+        brand: product.brand_name,
+        productName: product.product_name,
+        category: product.category,
+        imageUrl: product.image_url,
+        sourceUrl: product.source_url,
+        ingredients: (product.ingredients ?? []) as string[],
+        ingredientsCount: product.ingredients_count,
+        freeFrom: (product.free_from ?? []) as string[],
+        goodFor: (product.good_for ?? []) as string[],
+        contains: (product.contains ?? []) as string[],
+        lowestPriceUsd:
+          product.lowest_price_usd == null ? null : Number(product.lowest_price_usd),
+        vendors,
+        dupesForThis,
+        alsoDupeFor,
+      },
+    };
   });

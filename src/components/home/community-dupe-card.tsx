@@ -19,8 +19,8 @@ export function CommunityDupeCard({
     variant === "card" ? "w-[200px] shrink-0" : "w-full";
   return (
     <Link
-      to="/community/$brand/$product"
-      params={{ brand: dupe.original.brandSlug, product: dupe.original.productSlug }}
+      to="/p/$productId"
+      params={{ productId: dupe.dupe.id }}
       className={`tap snap-start group flex ${widthClass} flex-col gap-2 rounded-[16px] border border-border bg-card p-3 text-left shadow-soft`}
     >
       {/* Pair preview: original on the left, dupe on the right with a savings chip */}
@@ -46,6 +46,11 @@ export function CommunityDupeCard({
           name={dupe.dupe.productName}
           emphasized
         />
+        {dupe.dupe.lowestPriceUsd != null && (
+          <div className="pt-0.5 font-display text-[14px] font-bold tabular-nums text-foreground">
+            ${dupe.dupe.lowestPriceUsd.toFixed(2)}
+          </div>
+        )}
       </div>
     </Link>
   );
