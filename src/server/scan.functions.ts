@@ -735,3 +735,74 @@ function pickBestProductImage(
 
   return best;
 }
+
+// --- Internal dupe DB cross-reference ----------------------------------------
+// Quietly enriches an analysis with verified data from our products+dupes
+// tables. Source (SkinSort) is never surfaced to the user.
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { slugify } from "./skinsort-slugs";
+
+async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
+  if (!analysis.original?.brand || !analysis.original?.productName) return;
+
+  const brandSlug = slugify(analysis.original.brand);
+  const productSlug = slugify(analysis.original.productName);
+
+  const { data: product } = await supabaseAdmin
+    .from("products")
+    .select("id, brand_name, product_name, category, image_url, free_from, good_for, contains")
+    .eq("brand_slug", brandSlug)
+    .eq("product_slug", productSlug)
+    .maybeSingle();
+
+  if (!product) {
+    // Miss — enqueue for background ingestion. Conflict on pending unique idx is silent.
+    await supabaseAdmin
+      .from("ingestion_queue")
+      .insert({
+        brand_slug: brandSlug,
+        product_slug: productSlug,
+        reason: "user_scan_miss",
+        priority: 10,
+      });
+    return;
+  }
+
+  // Hit — pull the top verified dupe.
+  const { data: dupeRows } = await supabaseAdmin
+    .from("dupes")
+    .select(
+      `overall_match, ingredient_match, shared_ingredients_count, rationale,
+       dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
+    )
+    .eq("original_product_id", product.id)
+    .order("overall_match", { ascending: false })
+    .limit(1);
+
+  const top = (dupeRows ?? [])[0];
+  const topDupe = top?.dupe as
+    | { brand_name: string; product_name: string; category: string | null; image_url: string | null }
+    | null
+    | undefined;
+
+  // If our verified top dupe is materially better than the AI's guess, swap it in.
+  if (top && topDupe && top.overall_match >= analysis.matchScore) {
+    analysis.dupe = {
+      productName: topDupe.product_name,
+      brand: topDupe.brand_name,
+      category: topDupe.category ?? analysis.dupe?.category ?? "Beauty product",
+      estimatedPriceUsd: analysis.dupe?.estimatedPriceUsd ?? 0,
+      whereToBuy: analysis.dupe?.whereToBuy ?? "Online",
+      buyUrl:
+        analysis.dupe?.buyUrl ??
+        `https://www.amazon.com/s?k=${encodeURIComponent(`${topDupe.brand_name} ${topDupe.product_name}`)}`,
+      keyIngredients: analysis.dupe?.keyIngredients ?? [],
+      imageUrl: topDupe.image_url ?? analysis.dupe?.imageUrl,
+    };
+    analysis.matchScore = top.overall_match;
+    analysis.confidence = "high";
+    if (top.rationale && (!analysis.notes || analysis.notes.length < 40)) {
+      analysis.notes = top.rationale;
+    }
+  }
+}
