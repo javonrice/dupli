@@ -6,7 +6,8 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { buildSkinsortUrl, slugify } from "@/server/skinsort-slugs";
 import { parseSkinsortPage } from "@/server/skinsort-parser";
 
-const USER_AGENT = "DupliBot/1.0 (+contact: app)";
+const USER_AGENT =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 async function fetchSkinsort(url: string): Promise<{ status: number; body: string }> {
   const res = await fetch(url, {
