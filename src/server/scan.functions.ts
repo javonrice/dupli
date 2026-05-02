@@ -8,6 +8,12 @@ const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
 });
 
+export type Vendor = {
+  merchant: string;
+  url: string;
+  priceUsd: number | null;
+};
+
 export type ScannedProduct = {
   productName: string;
   brand: string;
@@ -15,6 +21,9 @@ export type ScannedProduct = {
   estimatedPriceUsd: number;
   keyIngredients: string[];
   imageUrl?: string;
+  priceSource?: "estimate" | "skinsort_vendor";
+  priceMerchant?: string;
+  vendors?: Vendor[];
 };
 
 export type DupeSuggestion = {
@@ -26,6 +35,9 @@ export type DupeSuggestion = {
   buyUrl: string;
   keyIngredients: string[];
   imageUrl?: string;
+  priceSource?: "estimate" | "skinsort_vendor";
+  priceMerchant?: string;
+  vendors?: Vendor[];
 };
 
 export type DupeAnalysis = {
