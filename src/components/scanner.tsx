@@ -8,6 +8,7 @@ import { DupeCard } from "@/components/dupe-card";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
 import { googleShoppingLink } from "@/lib/retailer-links";
+import { selectDupe } from "@/lib/select-dupe";
 import wordmark from "@/assets/dupli-wordmark.png";
 
 type Stage = "idle" | "scanning" | "results";
