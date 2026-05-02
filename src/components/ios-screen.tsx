@@ -24,6 +24,7 @@ export function IOSScreen({
   trailing,
   bottomBar,
   fixed = false,
+  fullHeight = false,
   children,
 }: {
   title?: string;
@@ -32,10 +33,14 @@ export function IOSScreen({
   trailing?: ReactNode;
   bottomBar?: ReactNode;
   fixed?: boolean;
+  /** When true, occupy full viewport height instead of leaving room for the tab bar. */
+  fullHeight?: boolean;
   children: ReactNode;
 }) {
   return (
-    <div className="flex h-screen-minus-tabbar flex-col bg-background no-bounce">
+    <div
+      className={`flex flex-col bg-background no-bounce ${fullHeight ? "h-screen-safe" : "h-screen-minus-tabbar"}`}
+    >
       {/* Nav bar */}
       <div className="pt-safe sticky top-0 z-30 bg-background/85 backdrop-blur-xl">
         <div className="hairline-b flex h-14 items-center justify-between px-4">
