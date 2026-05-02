@@ -339,6 +339,7 @@ export type Database = {
     }
     Functions: {
       set_ingestion_token_secret: { Args: { p_token: string }; Returns: string }
+      verify_ingestion_token: { Args: { p_token: string }; Returns: boolean }
     }
     Enums: {
       [_ in never]: never
