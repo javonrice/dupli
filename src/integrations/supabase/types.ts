@@ -166,6 +166,7 @@ export type Database = {
           ingredients_count: number | null
           last_ingested_at: string | null
           last_priced_at: string | null
+          lowest_price_usd: number | null
           product_name: string
           product_slug: string
           search_vector: unknown
@@ -187,6 +188,7 @@ export type Database = {
           ingredients_count?: number | null
           last_ingested_at?: string | null
           last_priced_at?: string | null
+          lowest_price_usd?: number | null
           product_name: string
           product_slug: string
           search_vector?: unknown
@@ -208,6 +210,7 @@ export type Database = {
           ingredients_count?: number | null
           last_ingested_at?: string | null
           last_priced_at?: string | null
+          lowest_price_usd?: number | null
           product_name?: string
           product_slug?: string
           search_vector?: unknown
