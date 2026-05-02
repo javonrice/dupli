@@ -39,14 +39,21 @@ async function fetchHtml(url: string): Promise<string | null> {
     const res = await fetch(url, {
       signal: ctrl.signal,
       headers: {
+        // Pose as a real browser. SkinSort returns 403/empty for unknown bot UAs.
         "user-agent":
-          "Mozilla/5.0 (compatible; DupliBot/1.0; +https://dupli.lovable.app)",
-        accept: "text/html,application/xhtml+xml",
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        accept:
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "accept-language": "en-US,en;q=0.9",
       },
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      console.warn(`[skinsort-scraper] fetch ${res.status} for ${url}`);
+      return null;
+    }
     return await res.text();
-  } catch {
+  } catch (err) {
+    console.warn(`[skinsort-scraper] fetch error for ${url}:`, err);
     return null;
   } finally {
     clearTimeout(t);
