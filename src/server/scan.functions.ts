@@ -363,6 +363,9 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
       estimatedPriceUsd: safeNumber(original.estimatedPriceUsd),
       keyIngredients: safeList(original.keyIngredients),
       imageUrl: original.imageUrl,
+      priceSource: original.priceSource ?? "estimate",
+      priceMerchant: original.priceMerchant,
+      vendors: original.vendors,
     },
     dupe: dupe
       ? {
@@ -374,6 +377,9 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
           buyUrl: safeUrl(dupe.buyUrl, dupe.brand, dupe.productName),
           keyIngredients: safeList(dupe.keyIngredients),
           imageUrl: dupe.imageUrl,
+          priceSource: dupe.priceSource ?? "estimate",
+          priceMerchant: dupe.priceMerchant,
+          vendors: dupe.vendors,
         }
       : null,
     matchScore: clampScore(input.matchScore),
