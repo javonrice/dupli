@@ -751,7 +751,21 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
 
   const brand = analysis.original.brand;
   const productName = analysis.original.productName;
-  const product = await findProductSmart(brand, productName);
+  const keyIngredients = analysis.original.keyIngredients ?? [];
+  let product = await findProductSmart(brand, productName);
+
+  // TIER 4.5: category-inferred cross-brand fallback. The brand is unknown to
+  // us OR we couldn't find any plausible product, but we can still derive a
+  // category from the name and find the best ingredient-overlap match.
+  if (!product) {
+    const inferred = await findByCategoryAndIngredients(productName, keyIngredients);
+    if (inferred) {
+      console.log(
+        `[dupedb] HIT via category_ingredients(${inferred.score.toFixed(2)}): "${brand} / ${productName}" -> "${inferred.product.brand_name} / ${inferred.product.product_name}"`,
+      );
+      product = { ...inferred.product, matchStrategy: `category_ingredients(${inferred.score.toFixed(2)})` };
+    }
+  }
 
   if (!product) {
     if (isJunkBrand(brand)) {
