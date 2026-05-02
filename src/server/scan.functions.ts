@@ -346,8 +346,8 @@ export const scanProduct = createServerFn({ method: "POST" })
       // The SkinSort-backed dupes table is populated but not consulted.
       // To re-enable, restore the call to crossReferenceDupeDb(parsed) here.
 
-      // Best-effort: enrich both the original and the dupe with real product photos in parallel.
-      // Wrap each lookup so a thrown error (network / ranker / malformed data) never wipes a valid analysis.
+      // Best-effort: enrich the original AND every dupe candidate with real product photos in parallel.
+      // Capped at 7 candidates by the schema. Each lookup is wrapped so a failure never wipes the analysis.
       const safeFind = async (b?: string | null, n?: string | null) => {
         try {
           return await findProductImage(b, n);
@@ -356,16 +356,20 @@ export const scanProduct = createServerFn({ method: "POST" })
           return undefined;
         }
       };
-      const [originalImg, dupeImg] = await Promise.all([
+      const candidates = parsed.dupes ?? [];
+      const lookups = await Promise.all([
         parsed.original
           ? safeFind(parsed.original.brand, parsed.original.productName)
           : Promise.resolve(undefined),
-        parsed.dupe
-          ? safeFind(parsed.dupe.brand, parsed.dupe.productName)
-          : Promise.resolve(undefined),
+        ...candidates.map((c) => safeFind(c.brand, c.productName)),
       ]);
+      const [originalImg, ...dupeImgs] = lookups;
       if (originalImg && parsed.original) parsed.original.imageUrl = originalImg;
-      if (dupeImg && parsed.dupe) parsed.dupe.imageUrl = dupeImg;
+      candidates.forEach((c, i) => {
+        if (dupeImgs[i]) c.imageUrl = dupeImgs[i];
+      });
+      // Re-sync the headline `dupe` (which is candidates[0]) so its imageUrl matches.
+      if (parsed.dupe && candidates[0]) parsed.dupe = candidates[0];
 
       return { result: parsed, error: null };
     } catch (e) {
