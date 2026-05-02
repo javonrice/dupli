@@ -30,7 +30,7 @@ export type DupeAnalysis = {
   original: ScannedProduct;
   dupe: DupeSuggestion | null;
   matchScore: number; // 0-100
-  verdict: "Worth the hype" | "Mixed" | "Skip" | "No dupe found";
+  verdict: "Worth the hype" | "Mixed" | "Skip" | "Risky dupe" | "No dupe found";
   notes: string;
   bestFor: string[];
   confidence: "high" | "medium" | "low";
@@ -38,6 +38,13 @@ export type DupeAnalysis = {
   uniqueToOriginal?: string[];
   uniqueToDupe?: string[];
   contextMatch?: string;
+  // New: lookalike + risk dimensions
+  dupeType?: "Lookalike packaging" | "Formula dupe" | "Both" | "Neither";
+  packagingSimilarity?: number; // 0-100 — how much the dupe's packaging mimics the original
+  riskLevel?: "Lower risk" | "Comparable" | "Higher risk";
+  riskFactors?: string[]; // specific concerns introduced by the dupe
+  missingActives?: string[]; // actives the original has that the dupe drops
+  safetyNote?: string; // one plain-English esthetician sentence
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
