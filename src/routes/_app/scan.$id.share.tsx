@@ -109,9 +109,32 @@ function SharePage() {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "")
           .slice(0, 40) || "dupe";
+      const filename = `dupli-${safeName}.png`;
+      const file = await dataUrlToFile(dataUrl, filename);
+
+      // Prefer the native share sheet (iOS/Android) so users can save to
+      // Photos, AirDrop, Messages, etc. Falls back to download on desktop.
+      const nav = navigator as Navigator & {
+        canShare?: (data: { files?: File[] }) => boolean;
+        share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>;
+      };
+      if (nav.share && nav.canShare && nav.canShare({ files: [file] })) {
+        try {
+          await nav.share({
+            files: [file],
+            title: "Dupli — found a dupe",
+            text: `${analysis.dupe?.productName ?? "Dupe"} for ${analysis.original.productName}`,
+          });
+          return;
+        } catch (err) {
+          // User cancelled — silently exit. Anything else falls through to download.
+          if ((err as Error)?.name === "AbortError") return;
+        }
+      }
+
       const a = document.createElement("a");
       a.href = dataUrl;
-      a.download = `dupli-${safeName}.png`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
