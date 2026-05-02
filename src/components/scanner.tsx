@@ -307,6 +307,8 @@ export function ResultsScreen({
   isSaved,
   canSave,
   onToggleSave,
+  onShare,
+  preparingShare,
 }: {
   analysis: DupeAnalysis;
   preview: string | null;
@@ -315,6 +317,8 @@ export function ResultsScreen({
   isSaved: boolean;
   canSave: boolean;
   onToggleSave: () => void | Promise<void>;
+  onShare?: () => void | Promise<void>;
+  preparingShare?: boolean;
 }) {
   // Hide the bottom tab bar while results are shown for extra spacing.
   useHideTabBar();
