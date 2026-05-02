@@ -186,15 +186,15 @@ function SharePage() {
           <button
             onClick={handleDownload}
             disabled={downloading}
-            aria-label="Download share image"
+            aria-label="Share dupe image"
             className="tap flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background disabled:opacity-60"
           >
             {downloading ? (
               <Loader2 className="h-[18px] w-[18px] animate-spin" strokeWidth={2.25} />
             ) : (
-              <Download className="h-[18px] w-[18px]" strokeWidth={2.25} />
+              <Share2 className="h-[18px] w-[18px]" strokeWidth={2.25} />
             )}
-            {downloading ? "Generating image…" : "Download PNG"}
+            {downloading ? "Generating image…" : "Share image"}
           </button>
         </div>
       }
