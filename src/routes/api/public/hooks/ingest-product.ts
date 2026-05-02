@@ -22,6 +22,60 @@ async function fetchSkinsort(url: string): Promise<{ status: number; body: strin
   return { status: res.status, body };
 }
 
+// Fetch + parse vendors for a product, then upsert them and recompute the
+// product's lowest_price_usd. Failure is non-fatal: if vendors are missing or
+// the fetch fails, we still keep the product/dupe rows.
+async function ingestVendors(
+  productId: string,
+  brandSlug: string,
+  productSlug: string,
+): Promise<number> {
+  const url = buildVendorsUrl(brandSlug, productSlug);
+  let html = "";
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html" },
+    });
+    if (!res.ok) return 0;
+    html = await res.text();
+  } catch {
+    return 0;
+  }
+
+  const vendors: ParsedVendor[] = parseSkinsortVendors(html);
+  if (vendors.length === 0) return 0;
+
+  const rows = vendors.map((v) => ({
+    product_id: productId,
+    merchant: v.merchant,
+    url: v.url,
+    price_usd: v.priceUsd,
+    currency: v.currency,
+    rank: v.rank,
+    fetched_at: new Date().toISOString(),
+  }));
+
+  const { error: upErr } = await supabaseAdmin
+    .from("product_vendors")
+    .upsert(rows, { onConflict: "product_id,merchant" });
+  if (upErr) {
+    console.error("vendor upsert failed", productId, upErr.message);
+    return 0;
+  }
+
+  // Recompute denormalized lowest price.
+  const prices = vendors
+    .map((v) => v.priceUsd)
+    .filter((p): p is number => typeof p === "number");
+  const lowest = prices.length > 0 ? Math.min(...prices) : null;
+  await supabaseAdmin
+    .from("products")
+    .update({ lowest_price_usd: lowest, last_priced_at: new Date().toISOString() })
+    .eq("id", productId);
+
+  return vendors.length;
+}
+
 async function upsertProduct(input: {
   brandSlug: string;
   productSlug: string;
