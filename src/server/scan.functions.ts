@@ -217,7 +217,7 @@ export const scanProduct = createServerFn({ method: "POST" })
   });
 
 function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
-  const original = input.original ?? {} as Partial<ScannedProduct>;
+  const original = (input.original ?? {}) as Partial<ScannedProduct>;
   const dupe = input.dupe ?? null;
   const verdicts = ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"] as const;
   const riskLevels = ["Lower risk", "Comparable", "Higher risk"] as const;
