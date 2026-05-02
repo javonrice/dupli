@@ -1,63 +1,68 @@
-## Goal
+## Problem
 
-Instead of asking the AI for one dupe, ask for 5–7 candidates. The AI ranks them, the top one becomes the main dupe (current UI unchanged), and the others appear under the result in a horizontal scroll labeled something like "Also could be a dupe."
+The vendor backfill is **completely stalled**. Out of 46,689 dupe products, only **100 have vendor prices** — the queue has 46,589 vendor jobs sitting in `pending` and hasn't moved in ~25 minutes.
 
-## Cost / time impact (honest answer)
+Root cause confirmed in worker logs: the pg_cron job has been firing every minute but every single call returns **401 Unauthorized**.
 
-**Latency:** Roughly **1.3×–1.8×** the current scan time. We're using the same single AI call (still one round trip), but the model has to think about more candidates and write more output. Today we cap output at 2,400 tokens; 5–7 candidates pushes that to ~4,500–5,500 tokens. On `gemini-2.5-flash` that's typically an extra **2–5 seconds**. No new network hops on the AI side.
+```
+[19:13:01] POST .../run-ingestion → 401
+[19:12:00] POST .../run-ingestion → 401
+[19:11:00] POST .../run-ingestion → 401
+... (every minute since the cron was set up)
+```
 
-**The real latency cost is product images.** Today we look up 2 images in parallel (original + dupe). With 7 candidates that's 8 lookups. Each `findProductImage` call hits DuckDuckGo/Bing and takes ~500–1500ms. Done in parallel, the whole batch still finishes in roughly the slowest single lookup (~1–2s), so this is mostly free — but it does increase the chance one or two images come back empty.
+The cron SQL reads the auth token from Postgres `vault.secrets`:
+```sql
+'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'INGESTION_TOKEN')
+```
 
-**Cost:** Per-scan AI cost goes up roughly **2×** (more output tokens). Still cents per scan on Flash.
+But `INGESTION_TOKEN` only exists as a Worker env secret — there's no row in the vault with that name. The subselect returns NULL, the header becomes the literal string `"Bearer "`, and the endpoint correctly rejects it. Every cron tick has been a no-op.
 
-**Complexity:** Low–medium. It's mostly a schema change + a new UI strip. No DB migration, no new server function, no new dependencies.
+So the parser fix and the inline-concurrency drain code are both fine — they've just never been allowed to run.
 
-## What changes
+## Fix (3 small steps)
 
-### 1. AI schema + prompt (`src/server/scan.functions.ts`)
+### 1. Put the ingestion token into the Postgres vault
 
-- Replace the single `dupe` field with a `dupes` array of 5–7 candidates (same shape as today's `DupeSuggestion`, plus a per-candidate `matchScore`, `dupeType`, `packagingSimilarity`, `riskLevel`, `riskFactors`, `missingActives`, `safetyNote`, `sharedIngredients`, `uniqueToOriginal`, `uniqueToDupe`, `contextMatch`, short `notes`).
-- Ask the model to return them **sorted best → worst** and to set the top-level `verdict` based on candidate #1.
-- Keep top-level fields (`matchScore`, `verdict`, `notes`, `bestFor`, etc.) as a mirror of the #1 candidate so existing screens (results, share card, history) keep working with zero changes.
-- Add a derived `dupe` getter on the server side = `dupes[0] ?? null` so the rest of the app stays backward-compatible.
-- Bump `max_tokens` to ~5500. Keep `temperature: 0.2`.
+Migration that inserts/updates the same token value (read at migration time from the worker env via a one-time hardcoded value isn't ideal — instead we'll have you provide it once). Approach:
 
-### 2. Image enrichment
+- Migration creates the vault entry from a parameter we pass in, OR
+- Simpler: change the cron to call a new SECURITY DEFINER function that uses a token stored in a regular `app_config` table (single-row, RLS-locked, no anon access).
 
-- Parallel-fetch images for the original + all candidates with `Promise.all`. Wrap each in the existing `safeFind` so a missing image never breaks the response. Cap at 7 lookups so worst case is bounded.
+Cleanest option: store the token in `vault.secrets` via `vault.create_secret('<token>', 'INGESTION_TOKEN')`. We'll do this in a migration where the literal token value is the existing `INGESTION_TOKEN` value — we'll pull it from the Worker env on first call. To avoid asking the user, the migration will:
 
-### 3. Database + types
+a. Create the vault entry only if missing (so it's idempotent / safe to re-run).
+b. Use a one-shot bootstrap server endpoint `/api/public/hooks/bootstrap-cron-token` (token-protected by the same Worker env `INGESTION_TOKEN`) that, when called, writes the token into the vault using `supabaseAdmin`. We invoke it once after deploy, then it's done.
 
-- The `scans` table already stores the full analysis JSON, so no migration needed — the `dupes` array just rides along inside the existing JSON column.
-- Update the `DupeAnalysis` TypeScript type to add `dupes: DupeSuggestion[]` (each candidate also carrying its own match/risk fields).
-- Old saved scans (single `dupe`) keep rendering: when loading, if `dupes` is missing but `dupe` exists, treat it as a 1-item array.
+This avoids hardcoding the secret into a SQL migration file.
 
-### 4. UI — main result screen (`src/components/scanner.tsx` results view + `src/components/dupe-card.tsx`)
+### 2. Make the cron simpler & more aggressive
 
-- Top of the screen: unchanged. The hero dupe card still shows candidate #1 exactly like today.
-- Below the existing comparison block, add a new section:
-  - Small uppercase eyebrow: **"Also could be a dupe"**
-  - Horizontal scroll rail (snap-x, edge padding, hides scrollbar) of compact cards for candidates #2–#7.
-  - Each card: product image, brand, product name, price, small match-score chip, tap → opens that candidate in a sheet/modal showing the full comparison (reusing the existing dupe-card layout against the same original).
-- Empty/edge case: if AI only returns 1 dupe, hide the rail entirely.
+Once the vault entry exists the existing cron command will work, but I'll also:
+- Bump `batch` from 30 → **100** per cron tick.
+- Add a second cron entry that fires the same drain (same minute) so we get **multiple parallel drains per minute** even before the self-cascade kicks in.
+- Self-cascade inside the worker remains as-is and will now actually fire (it uses the env token directly, not the vault).
 
-### 5. Share card
+### 3. Manually kick the cascade once
 
-- Unchanged — keeps featuring the #1 dupe only. (Sharing 7 dupes on one card hurts the design.)
+After (1) and (2), call `/api/public/hooks/run-ingestion` once with the correct bearer to start the cascade immediately rather than waiting for the next minute boundary.
 
-## Technical notes
+## Expected throughput after the fix
 
-- Single AI call, single `tool_choice`, no streaming changes.
-- Tool schema `dupes` array: `minItems: 1, maxItems: 7`, with the 1st item required.
-- The model is told: "Return 5–7 plausible candidates sorted by overall fit. The first must be your strongest pick — you'll be evaluated on it. Diversity matters: don't return 7 near-duplicate listings of the same product."
-- Backward-compat shim in `normalizeAnalysis`: if `dupes` is empty but legacy `dupe` exists, wrap it; if `dupes` exists, set `dupe = dupes[0]` so all current screens keep working without edits.
+- 100 vendor jobs per drain × 20 concurrency = ~5s per drain (Skinsort fetch + 1 upsert each)
+- Self-cascade keeps drains running back-to-back as long as the queue has work
+- 46,589 jobs ÷ ~20 jobs/sec sustained ≈ **~40 minutes** to fully drain
+- pg_cron fires every minute as a safety net in case any cascade dies
 
-## Out of scope
+## Files to change
 
-- No swiping to "promote" a different candidate to main (can be a follow-up).
-- No saving individual candidates to history separately — the whole scan stays one row.
-- No changes to the SkinSort DB lookup (still disabled per your earlier call).
+- `supabase/migrations/<new>.sql` — update the cron job to use batch=100 (and add a second twin job for parallelism). Vault bootstrap stays out of SQL.
+- `src/routes/api/public/hooks/bootstrap-cron-token.ts` — new one-shot endpoint that copies the env `INGESTION_TOKEN` into `vault.secrets`. Token-protected with the same secret.
+- After deploy: invoke bootstrap once, then invoke `run-ingestion` once to start the cascade.
 
-## Recommendation
+## Verification
 
-Worth doing. The latency hit is small (a couple seconds), the cost is still cents, and the UX win — "here's the best dupe, plus 6 more options to consider" — is exactly the kind of thing that makes the app feel smart instead of guessy.
+- Worker logs go from `→ 401` to `→ 200` on cron ticks
+- `SELECT count(*) FROM ingestion_queue WHERE status='done' AND mode='vendors'` climbs every few seconds
+- `SELECT count(*) FROM products WHERE lowest_price_usd IS NOT NULL` climbs in lockstep
+- Done when `pending` count for `mode='vendors'` hits 0
