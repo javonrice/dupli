@@ -89,14 +89,35 @@ export function Scanner() {
       setStage("results");
 
       // Persist scan to history (best-effort, don't block UI).
-      persistScan({ data: { analysis: result, thumbnailDataUrl: small } })
-        .then((r) => {
-          if (r.id) setScanId(r.id);
-        })
-        .catch((e) => console.warn("Failed to persist scan", e));
+      const p = persistScan({ data: { analysis: result, thumbnailDataUrl: small } });
+      persistPromiseRef.current = p;
+      p.then((r) => {
+        if (r.id) setScanId(r.id);
+      }).catch((e) => console.warn("Failed to persist scan", e));
     },
     [scan, persistScan],
   );
+
+  const handleShare = useCallback(async () => {
+    if (preparingShare) return;
+    if (scanId) {
+      navigate({ to: "/scan/$id/share", params: { id: scanId } });
+      return;
+    }
+    setPreparingShare(true);
+    try {
+      const r = await (persistPromiseRef.current ?? Promise.resolve({ id: undefined as string | undefined }));
+      if (r?.id) {
+        navigate({ to: "/scan/$id/share", params: { id: r.id } });
+      } else {
+        console.warn("Cannot share: scan not persisted");
+      }
+    } catch (e) {
+      console.warn("Failed to prepare share", e);
+    } finally {
+      setPreparingShare(false);
+    }
+  }, [scanId, preparingShare, navigate]);
 
   const handleToggleSave = useCallback(async () => {
     if (!scanId || savingBookmark) return;
