@@ -18,20 +18,24 @@ export type CommunityDupe = {
   sharedIngredientsCount: number | null;
   rationale: string | null;
   original: {
+    id: string;
     brandSlug: string;
     productSlug: string;
     brand: string;
     productName: string;
     category: string | null;
     imageUrl: string | null;
+    lowestPriceUsd: number | null;
   };
   dupe: {
+    id: string;
     brandSlug: string;
     productSlug: string;
     brand: string;
     productName: string;
     category: string | null;
     imageUrl: string | null;
+    lowestPriceUsd: number | null;
   };
 };
 
@@ -43,33 +47,39 @@ type DupeJoinRow = {
   shared_ingredients_count: number | null;
   rationale: string | null;
   original: {
+    id: string;
     brand_slug: string;
     product_slug: string;
     brand_name: string;
     product_name: string;
     category: string | null;
     image_url: string | null;
+    lowest_price_usd: number | null;
   } | null;
   dupe: {
+    id: string;
     brand_slug: string;
     product_slug: string;
     brand_name: string;
     product_name: string;
     category: string | null;
     image_url: string | null;
+    lowest_price_usd: number | null;
   } | null;
 };
 
 const DUPE_SELECT = `
   id, overall_match, ingredient_match, attribute_match, shared_ingredients_count, rationale,
-  original:products!dupes_original_product_id_fkey ( brand_slug, product_slug, brand_name, product_name, category, image_url ),
-  dupe:products!dupes_dupe_product_id_fkey ( brand_slug, product_slug, brand_name, product_name, category, image_url )
+  original:products!dupes_original_product_id_fkey ( id, brand_slug, product_slug, brand_name, product_name, category, image_url, lowest_price_usd ),
+  dupe:products!dupes_dupe_product_id_fkey ( id, brand_slug, product_slug, brand_name, product_name, category, image_url, lowest_price_usd )
 `;
 
 function mapRow(row: DupeJoinRow): CommunityDupe | null {
   if (!row.original || !row.dupe) return null;
   // Drop pairings with no images — they look broken in the hub.
   if (!row.original.image_url || !row.dupe.image_url) return null;
+  // The dupe is the thing the user shops for — require it to have a price.
+  if (row.dupe.lowest_price_usd == null) return null;
   return {
     id: row.id,
     overallMatch: row.overall_match,
@@ -78,20 +88,24 @@ function mapRow(row: DupeJoinRow): CommunityDupe | null {
     sharedIngredientsCount: row.shared_ingredients_count,
     rationale: row.rationale,
     original: {
+      id: row.original.id,
       brandSlug: row.original.brand_slug,
       productSlug: row.original.product_slug,
       brand: row.original.brand_name,
       productName: row.original.product_name,
       category: row.original.category,
       imageUrl: row.original.image_url,
+      lowestPriceUsd: row.original.lowest_price_usd,
     },
     dupe: {
+      id: row.dupe.id,
       brandSlug: row.dupe.brand_slug,
       productSlug: row.dupe.product_slug,
       brand: row.dupe.brand_name,
       productName: row.dupe.product_name,
       category: row.dupe.category,
       imageUrl: row.dupe.image_url,
+      lowestPriceUsd: row.dupe.lowest_price_usd,
     },
   };
 }
