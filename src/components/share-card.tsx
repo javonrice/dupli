@@ -82,7 +82,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           src={wordmark}
           alt=""
           crossOrigin="anonymous"
-          style={{ height: 56, width: "auto" }}
+          style={{ height: 120, width: "auto" }}
         />
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {riskLevel && (
