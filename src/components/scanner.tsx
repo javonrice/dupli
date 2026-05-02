@@ -199,22 +199,22 @@ function HomeScreen({
       }
       fixed
     >
-      <div className="flex flex-1 flex-col items-center justify-between px-6 pb-2 pt-6">
+      <div className="flex flex-1 flex-col items-center justify-between gap-3 px-6 pb-3 pt-4">
         {/* Hero copy */}
         <div className="text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             AI Dupe Finder
           </p>
-          <h1 className="mt-2 font-display text-[34px] font-bold leading-[1.05] tracking-tight">
+          <h1 className="mt-2 font-display text-[clamp(24px,7vw,34px)] font-bold leading-[1.05] tracking-tight">
             Snap any product.
           </h1>
-          <p className="font-display text-[34px] font-bold italic leading-[1.05] tracking-tight text-muted-foreground">
+          <p className="font-display text-[clamp(24px,7vw,34px)] font-bold italic leading-[1.05] tracking-tight text-muted-foreground">
             Find the dupe.
           </p>
         </div>
 
-        {/* Viewfinder */}
-        <div className="relative my-4 aspect-[4/5] w-full max-w-[260px]">
+        {/* Viewfinder — shrinks on short screens so buttons never clip */}
+        <div className="relative w-full max-w-[260px] flex-1 min-h-0 aspect-[4/5] max-h-[40vh]">
           <div className="absolute inset-0 rounded-[28px] border border-border bg-secondary/40" />
           <div className="absolute left-3 top-3 h-7 w-7 rounded-tl-[20px] border-l-[3px] border-t-[3px] border-foreground/50" />
           <div className="absolute right-3 top-3 h-7 w-7 rounded-tr-[20px] border-r-[3px] border-t-[3px] border-foreground/50" />
@@ -234,8 +234,8 @@ function HomeScreen({
           </div>
         )}
 
-        {/* Capture controls — stacked button format */}
-        <div className="flex w-full flex-col gap-2.5 pb-2 pt-4">
+        {/* Capture controls — always visible, even on short viewports */}
+        <div className="flex w-full shrink-0 flex-col gap-2.5 pt-1">
           <button
             onClick={onCamera}
             className="tap flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
