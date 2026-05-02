@@ -380,10 +380,45 @@ export const scanProduct = createServerFn({ method: "POST" })
 
 function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
   const original = (input.original ?? {}) as Partial<ScannedProduct>;
-  const dupe = input.dupe ?? null;
   const verdicts = ["Worth the hype", "Mixed", "Skip", "Risky dupe", "No dupe found"] as const;
   const riskLevels = ["Lower risk", "Comparable", "Higher risk"] as const;
   const dupeTypes = ["Lookalike packaging", "Formula dupe", "Both", "Neither"] as const;
+
+  // Build the candidates array. Prefer new `dupes` field; fall back to legacy single `dupe`.
+  const rawDupes: Partial<DupeSuggestion>[] = Array.isArray(input.dupes)
+    ? input.dupes
+    : input.dupe
+      ? [input.dupe]
+      : [];
+
+  const dupes: DupeSuggestion[] = rawDupes.slice(0, 7).map((d) => ({
+    productName: safeText(d?.productName, "Suggested alternative"),
+    brand: safeText(d?.brand, "Unknown brand"),
+    category: safeText(d?.category, "Beauty product"),
+    estimatedPriceUsd: safeNumber(d?.estimatedPriceUsd),
+    whereToBuy: safeText(d?.whereToBuy, "Online"),
+    buyUrl: safeUrl(d?.buyUrl, d?.brand, d?.productName),
+    keyIngredients: safeList(d?.keyIngredients),
+    imageUrl: d?.imageUrl,
+    matchScore: clampScore(d?.matchScore),
+    dupeType: dupeTypes.includes(d?.dupeType as NonNullable<DupeAnalysis["dupeType"]>)
+      ? d?.dupeType
+      : "Formula dupe",
+    packagingSimilarity: clampScore(d?.packagingSimilarity),
+    riskLevel: riskLevels.includes(d?.riskLevel as NonNullable<DupeAnalysis["riskLevel"]>)
+      ? d?.riskLevel
+      : "Comparable",
+    riskFactors: safeList(d?.riskFactors),
+    missingActives: safeList(d?.missingActives),
+    safetyNote: safeText(d?.safetyNote, ""),
+    sharedIngredients: safeList(d?.sharedIngredients),
+    uniqueToOriginal: safeList(d?.uniqueToOriginal),
+    uniqueToDupe: safeList(d?.uniqueToDupe),
+    contextMatch: safeText(d?.contextMatch, ""),
+    notes: safeText(d?.notes, ""),
+  }));
+
+  const headline = dupes[0] ?? null;
 
   return {
     original: {
@@ -394,48 +429,41 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
       keyIngredients: safeList(original.keyIngredients),
       imageUrl: original.imageUrl,
     },
-    dupe: dupe
-      ? {
-          productName: safeText(dupe.productName, "Suggested alternative"),
-          brand: safeText(dupe.brand, "Unknown brand"),
-          category: safeText(dupe.category, "Beauty product"),
-          estimatedPriceUsd: safeNumber(dupe.estimatedPriceUsd),
-          whereToBuy: safeText(dupe.whereToBuy, "Online"),
-          buyUrl: safeUrl(dupe.buyUrl, dupe.brand, dupe.productName),
-          keyIngredients: safeList(dupe.keyIngredients),
-          imageUrl: dupe.imageUrl,
-        }
-      : null,
-    matchScore: clampScore(input.matchScore),
+    dupe: headline,
+    dupes,
+    // Top-level fields mirror the headline candidate when AI didn't fill them in.
+    matchScore: typeof input.matchScore === "number"
+      ? clampScore(input.matchScore)
+      : (headline?.matchScore ?? 0),
     verdict: verdicts.includes(input.verdict as DupeAnalysis["verdict"])
       ? (input.verdict as DupeAnalysis["verdict"])
-      : dupe
+      : headline
         ? "Mixed"
         : "No dupe found",
     notes: safeText(
-      input.notes,
+      input.notes ?? headline?.notes,
       "We found the closest practical comparison, but double-check the label if your skin is sensitive.",
     ),
     bestFor: safeList(input.bestFor),
     confidence: ["high", "medium", "low"].includes(input.confidence ?? "")
       ? (input.confidence as DupeAnalysis["confidence"])
       : "medium",
-    sharedIngredients: safeList(input.sharedIngredients),
-    uniqueToOriginal: safeList(input.uniqueToOriginal),
-    uniqueToDupe: safeList(input.uniqueToDupe),
-    contextMatch: safeText(input.contextMatch, ""),
+    sharedIngredients: safeList(input.sharedIngredients ?? headline?.sharedIngredients),
+    uniqueToOriginal: safeList(input.uniqueToOriginal ?? headline?.uniqueToOriginal),
+    uniqueToDupe: safeList(input.uniqueToDupe ?? headline?.uniqueToDupe),
+    contextMatch: safeText(input.contextMatch ?? headline?.contextMatch, ""),
     dupeType: dupeTypes.includes(input.dupeType as NonNullable<DupeAnalysis["dupeType"]>)
       ? input.dupeType
-      : dupe
-        ? "Formula dupe"
-        : "Neither",
-    packagingSimilarity: clampScore(input.packagingSimilarity),
+      : headline?.dupeType ?? (headline ? "Formula dupe" : "Neither"),
+    packagingSimilarity: typeof input.packagingSimilarity === "number"
+      ? clampScore(input.packagingSimilarity)
+      : (headline?.packagingSimilarity ?? 0),
     riskLevel: riskLevels.includes(input.riskLevel as NonNullable<DupeAnalysis["riskLevel"]>)
       ? input.riskLevel
-      : "Comparable",
-    riskFactors: safeList(input.riskFactors),
-    missingActives: safeList(input.missingActives),
-    safetyNote: safeText(input.safetyNote, ""),
+      : headline?.riskLevel ?? "Comparable",
+    riskFactors: safeList(input.riskFactors ?? headline?.riskFactors),
+    missingActives: safeList(input.missingActives ?? headline?.missingActives),
+    safetyNote: safeText(input.safetyNote ?? headline?.safetyNote, ""),
   };
 }
 
