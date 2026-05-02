@@ -3,10 +3,17 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { slugify } from "./skinsort-slugs";
+import { ensureProductData, diffIngredientLists } from "./skinsort-scraper.server";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
 });
+
+export type Vendor = {
+  merchant: string;
+  url: string;
+  priceUsd: number | null;
+};
 
 export type ScannedProduct = {
   productName: string;
@@ -15,6 +22,9 @@ export type ScannedProduct = {
   estimatedPriceUsd: number;
   keyIngredients: string[];
   imageUrl?: string;
+  priceSource?: "estimate" | "skinsort_vendor";
+  priceMerchant?: string;
+  vendors?: Vendor[];
 };
 
 export type DupeSuggestion = {
@@ -26,6 +36,9 @@ export type DupeSuggestion = {
   buyUrl: string;
   keyIngredients: string[];
   imageUrl?: string;
+  priceSource?: "estimate" | "skinsort_vendor";
+  priceMerchant?: string;
+  vendors?: Vendor[];
 };
 
 export type DupeAnalysis = {
@@ -351,6 +364,9 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
       estimatedPriceUsd: safeNumber(original.estimatedPriceUsd),
       keyIngredients: safeList(original.keyIngredients),
       imageUrl: original.imageUrl,
+      priceSource: original.priceSource ?? "estimate",
+      priceMerchant: original.priceMerchant,
+      vendors: original.vendors,
     },
     dupe: dupe
       ? {
@@ -362,6 +378,9 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
           buyUrl: safeUrl(dupe.buyUrl, dupe.brand, dupe.productName),
           keyIngredients: safeList(dupe.keyIngredients),
           imageUrl: dupe.imageUrl,
+          priceSource: dupe.priceSource ?? "estimate",
+          priceMerchant: dupe.priceMerchant,
+          vendors: dupe.vendors,
         }
       : null,
     matchScore: clampScore(input.matchScore),
@@ -815,31 +834,90 @@ async function crossReferenceDupeDb(analysis: DupeAnalysis): Promise<void> {
   analysis.original.productName = product.product_name;
   analysis.original.brand = product.brand_name;
 
+  // Pull REAL ingredient lists + REAL retailer prices from SkinSort (cached
+  // in our DB after the first hit). This is what replaces the AI's estimates.
+  const [origData, dupeData] = await Promise.all([
+    ensureProductData(product.id),
+    ensureProductData(topDupe.id),
+  ]);
+
+  // Real prices: cheapest in-stock vendor wins.
+  const origVendor = pickPrimaryVendor(origData.vendors);
+  const dupeVendor = pickPrimaryVendor(dupeData.vendors);
+
+  if (origVendor?.priceUsd != null) {
+    analysis.original.estimatedPriceUsd = origVendor.priceUsd;
+    analysis.original.priceSource = "skinsort_vendor";
+    analysis.original.priceMerchant = origVendor.merchant;
+  }
+  analysis.original.vendors = origData.vendors.map((v: { merchant: string; url: string; priceUsd: number | null }) => ({
+    merchant: v.merchant,
+    url: v.url,
+    priceUsd: v.priceUsd,
+  }));
+
   analysis.dupe = {
     productName: topDupe.product_name,
     brand: topDupe.brand_name,
     category: topDupe.category ?? "Beauty product",
-    estimatedPriceUsd: 0,
-    whereToBuy: "Online",
-    buyUrl: `https://www.amazon.com/s?k=${encodeURIComponent(`${topDupe.brand_name} ${topDupe.product_name}`)}`,
-    keyIngredients: [],
+    estimatedPriceUsd: dupeVendor?.priceUsd ?? 0,
+    whereToBuy: dupeVendor?.merchant ?? "Online",
+    buyUrl:
+      dupeVendor?.url ??
+      `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(`${topDupe.brand_name} ${topDupe.product_name}`)}`,
+    keyIngredients: dupeData.ingredients.slice(0, 6),
     imageUrl: topDupe.image_url ?? undefined,
+    priceSource: dupeVendor?.priceUsd != null ? "skinsort_vendor" : "estimate",
+    priceMerchant: dupeVendor?.merchant,
+    vendors: dupeData.vendors.map((v: { merchant: string; url: string; priceUsd: number | null }) => ({
+      merchant: v.merchant,
+      url: v.url,
+      priceUsd: v.priceUsd,
+    })),
   };
+
+  // Real ingredient diff (only when we actually got both lists from SkinSort).
+  if (origData.ingredients.length > 0 && dupeData.ingredients.length > 0) {
+    const diff = diffIngredientLists(origData.ingredients, dupeData.ingredients);
+    analysis.sharedIngredients = diff.sharedIngredients;
+    analysis.uniqueToOriginal = diff.uniqueToOriginal;
+    analysis.uniqueToDupe = diff.uniqueToDupe;
+    // Refresh the original's keyIngredients with the real top-of-formula items.
+    analysis.original.keyIngredients = origData.ingredients.slice(0, 6);
+  } else {
+    // SkinSort missed one side — keep the AI's lists (already populated by the
+    // model) instead of clearing them, so the user always sees something.
+  }
+
   // Always surface SkinSort's verified overall_match (0-100), never the lookup
   // confidence — the fuzzy score was for ranking, not for telling the user
   // how good the dupe actually is.
   analysis.matchScore = top.overall_match;
   analysis.confidence = top.overall_match >= 85 ? "high" : top.overall_match >= 70 ? "medium" : "low";
   if (top.rationale) analysis.notes = top.rationale;
-  analysis.sharedIngredients = [];
-  analysis.uniqueToOriginal = [];
-  analysis.uniqueToDupe = [];
   if (analysis.verdict === "No dupe found") {
     analysis.verdict = top.overall_match >= 80 ? "Worth the hype" : "Mixed";
   }
 }
 
+// Pick the best vendor row to surface as the primary "Buy at" CTA. Prefers
+// the cheapest priced row, falls back to the first listed vendor when no
+// prices are available.
+function pickPrimaryVendor(
+  vendors: { merchant: string; url: string; priceUsd: number | null }[],
+):
+  | { merchant: string; url: string; priceUsd: number | null }
+  | undefined {
+  if (!vendors.length) return undefined;
+  const priced = vendors.filter((v) => v.priceUsd != null && v.priceUsd > 0);
+  if (priced.length > 0) {
+    return priced.reduce((a, b) => ((a.priceUsd ?? Infinity) <= (b.priceUsd ?? Infinity) ? a : b));
+  }
+  return vendors[0];
+}
+
 type CounterpartProduct = {
+  id: string;
   brand_name: string;
   product_name: string;
   category: string | null;
@@ -867,7 +945,7 @@ async function fetchBestCounterpart(productId: string): Promise<CounterpartHit |
     .from("dupes")
     .select(
       `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       counterpart:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url )`,
+       counterpart:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, category, image_url )`,
     )
     .eq("original_product_id", productId)
     .order("overall_match", { ascending: false })
@@ -879,7 +957,7 @@ async function fetchBestCounterpart(productId: string): Promise<CounterpartHit |
     .from("dupes")
     .select(
       `overall_match, ingredient_match, shared_ingredients_count, rationale,
-       counterpart:products!dupes_original_product_id_fkey ( brand_name, product_name, category, image_url )`,
+       counterpart:products!dupes_original_product_id_fkey ( id, brand_name, product_name, category, image_url )`,
     )
     .eq("dupe_product_id", productId)
     .order("overall_match", { ascending: false })
