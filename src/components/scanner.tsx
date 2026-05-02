@@ -199,22 +199,22 @@ function HomeScreen({
       }
       fixed
     >
-      <div className="flex flex-1 flex-col items-center justify-between px-6 pb-2 pt-6">
+      <div className="flex flex-1 flex-col items-center px-6 pb-3 pt-4">
         {/* Hero copy */}
         <div className="text-center">
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             AI Dupe Finder
           </p>
-          <h1 className="mt-2 font-display text-[34px] font-bold leading-[1.05] tracking-tight">
+          <h1 className="mt-2 font-display text-[28px] font-bold leading-[1.05] tracking-tight sm:text-[34px]">
             Snap any product.
           </h1>
-          <p className="font-display text-[34px] font-bold italic leading-[1.05] tracking-tight text-muted-foreground">
+          <p className="font-display text-[28px] font-bold italic leading-[1.05] tracking-tight text-muted-foreground sm:text-[34px]">
             Find the dupe.
           </p>
         </div>
 
-        {/* Viewfinder */}
-        <div className="relative my-4 aspect-[4/5] w-full max-w-[260px]">
+        {/* Viewfinder — flexes to fill leftover space, never pushes buttons out */}
+        <div className="relative my-3 aspect-[4/5] w-full max-w-[260px] min-h-0 flex-1">
           <div className="absolute inset-0 rounded-[28px] border border-border bg-secondary/40" />
           <div className="absolute left-3 top-3 h-7 w-7 rounded-tl-[20px] border-l-[3px] border-t-[3px] border-foreground/50" />
           <div className="absolute right-3 top-3 h-7 w-7 rounded-tr-[20px] border-r-[3px] border-t-[3px] border-foreground/50" />
@@ -229,13 +229,13 @@ function HomeScreen({
         </div>
 
         {error && (
-          <div className="w-full rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
+          <div className="mt-2 w-full rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
             {error}
           </div>
         )}
 
-        {/* Capture controls — stacked button format */}
-        <div className="flex w-full flex-col gap-2.5 pb-2 pt-4">
+        {/* Capture controls — pinned to bottom, never clipped */}
+        <div className="mt-3 flex w-full shrink-0 flex-col gap-2.5">
           <button
             onClick={onCamera}
             className="tap flex h-[52px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
