@@ -145,6 +145,10 @@ export async function ensureProductData(
       return { ingredients, vendors };
     }
 
+    console.log(
+      `[skinsort-scraper] enrich ${row.brand_slug}/${row.product_slug} needIng=${needIngredients} needVendors=${needVendors}`,
+    );
+
     await withSlot(async () => {
       // 1. Fetch product HTML for ingredients (only if missing).
       if (needIngredients) {
@@ -153,6 +157,9 @@ export async function ensureProductData(
         );
         if (html) {
           const parsed = extractIngredients(html);
+          console.log(
+            `[skinsort-scraper] ingredients ${row.product_slug}: ${parsed.length}`,
+          );
           if (parsed.length > 0) {
             ingredients = parsed;
             await supabaseAdmin
@@ -170,6 +177,9 @@ export async function ensureProductData(
         );
         if (html) {
           const parsed = parseSkinsortVendors(html);
+          console.log(
+            `[skinsort-scraper] vendors ${row.product_slug}: ${parsed.length}`,
+          );
           if (parsed.length > 0) {
             // Replace cached vendor set atomically (delete then insert).
             await supabaseAdmin
