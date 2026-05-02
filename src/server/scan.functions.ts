@@ -3,6 +3,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { slugify } from "./skinsort-slugs";
+import { ensureProductData, diffIngredientLists } from "./skinsort-scraper.server";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
