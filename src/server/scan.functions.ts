@@ -491,7 +491,7 @@ async function searchDuckDuckGoImages(query: string): Promise<ImageCandidate[] |
     }
     const tokenHtml = await tokenRes.text();
     const vqdMatch =
-      tokenHtml.match(/vqd=([\d-]+)\&/) ||
+      tokenHtml.match(/vqd=([\d-]+)&/) ||
       tokenHtml.match(/vqd="([\d-]+)"/) ||
       tokenHtml.match(/vqd=([\d-]+)/);
     const vqd = vqdMatch?.[1];
@@ -695,7 +695,7 @@ function pickBestProductImage(
     if (brandSlug.length >= 4 && pageHost.includes(brandSlug)) score += 40;
     if (brandSlug.length >= 4 && imgHost.includes(brandSlug)) score += 15;
     // URL path hints we're on a real product page, not a blog/listicle.
-    if (/\/(p|product|products|prod|item|dp|ip)[\/-]/i.test(r.url ?? "")) score += 25;
+    if (/\/(p|product|products|prod|item|dp|ip)[/-]/i.test(r.url ?? "")) score += 25;
     // Image filename hints at product photography.
     if (/(product|packshot|pdp|hero|main|front)/i.test(r.image)) score += 8;
 
