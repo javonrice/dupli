@@ -1,6 +1,7 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { Camera, Clock, Bookmark, User } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useTabBarHidden } from "@/lib/tab-bar-visibility";
 
 type Tab = {
   to: "/" | "/history" | "/saved" | "/profile";
