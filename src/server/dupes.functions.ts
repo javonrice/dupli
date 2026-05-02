@@ -65,7 +65,7 @@ export const lookupDupes = createServerFn({ method: "POST" })
       .from("dupes")
       .select(
         `overall_match, ingredient_match, attribute_match, shared_ingredients_count, rationale,
-         dupe:dupe_product_id ( brand_name, product_name, category, image_url, free_from, good_for, contains )`,
+         dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url, free_from, good_for, contains )`,
       )
       .eq("original_product_id", product.id)
       .order("overall_match", { ascending: false })
