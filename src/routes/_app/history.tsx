@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Loader2, Camera } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { listScans, type ScanRow } from "@/server/scans.functions";
