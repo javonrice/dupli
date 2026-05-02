@@ -19,7 +19,8 @@ export const Route = createFileRoute("/api/public/hooks/bootstrap-cron-token")({
         }
 
         // Use a SQL function (created by migration) that wraps vault access.
-        const { data, error } = await supabaseAdmin.rpc(
+        // Cast to any to avoid generated-types lag for this newly added RPC.
+        const { data, error } = await (supabaseAdmin.rpc as any)(
           "set_ingestion_token_secret",
           { p_token: expected },
         );
