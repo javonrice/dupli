@@ -213,8 +213,11 @@ export const scanProduct = createServerFn({ method: "POST" })
  * gets Cloudflare 525s when calling DDG).
  * Returns undefined on any failure so a missing image never breaks the scan.
  */
-async function findProductImage(brand: string, productName: string): Promise<string | undefined> {
-  const query = `${brand} ${productName}`.trim();
+async function findProductImage(brand?: string | null, productName?: string | null): Promise<string | undefined> {
+  const safeBrand = (brand ?? "").trim();
+  const safeName = (productName ?? "").trim();
+  const query = `${safeBrand} ${safeName}`.trim();
+  if (!query) return undefined;
   console.log("[findProductImage] looking up:", query);
 
   const ddg = await searchDuckDuckGoImages(query);
