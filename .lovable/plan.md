@@ -1,71 +1,75 @@
-## Goal
+## What's changing
 
-Make Dupli feel indistinguishable from a hand-built iOS native app when installed to the home screen — proper safe areas, fixed (non-scrolling) screens where iOS would have them, SF Symbols-style iconography, iOS-native button/sheet/transition idioms, and a real PWA install path.
+Right now the scanner is built around one idea: "find a cheaper version of this product." Your TikTok screenshots show that real-world dupe culture is actually about two different things:
 
-## What changes for the user
+1. **Lookalike packaging** — the Dollar Tree bottle is *designed to look like* La Roche‑Posay, eos, Vaseline, Summer Fridays. The visual mimicry IS the dupe.
+2. **Risk vs. reward** — a cheaper lookalike isn't automatically a win. It might be missing the active that made the original work, OR it might add irritants (fragrance, alcohol, harsh acids without buffering) that the original carefully avoided.
 
-**Three "screens" instead of one long page**, each behaving like an iOS view controller:
+So we'll teach the scanner to think like someone walking the Dollar Tree aisle, not like a savings calculator.
+
+## New analysis dimensions
+
+Every scan will produce these new fields (in addition to what's already there):
+
+- **dupeType**: `"Lookalike packaging"` | `"Formula dupe"` | `"Both"` | `"Neither"` — explains *why* it qualifies as a dupe
+- **packagingSimilarity**: 0–100 — how much the dupe's packaging mimics the original (color, shape, font, layout)
+- **riskLevel**: `"Lower risk"` | `"Comparable"` | `"Higher risk"` — whether switching to the dupe is safer, the same, or riskier than the original
+- **riskFactors**: short list of specific concerns in the dupe (e.g. "Added fragrance", "Higher % glycolic acid without buffering", "Denatured alcohol high in INCI list", "No SPF despite mimicking sunscreen packaging")
+- **missingActives**: actives the original has that the dupe doesn't (e.g. "Niacinamide", "Ceramides") — what you give up
+- **safetyNote**: one plain-English sentence an esthetician would say out loud ("Fine for body, I wouldn't put this on a compromised face barrier.")
+
+The verdict enum gets one more option: **`"Risky dupe"`** — cheap and lookalike, but the formula tradeoff is bad enough we shouldn't recommend it.
+
+## Prompt rewrite
+
+The system prompt for Gemini gets reframed:
+
+- Stop optimizing for "cheapest match." Start asking "is this a credible swap, and what does the user lose or risk by swapping?"
+- Treat **visual packaging mimicry** as a first-class signal. If the user photographed an XtraCare body balm in a navy tube with white wave that obviously copies Vaseline, the dupe IS Vaseline — even if the price gap is small.
+- For Dollar Tree / drugstore lookalikes specifically, score packaging similarity honestly (color palette, bottle shape, typography, label layout).
+- Score risk separately from match. A 90% formula match can still be "Higher risk" if the dupe swaps a buffered acid for an unbuffered one.
+- Never inflate the verdict. "Skip" and the new "Risky dupe" exist for a reason.
+
+## UI changes (results screen + share card)
+
+**DupeCard gets a new top section** above the verdict bar:
 
 ```text
-[ Home / Capture ]   →   [ Scanning ]   →   [ Results ]
-   fixed, no scroll       fixed, no scroll      scrollable
-   big shutter button     full-screen modal     standard list
+┌──────────────────────────────────────────┐
+│  LOOKALIKE PACKAGING  ·  92% visual      │
+│  ⚠ Higher risk than the original         │
+└──────────────────────────────────────────┘
 ```
 
-- **Home**: full-viewport, no scroll. Centered viewfinder, large primary "shutter" button, ghost "Photo Library" button — exactly the layout pattern of Camera.app / Apple's Visual Look Up.
-- **Scanning**: full-screen modal overlay with an animated ScanLine sweep over the captured photo (like iOS Visual Look Up's shimmer) — also non-scrolling.
-- **Results**: scrollable (this is the only screen iOS would let scroll, like a Detail view). iOS-style large title ("Your Dupe"), back chevron in the top-left, sticky bottom action bar with "Shop on Google" as a primary pill.
+**Below the formula breakdown**, a new "Risk check" panel:
 
-All screens respect iOS safe areas (notch / Dynamic Island top, home indicator bottom).
+- Shaded amber when `Higher risk`, neutral when `Comparable`, soft green when `Lower risk`
+- Lists `riskFactors` as chips with a small warning icon
+- Lists `missingActives` under "What you give up"
+- Closes with the `safetyNote` in italic, attributed to the esthetician voice
 
-## Technical changes
+**ShareCard** gets a small "Risk: Higher / Comparable / Lower" pill next to the verdict pill, so when someone shares the card on TikTok the warning travels with it.
 
-### 1. PWA install (manifest already shipped) + viewport-fit
-- `index.html` / root `head`: add `viewport-fit=cover` to the existing viewport meta so safe-area insets resolve. Keep `apple-mobile-web-app-capable=yes` (already set).
-- Manifest already ships `display: standalone` — no service worker, per the project's PWA guidance (avoids preview iframe issues).
+**ScanListItem** (history + saved): if `riskLevel === "Higher risk"`, show a tiny amber dot next to the match score so risky dupes are visible at a glance in the list.
 
-### 2. Safe-area CSS tokens (`src/styles.css`)
-- Add CSS variables wrapping `env(safe-area-inset-*)` with fallbacks, exposed as Tailwind-friendly utility classes:
-  - `.pt-safe`, `.pb-safe`, `.pl-safe`, `.pr-safe`
-  - `.min-h-screen-safe` → `min-height: 100dvh` (dynamic viewport, accounts for iOS URL bar)
-  - `.h-screen-safe` → `height: 100dvh`
-- Add `overscroll-behavior: none` and `touch-action: manipulation` on `body` to kill rubber-band scroll on the home/scanning screens.
-- Add `-webkit-tap-highlight-color: transparent` globally.
+## Backend / data
 
-### 3. Scanner state machine → 3 distinct screen components
-Refactor `src/components/scanner.tsx`:
-- Split into `<HomeScreen />`, `<ScanningScreen />` (fullscreen modal), `<ResultsScreen />`.
-- Home + Scanning use `h-screen-safe` and `overflow-hidden` (no scroll).
-- Results uses normal scrolling but with safe-area-aware sticky header and bottom CTA bar.
-- Stage transitions get a 200ms iOS-flavored cross-fade + slight scale (matches push-from-right / modal-up feel without a router change).
+- No DB migration. The `scans.analysis` column is already `jsonb`, so new fields land there automatically. Older scans without the new fields render gracefully (fields are optional in the type and the UI uses conditional rendering).
+- Update the `DupeAnalysis` TypeScript type and the `analyze_dupe` tool JSON schema in `src/server/scan.functions.ts` to include the new fields as required outputs.
+- `saveScan` keeps writing the full analysis blob; no changes needed there.
+- The new verdict `"Risky dupe"` gets its own style entry in `verdictStyles` (amber background, warning icon).
 
-### 4. iOS-style chrome
-- **Header (`src/components/app-header.tsx`)**: shorter, true 44pt-equivalent height, `pt-safe`, hairline bottom border at 0.5px (`border-b-[0.5px]`), no shadow. The wordmark stays but smaller — iOS large-title pattern means the brand mark lives small in the nav bar and the "screen title" lives below.
-- **New `<IOSScreen />` wrapper component** in `src/components/ios-screen.tsx`: provides the standard iOS view structure (large title, optional back button, content area, optional bottom toolbar) so screens stay consistent.
+## Files I'll touch
 
-### 5. Icon swap to SF-Symbols-equivalent
-Replace lucide icons with the closest SF-Symbols-equivalent lucide variants (lucide already ships SF-aligned shapes — we just pick the right ones and standardize stroke width):
-- `Camera` → `Camera` at `strokeWidth={1.5}` (SF uses thinner strokes)
-- `ImageUp` → `Images` (matches SF `photo.on.rectangle`)
-- `X` → `X` at `strokeWidth={2}` in a tinted circle (matches iOS close button)
-- `RotateCcw` → `RotateCw` (iOS uses clockwise refresh)
-- `ScanLine` → keep, it maps to SF `viewfinder`
-- `ChevronLeft` for back button (matches iOS `chevron.backward`)
-- All icons standardized to `strokeWidth={1.75}` and slightly larger sizes, matching SF Symbol weight: Regular.
-- The shutter button on Home becomes a large 72px circular button (iOS Camera shutter shape) with a thin outer ring.
+- `src/server/scan.functions.ts` — extend `DupeAnalysis` type, expand the system prompt, add the new fields to the tool schema
+- `src/components/dupe-card.tsx` — add the lookalike/risk header band, risk-check panel, "Risky dupe" verdict style
+- `src/components/share-card.tsx` — add risk pill next to verdict pill
+- `src/components/scan-list-item.tsx` — amber risk dot when `riskLevel === "Higher risk"`
 
-### 6. iOS-style buttons
-- Pill buttons get `active:scale-[0.97]` + `transition-transform duration-100` for the iOS press feedback.
-- Replace `hover:` styles with `active:` on touch devices (hover doesn't apply on iOS).
-- Sticky bottom action bar on Results screen uses backdrop-blur + `pb-safe` so it sits above the home indicator.
+## What I won't do (yet)
 
-### 7. Results screen polish
-- Sticky top bar: back chevron (returns to Home) + small "Dupli" wordmark, with a hairline border.
-- Sticky bottom bar: "Shop on Google" primary pill (full-width, 50px tall, iOS button height) — moved out of the card and into the screen chrome where iOS would put a primary action.
-- Card layout inside stays as-is (already looks editorial).
+- I won't add a separate "Compare to a brand I name" flow — the camera still drives everything.
+- I won't change history/saved schemas. The richer data lives inside the existing `analysis` jsonb.
+- I won't add an ingredient-by-ingredient hazard database. The risk read comes from the AI's reasoning over the formula it identified, not a static lookup.
 
-## Out of scope (intentionally)
-
-- No service worker / offline support — Lovable PWA guidance explicitly warns against it in the preview iframe. Installable via manifest only.
-- No native-feeling page transitions via a router (would require restructuring routes); stage cross-fades are sufficient.
-- No haptics (`navigator.vibrate` is unreliable on iOS Safari and doesn't fire in standalone PWAs).
+After you approve, I'll implement and you can scan one of the Dollar Tree screenshots to see the new risk-aware verdict in action.
