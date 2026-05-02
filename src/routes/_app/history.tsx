@@ -57,7 +57,13 @@ function HistoryPage() {
         )}
         {error && (
           <div className="rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-3 text-center text-[13px] text-destructive">
-            {error}
+            <div>{error}</div>
+            <button
+              onClick={load}
+              className="tap mt-2 inline-flex h-8 items-center justify-center rounded-[10px] bg-destructive px-3 text-[12px] font-semibold text-destructive-foreground"
+            >
+              Try again
+            </button>
           </div>
         )}
         {scans && scans.length === 0 && <EmptyState />}
