@@ -92,6 +92,7 @@ function ScanDetailPage() {
     <ResultsScreen
       analysis={analysis}
       preview={preview}
+      scanId={id}
       isSaved={isSaved}
       canSave
       onToggleSave={handleToggleSave}
