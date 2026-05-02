@@ -78,8 +78,10 @@ export type Database = {
           created_at: string
           id: string
           last_error: string | null
+          mode: string
           priority: number
           processed_at: string | null
+          product_id: string | null
           product_slug: string | null
           reason: string
           status: string
@@ -90,8 +92,10 @@ export type Database = {
           created_at?: string
           id?: string
           last_error?: string | null
+          mode?: string
           priority?: number
           processed_at?: string | null
+          product_id?: string | null
           product_slug?: string | null
           reason?: string
           status?: string
@@ -102,8 +106,10 @@ export type Database = {
           created_at?: string
           id?: string
           last_error?: string | null
+          mode?: string
           priority?: number
           processed_at?: string | null
+          product_id?: string | null
           product_slug?: string | null
           reason?: string
           status?: string
