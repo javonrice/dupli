@@ -1,56 +1,67 @@
-## The problem
+# Why scans feel weak (the actual problem)
 
-Right now `crossReferenceDupeDb` requires an **exact slug match**:
+The database isn't worthless — we just aren't reaching it. Three concrete issues from logs + DB inspection:
 
-- AI returns: `CeraVe / Hydrating Facial Cleanser` → slug `cerave/hydrating-facial-cleanser`
-- DB has: `CeraVe / Hydrating Cleanser` → slug `cerave/hydrating-cleanser`
-- **MISS**, even though the product is right there.
+1. **Brand mismatch.** AI returns `NYX Professional Makeup`, DB stores `nyx-cosmetics`. Our slug variants only handle the `the-` prefix, so we get **0 candidates** and skip straight to a global FTS that finds a different brand at 0.52.
+2. **The Ordinary scan only scored 0.60** because it matched in Tier 3 (cross-brand FTS) instead of Tier 2 (same brand). Tier 2 missed because the AI returned `Niacinamide 10% + Zinc 1% Oil Control Serum` while the DB row is `Niacinamide 10% + Zinc 1%` — Jaccard distance got dragged down by the extra "oil control serum" tokens, falling under our 0.4 floor.
+3. **We never use the 109,263 dupe edges intelligently.** When a product has no rank-1 dupe we give up. We should fall through to "products with the most shared ingredients in the same DB-defined family."
 
-I confirmed this against real data: CeraVe alone has dozens of variants (`hydrating-cleanser`, `hydrating-cleanser-bar`, `hydrating-cream-to-foam-cleanser`, `foaming-facial-cleanser`...). The AI rarely returns SkinSort's exact wording. That's why your 3 scans all came back empty despite 47k products in the DB.
+What we have to work with: 46,689 products, **109,263 SkinSort dupe edges** with `ingredient_match` / `attribute_match` / `shared_ingredients_count` / `rationale`, full `search_vector` on every product, brand storefront images on 99% of rows. We do **not** have populated `category`, `free_from`, `good_for`, `contains`, or per-product ingredient lists — so any "bottle type" / "formula" matching has to be derived from product names + the dupe graph SkinSort already computed for us.
 
-## The fix: 3-tier fuzzy lookup
+# The plan: a 5-tier resolver, then a graph walk
 
-Replace the single slug query with a smarter `findProductSmart(brand, productName)` that tries progressively looser matches.
+No extra AI call needed. The lookup itself stays deterministic SQL; AI is only the fallback if all 5 tiers fail.
 
-```text
-TIER 1 — Exact slug                              (current behavior, kept)
-  e.g. cerave / hydrating-cleanser
-       → instant hit, sub-10ms
+## Tier 1 — Exact slug (unchanged)
+`brand_slug` IN variants AND `product_slug` = exact. Already works when the AI happens to be exact.
 
-TIER 2 — Same brand, fuzzy product name          (NEW)
-  Pull all CeraVe products (≤ a few hundred rows, indexed on brand_slug),
-  rank in JS using token-set Jaccard similarity:
-    "Hydrating Facial Cleanser" tokens: {hydrating, facial, cleanser}
-    "Hydrating Cleanser"        tokens: {hydrating, cleanser}
-    Jaccard = 2/3 = 0.67  →  HIT
-  Threshold: score ≥ 0.4
+## Tier 2 — Brand alias resolution (NEW, fixes NYX class of bugs)
+Replace the tiny `the-/no-the-` variant list with a real normalizer that strips and adds common brand suffix noise the AI loves to append:
 
-TIER 3 — Cross-brand full-text search            (NEW, last resort)
-  Use the existing `search_vector` GIN index with `to_tsquery('simple', ...)`.
-  Catches cases where AI got the brand slightly wrong.
-  Threshold: score ≥ 0.5 with a +0.15 bonus when the brand name still matches.
-```
+- strip: `professional`, `makeup`, `cosmetics`, `beauty`, `skincare`, `skin-care`, `paris`, `london`, `new-york`, `co`, `inc`
+- also try the first 1-2 tokens of the brand alone (`nyx-professional-makeup` → `nyx`)
+- also try `the-` prefix toggle (already there)
 
-I verified the FTS index works: querying `'hydrating | facial | cleanser'` against `search_vector` returns "Hydrating Cleanser" as a top result for CeraVe.
+Build a `Set<string>` of every plausible slug, then `WHERE brand_slug IN (...)`. With this, NYX hits, L'Oréal Paris hits, Maybelline New York hits, etc.
 
-## Other improvements bundled in
+## Tier 3 — Brand-scoped fuzzy (current Tier 2, with smarter scoring)
+Same brand candidates, but rank with:
 
-1. **Update displayed name to the verified one** — when we match `Hydrating Facial Cleanser` → `Hydrating Cleanser`, show the canonical name so the user sees what's actually in our DB (and so the share card / history reflect reality).
-2. **Log every lookup** — `[dupedb] HIT via brand_fuzzy(0.67): "..." -> "..."` so we can watch hit-rate in worker logs and tune thresholds.
-3. **Stopwords** — strip filler words (`the, and, with, for`) from tokens so they don't dilute similarity scores.
-4. **Length penalty** — prevent matching `Hydrating Cleanser` with the much longer `Hydrating Mineral Sunscreen SPF 30 Face Lotion` just because they share one token.
+- Jaccard on tokens (current)
+- **plus** trigram similarity on the full normalized name (catches "Niacinamide 10% + Zinc 1%" ≈ "Niacinamide 10% + Zinc 1% Oil Control Serum")
+- **plus** a "core actives" bonus: if both names contain the same headline ingredient token (`niacinamide`, `retinol`, `salicylic`, `vitamin-c`, `hyaluronic`, etc.), +0.15
+- drop floor from 0.4 → 0.35 once these signals are in
 
-## Files changed
+This is the single biggest win for "almost the right name in the right brand."
 
-- `src/server/scan.functions.ts` — replace `crossReferenceDupeDb` with the smarter lookup; add `findProductSmart`, `tokenize`, `rankBySimilarity` helpers. (~120 lines diff, all internal — no API or schema changes.)
+## Tier 4 — Cross-brand FTS (current Tier 3, raised floor)
+Keep at 0.6 minimum overall. Already prevents the "Life / Niacinamide" misfire.
 
-## What this doesn't do (yet)
+## Tier 5 — NEW: Sibling product fallback
+When Tiers 1-4 return a product but that product has **no rows in `dupes`** (or the AI's brand was unknown but Tier 3 still found a brand match), pivot to the dupe graph:
 
-- No `pg_trgm` extension or stored procedure — pure JS ranking is fast enough for ≤500 candidates per brand and avoids a migration. If we later want sub-10ms cross-brand fuzzy matching at scale, we add `pg_trgm` indexes + a Postgres function in a follow-up.
-- Still strict "DB-only" mode — AI is only used to identify the scanned product; the dupe itself comes 100% from our DB. If TIER 1/2/3 all miss, we still return "No dupe found" and enqueue.
+1. Take the matched product.
+2. Look up its top 5 `dupes` rows ordered by `overall_match DESC`.
+3. If still empty, find products with the **highest token overlap on product name within a different brand** and a similar headline-active token, then surface the one our database itself rates highest.
 
-## Expected outcome
+We already have these 109k edges precomputed by SkinSort — use them as the source of truth for matchScore (they range 70-100, much more confident than our current 0.6 fuzzy score).
 
-Hit-rate jumps from probably <20% (exact slug) to 70–85% on popular brands. The 109k dupe pairs we already loaded actually start surfacing.
+## Score surfacing
+Right now we display `top.overall_match` (0-100 from SkinSort) but only when Tier 1/2 hit. Make every successful tier surface the SkinSort score from the dupe row, never the fuzzy lookup score. The lookup score is for *ranking candidates*, not for telling the user how good the dupe is. That's why The Ordinary said "60" — we showed the FTS confidence instead of the dupe's real 90+ ingredient match.
 
-Approve and I'll ship it, then you scan the same 3 products again and we'll see live hits in the logs.
+## Don't queue garbage
+If the AI returns a brand starting with `Unbranded`, `Generic`, `Store Brand`, or empty/unknown, skip ingestion-queue insertion entirely. We saw `Unbranded (Dollar General)` queued — that will never resolve.
+
+# What we are intentionally NOT doing
+
+- **No second AI call for matching.** The user explicitly wanted to wait on that. The 5-tier resolver above should handle 80%+ of the misses we're seeing without spending more credits.
+- **No schema change.** The columns we'd want for "bottle type / category" matching (`category`, `contains`) are empty across all 46k rows. Backfilling them is a separate, larger ingestion project — flag it for later, don't block this fix on it.
+- **No re-ingestion.** SkinSort already gave us the dupe graph; we just need to walk it.
+
+# Files touched
+- `src/server/scan.functions.ts` — replace `brandSlugVariants`, `findProductSmart`, `rankBySimilarity`, and the `crossReferenceDupeDb` score-surfacing block. Add the unbranded-skip guard.
+
+# Acceptance check (on you to retry after deploy)
+- Scan an NYX product → logs show `nyx-cosmetics` in variants, Tier 2/3 hits, score reflects SkinSort's 80+ overall_match, not 0.60.
+- Re-scan The Ordinary Niacinamide → matches `the-ordinary` in Tier 2 (not Tier 3), score shows the real SkinSort dupe rating.
+- Scan something genuinely not in DB → logs show "no-match" diagnostics with full variant list, no `Unbranded` rows queued.
