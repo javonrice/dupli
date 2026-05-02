@@ -274,10 +274,16 @@ function ResultsScreen({
   analysis,
   preview,
   onReset,
+  isSaved,
+  canSave,
+  onToggleSave,
 }: {
   analysis: DupeAnalysis;
   preview: string | null;
   onReset: () => void;
+  isSaved: boolean;
+  canSave: boolean;
+  onToggleSave: () => void | Promise<void>;
 }) {
   const dupe = analysis.dupe;
   const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
@@ -287,13 +293,28 @@ function ResultsScreen({
       title="Result"
       back={{ onClick: onReset }}
       trailing={
-        <button
-          onClick={onReset}
-          aria-label="New scan"
-          className="tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground"
-        >
-          <RotateCw className="h-4 w-4" strokeWidth={2} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onToggleSave}
+            disabled={!canSave}
+            aria-label={isSaved ? "Remove from saved" : "Save"}
+            aria-pressed={isSaved}
+            className="tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground disabled:opacity-40"
+          >
+            <Bookmark
+              className="h-4 w-4"
+              strokeWidth={2}
+              fill={isSaved ? "currentColor" : "none"}
+            />
+          </button>
+          <button
+            onClick={onReset}
+            aria-label="New scan"
+            className="tap flex h-9 w-9 items-center justify-center rounded-full bg-secondary/60 text-foreground"
+          >
+            <RotateCw className="h-4 w-4" strokeWidth={2} />
+          </button>
+        </div>
       }
       bottomBar={
         link ? (
