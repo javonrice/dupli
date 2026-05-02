@@ -4,9 +4,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-const DEFAULT_BATCH = 30; // ~1 every 2s = under 1 req/sec average
-const MIN_DELAY_MS = 1100;
-const JITTER_MS = 400;
+const DEFAULT_BATCH = 8; // keep total under ~30s worker budget
+const MIN_DELAY_MS = 250;
+const JITTER_MS = 200;
+const STALE_PROCESSING_MS = 5 * 60 * 1000; // reclaim items stuck >5min
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -29,7 +30,15 @@ export const Route = createFileRoute("/api/public/hooks/run-ingestion")({
         } catch {
           // empty body is fine
         }
-        const batch = Math.min(Math.max(body.batch ?? DEFAULT_BATCH, 1), 60);
+        const batch = Math.min(Math.max(body.batch ?? DEFAULT_BATCH, 1), 15);
+
+        // Reclaim items stuck in "processing" from a previous worker that timed out.
+        const staleCutoff = new Date(Date.now() - STALE_PROCESSING_MS).toISOString();
+        await supabaseAdmin
+          .from("ingestion_queue")
+          .update({ status: "pending" })
+          .eq("status", "processing")
+          .lt("created_at", staleCutoff);
 
         // Pick up N pending items, mark them processing atomically.
         const { data: picks, error: pickErr } = await supabaseAdmin
