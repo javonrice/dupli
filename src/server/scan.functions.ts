@@ -222,14 +222,14 @@ async function findProductImage(brand?: string | null, productName?: string | nu
 
   const ddg = await searchDuckDuckGoImages(query);
   if (ddg && ddg.length > 0) {
-    const best = pickBestProductImage(ddg, brand, productName);
+    const best = pickBestProductImage(ddg, safeBrand, safeName);
     console.log("[findProductImage] ddg found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
     return best.image;
   }
 
   const bing = await searchBingImages(query);
   if (bing && bing.length > 0) {
-    const best = pickBestProductImage(bing, brand, productName);
+    const best = pickBestProductImage(bing, safeBrand, safeName);
     console.log("[findProductImage] bing found:", best.image, "score:", best.score, "from:", best.url ?? best.source);
     return best.image;
   }
