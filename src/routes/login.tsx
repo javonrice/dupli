@@ -55,7 +55,7 @@ function LoginPage() {
     <div className="flex h-screen-safe flex-col bg-background">
       <div className="pt-safe" />
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <img src={wordmark} alt="Dupli" className="mb-10 h-16 w-auto" width={1536} height={1024} />
+        <img src={wordmark} alt="Dupli" className="mb-10 h-16 w-auto" width={887} height={414} />
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           AI Dupe Finder
         </p>
