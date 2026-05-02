@@ -90,6 +90,12 @@
   /* Dynamic-viewport sizing (accounts for iOS Safari's collapsing URL bar) */
   .h-screen-safe     { height: 100dvh; }
   .min-h-screen-safe { min-height: 100dvh; }
+  /* Bottom tab bar height (icon + label + padding + safe-area inset).
+     Screens inside /_app reserve this space so content/CTAs are never covered. */
+  :root { --tab-bar-h: calc(58px + env(safe-area-inset-bottom, 0px)); }
+  .pb-tabbar             { padding-bottom: var(--tab-bar-h); }
+  .bottom-tabbar         { bottom: var(--tab-bar-h); }
+  .h-screen-minus-tabbar { height: calc(100dvh - var(--tab-bar-h)); }
   /* iOS-style tap feedback */
   .tap { transition: transform 100ms ease-out, opacity 150ms ease-out; }
   .tap:active { transform: scale(0.97); }
