@@ -158,9 +158,11 @@ function SharePage() {
     }
   }, [analysis, downloading]);
 
+  // Always go to the result detail page, never `history.back()`. The scanner
+  // resets its in-memory state when navigating to /share, so going back in
+  // history would land on the empty camera screen instead of the result.
   const goBack = useCallback(() => {
-    if (window.history.length > 1) window.history.back();
-    else navigate({ to: "/scan/$id", params: { id } });
+    navigate({ to: "/scan/$id", params: { id } });
   }, [navigate, id]);
 
   if (error) {
