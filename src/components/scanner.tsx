@@ -172,6 +172,8 @@ export function Scanner() {
           canSave={!!scanId}
           onToggleSave={handleToggleSave}
           onReset={reset}
+          onShare={handleShare}
+          preparingShare={preparingShare}
         />
       )}
     </>
