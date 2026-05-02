@@ -34,6 +34,9 @@ function HistoryPage() {
 
   useEffect(() => {
     load();
+    const onFocus = () => load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, [load]);
 
   return (
