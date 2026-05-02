@@ -18,6 +18,11 @@ const TABS: Tab[] = [
 
 export function TabBar() {
   const { pathname } = useLocation();
+  const hidden = useTabBarHidden();
+
+  // Hide on scan detail + share routes (and via imperative useHideTabBar).
+  const routeHidden = /^\/scan\//.test(pathname);
+  if (hidden || routeHidden) return null;
 
   return (
     <nav className="pb-safe hairline-t fixed inset-x-0 bottom-0 z-40 bg-background/90 backdrop-blur-xl">
