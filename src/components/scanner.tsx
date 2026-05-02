@@ -41,18 +41,25 @@ async function downscaleImage(dataUrl: string, maxDim = 1024): Promise<string> {
 
 export function Scanner() {
   const scan = useServerFn(scanProduct);
+  const persistScan = useServerFn(saveScan);
+  const toggleSaved = useServerFn(setSaved);
   const fileRef = useRef<HTMLInputElement>(null);
   const cameraRef = useRef<HTMLInputElement>(null);
 
   const [stage, setStage] = useState<Stage>("idle");
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<DupeAnalysis | null>(null);
+  const [scanId, setScanId] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingBookmark, setSavingBookmark] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setStage("idle");
     setPreview(null);
     setAnalysis(null);
+    setScanId(null);
+    setIsSaved(false);
     setError(null);
     if (fileRef.current) fileRef.current.value = "";
     if (cameraRef.current) cameraRef.current.value = "";
@@ -75,9 +82,31 @@ export function Scanner() {
       }
       setAnalysis(result);
       setStage("results");
+
+      // Persist scan to history (best-effort, don't block UI).
+      persistScan({ data: { analysis: result, thumbnailDataUrl: small } })
+        .then((r) => {
+          if (r.id) setScanId(r.id);
+        })
+        .catch((e) => console.warn("Failed to persist scan", e));
     },
-    [scan],
+    [scan, persistScan],
   );
+
+  const handleToggleSave = useCallback(async () => {
+    if (!scanId || savingBookmark) return;
+    const next = !isSaved;
+    setIsSaved(next);
+    setSavingBookmark(true);
+    try {
+      await toggleSaved({ data: { scanId, saved: next } });
+    } catch (e) {
+      console.warn("Failed to toggle save", e);
+      setIsSaved(!next); // revert
+    } finally {
+      setSavingBookmark(false);
+    }
+  }, [scanId, isSaved, savingBookmark, toggleSaved]);
 
   return (
     <>
