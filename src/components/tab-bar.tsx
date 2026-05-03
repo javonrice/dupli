@@ -4,7 +4,7 @@ import type { LucideIcon } from "lucide-react";
 import { useTabBarHidden } from "@/lib/tab-bar-visibility";
 
 type Tab = {
-  to: "/" | "/history" | "/saved" | "/profile";
+  to: "/app" | "/history" | "/saved" | "/profile";
   label: string;
   icon: LucideIcon;
 };
