@@ -4,13 +4,13 @@ import type { LucideIcon } from "lucide-react";
 import { useTabBarHidden } from "@/lib/tab-bar-visibility";
 
 type Tab = {
-  to: "/" | "/history" | "/saved" | "/profile";
+  to: "/app" | "/history" | "/saved" | "/profile";
   label: string;
   icon: LucideIcon;
 };
 
 const TABS: Tab[] = [
-  { to: "/", label: "Scan", icon: Camera },
+  { to: "/app", label: "Scan", icon: Camera },
   { to: "/history", label: "History", icon: Clock },
   { to: "/saved", label: "Saved", icon: Bookmark },
   { to: "/profile", label: "Profile", icon: User },
@@ -29,7 +29,7 @@ export function TabBar() {
     <nav className="pb-safe hairline-t fixed inset-x-0 bottom-0 z-40 bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-md items-stretch justify-around px-2 pt-1.5">
         {TABS.map(({ to, label, icon: Icon }) => {
-          const active = to === "/" ? pathname === "/" : pathname.startsWith(to);
+          const active = to === "/app" ? pathname === "/app" : pathname.startsWith(to);
           return (
             <Link
               key={to}

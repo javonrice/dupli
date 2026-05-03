@@ -13,10 +13,11 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
-import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
+import { Route as AppAppRouteImport } from './routes/_app/app'
 import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
 import { Route as AppPProductIdRouteImport } from './routes/_app/p.$productId'
 import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
@@ -45,10 +46,10 @@ const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppIndexRoute = AppIndexRouteImport.update({
+const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppSavedRoute = AppSavedRouteImport.update({
   id: '/saved',
@@ -63,6 +64,11 @@ const AppProfileRoute = AppProfileRouteImport.update({
 const AppHistoryRoute = AppHistoryRouteImport.update({
   id: '/history',
   path: '/history',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAppRoute = AppAppRouteImport.update({
+  id: '/app',
+  path: '/app',
   getParentRoute: () => AppRoute,
 } as any)
 const AppScanIdRoute = AppScanIdRouteImport.update({
@@ -111,10 +117,11 @@ const AppCommunityBrandProductRoute =
   } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof AppIndexRoute
+  '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/app': typeof AppAppRoute
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
@@ -128,13 +135,14 @@ export interface FileRoutesByFullPath {
   '/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/app': typeof AppAppRoute
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
-  '/': typeof AppIndexRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
@@ -145,14 +153,15 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
+  '/_app/app': typeof AppAppRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
-  '/_app/': typeof AppIndexRoute
   '/_app/p/$productId': typeof AppPProductIdRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -169,6 +178,7 @@ export interface FileRouteTypes {
     | '/login'
     | '/privacy'
     | '/terms'
+    | '/app'
     | '/history'
     | '/profile'
     | '/saved'
@@ -182,13 +192,14 @@ export interface FileRouteTypes {
     | '/scan/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/'
     | '/login'
     | '/privacy'
     | '/terms'
+    | '/app'
     | '/history'
     | '/profile'
     | '/saved'
-    | '/'
     | '/p/$productId'
     | '/community/$brand/$product'
     | '/scan/$id/share'
@@ -198,14 +209,15 @@ export interface FileRouteTypes {
     | '/scan/$id'
   id:
     | '__root__'
+    | '/'
     | '/_app'
     | '/login'
     | '/privacy'
     | '/terms'
+    | '/_app/app'
     | '/_app/history'
     | '/_app/profile'
     | '/_app/saved'
-    | '/_app/'
     | '/_app/p/$productId'
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
@@ -217,6 +229,7 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -256,12 +269,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/': {
-      id: '/_app/'
+    '/': {
+      id: '/'
       path: '/'
       fullPath: '/'
-      preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRoute
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/saved': {
       id: '/_app/saved'
@@ -282,6 +295,13 @@ declare module '@tanstack/react-router' {
       path: '/history'
       fullPath: '/history'
       preLoaderRoute: typeof AppHistoryRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/app': {
+      id: '/_app/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppAppRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/scan/$id': {
@@ -358,20 +378,20 @@ const AppScanIdRouteWithChildren = AppScanIdRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAppRoute: typeof AppAppRoute
   AppHistoryRoute: typeof AppHistoryRoute
   AppProfileRoute: typeof AppProfileRoute
   AppSavedRoute: typeof AppSavedRoute
-  AppIndexRoute: typeof AppIndexRoute
   AppPProductIdRoute: typeof AppPProductIdRoute
   AppScanIdRoute: typeof AppScanIdRouteWithChildren
   AppCommunityBrandProductRoute: typeof AppCommunityBrandProductRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAppRoute: AppAppRoute,
   AppHistoryRoute: AppHistoryRoute,
   AppProfileRoute: AppProfileRoute,
   AppSavedRoute: AppSavedRoute,
-  AppIndexRoute: AppIndexRoute,
   AppPProductIdRoute: AppPProductIdRoute,
   AppScanIdRoute: AppScanIdRouteWithChildren,
   AppCommunityBrandProductRoute: AppCommunityBrandProductRoute,
@@ -380,6 +400,7 @@ const AppRouteChildren: AppRouteChildren = {
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,

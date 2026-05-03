@@ -50,7 +50,7 @@ function CommunityDupePage() {
 
   const goBack = useCallback(() => {
     if (window.history.length > 1) window.history.back();
-    else navigate({ to: "/" });
+    else navigate({ to: "/app" });
   }, [navigate]);
 
   if (error) {
@@ -59,7 +59,7 @@ function CommunityDupePage() {
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           <p className="text-[14px] text-muted-foreground">{error}</p>
           <Link
-            to="/"
+            to="/app"
             className="tap mt-4 inline-flex h-10 items-center justify-center rounded-[12px] bg-foreground px-4 text-[13px] font-semibold text-background"
           >
             Back to home
@@ -245,7 +245,7 @@ function CommunityDupePage() {
             Have this product? Snap it for a personalized match.
           </p>
           <Link
-            to="/"
+            to="/app"
             className="tap mt-2 inline-flex h-9 items-center justify-center gap-1 rounded-[10px] bg-foreground px-3 text-[12px] font-semibold text-background"
           >
             Scan it

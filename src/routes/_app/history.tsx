@@ -95,7 +95,7 @@ function EmptyState() {
         Snap a product on the Scan tab. Every scan you take shows up here.
       </p>
       <Link
-        to="/"
+        to="/app"
         className="tap mt-5 flex h-[44px] items-center justify-center gap-2 rounded-[14px] bg-foreground px-5 text-[14px] font-semibold text-background"
       >
         <Camera className="h-4 w-4" strokeWidth={2} />
