@@ -58,7 +58,7 @@ function ProductDetailPage() {
 
   const goBack = useCallback(() => {
     if (window.history.length > 1) window.history.back();
-    else navigate({ to: "/" });
+    else navigate({ to: "/app" });
   }, [navigate]);
 
   if (loading) {
@@ -79,7 +79,7 @@ function ProductDetailPage() {
             {error ?? "Product not found."}
           </p>
           <Link
-            to="/"
+            to="/app"
             className="tap mt-4 inline-flex h-10 items-center justify-center rounded-[12px] bg-foreground px-4 text-[13px] font-semibold text-background"
           >
             Back to home

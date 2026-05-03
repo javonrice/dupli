@@ -33,7 +33,7 @@ function LoginPage() {
   }
 
   if (user) {
-    return <Navigate to="/" />;
+    return <Navigate to="/app" />;
   }
 
   const handleGoogle = async () => {
