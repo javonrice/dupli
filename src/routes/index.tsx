@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
         content:
           "Point your camera at any beauty product and Dupli finds the affordable dupe in seconds.",
       },
-      { name: "google-site-verification", content: "nWTWCWzGuQ32ZLQ-CEuz0PvHL91XoFsi1a_DeTIaHYg" },
+      { name: "google-site-verification", content: "JVhpBb4bYMI2c1dzuaBYXWOoBehfE7f__YyB3PZvQBc" },
     ],
   }),
   component: LandingPage,
