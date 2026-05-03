@@ -29,7 +29,7 @@ export function TabBar() {
     <nav className="pb-safe hairline-t fixed inset-x-0 bottom-0 z-40 bg-background/90 backdrop-blur-xl">
       <div className="mx-auto flex max-w-md items-stretch justify-around px-2 pt-1.5">
         {TABS.map(({ to, label, icon: Icon }) => {
-          const active = to === "/" ? pathname === "/" : pathname.startsWith(to);
+          const active = to === "/app" ? pathname === "/app" : pathname.startsWith(to);
           return (
             <Link
               key={to}
