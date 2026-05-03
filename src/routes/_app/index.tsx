@@ -178,6 +178,13 @@ function DiscoveryHub({ error }: { error: string | null }) {
           </>
         )}
 
+        {/* Footer links */}
+        <div className="flex items-center justify-center gap-4 pt-2 text-[12px] text-muted-foreground">
+          <a href="/privacy" className="hover:text-foreground hover:underline">Privacy</a>
+          <span aria-hidden>·</span>
+          <a href="/terms" className="hover:text-foreground hover:underline">Terms</a>
+        </div>
+
         {/* Extra space so the FAB doesn't cover the last card */}
         <div className="h-16" />
       </div>
