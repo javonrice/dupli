@@ -13,7 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getProductDetail, type ProductDetail } from "@/server/discover.functions";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
-import { CommunityDupeCard } from "@/components/home/community-dupe-card";
+
 
 export const Route = createFileRoute("/_app/p/$productId")({
   component: ProductDetailPage,
@@ -245,30 +245,59 @@ function ProductDetailPage() {
           </section>
         )}
 
-        {/* Dupes for this product */}
+        {/* Dupes for this product — image + price tiles, ranked by match */}
         {product.dupesForThis.length > 0 && (
           <section className="space-y-2">
             <h2 className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
               <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.5} />
               Dupes for this
             </h2>
-            <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="grid grid-cols-2 gap-3 pt-1">
               {product.dupesForThis.map((d) => (
-                <CommunityDupeCard key={d.id} dupe={d} variant="card" />
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* This is also a dupe for ... */}
-        {product.alsoDupeFor.length > 0 && (
-          <section className="space-y-2">
-            <h2 className="px-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
-              Also a dupe for
-            </h2>
-            <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {product.alsoDupeFor.map((d) => (
-                <CommunityDupeCard key={d.id} dupe={d} variant="card" />
+                <Link
+                  key={d.id}
+                  to="/p/$productId"
+                  params={{ productId: d.dupe.id }}
+                  className="tap group flex flex-col overflow-hidden rounded-[16px] border border-border bg-card text-left shadow-soft"
+                >
+                  <div className="relative">
+                    <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-secondary/40">
+                      {d.dupe.imageUrl ? (
+                        <img
+                          src={d.dupe.imageUrl}
+                          alt={`${d.dupe.brand} ${d.dupe.productName}`}
+                          loading="lazy"
+                          className="h-full w-full object-contain p-3"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <ShoppingBag className="h-7 w-7 text-muted-foreground/60" strokeWidth={1.5} />
+                      )}
+                    </div>
+                    <div className="absolute right-2 top-2 rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background shadow-soft">
+                      {d.overallMatch}%
+                    </div>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {d.dupe.brand}
+                      </div>
+                      <div className="line-clamp-1 font-display text-[13px] font-semibold leading-tight text-foreground">
+                        {d.dupe.productName}
+                      </div>
+                    </div>
+                    <div className="shrink-0 font-display text-[15px] font-bold tabular-nums text-foreground">
+                      {d.dupe.lowestPriceUsd != null && d.dupe.lowestPriceUsd > 0
+                        ? d.dupe.lowestPriceUsd < 10
+                          ? `$${d.dupe.lowestPriceUsd.toFixed(2)}`
+                          : `$${Math.round(d.dupe.lowestPriceUsd)}`
+                        : "—"}
+                    </div>
+                  </div>
+                </Link>
               ))}
             </div>
           </section>
