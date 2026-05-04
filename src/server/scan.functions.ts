@@ -363,7 +363,28 @@ export const scanProduct = createServerFn({ method: "POST" })
       if (!argsRaw) {
         return { result: null, error: "Couldn't read the product. Try a clearer, well-lit photo." };
       }
-      const parsed = normalizeAnalysis(JSON.parse(argsRaw) as Partial<DupeAnalysis>);
+      const rawArgs = JSON.parse(argsRaw) as Partial<DupeAnalysis> & {
+        isBeautyProduct?: boolean;
+        rejectionReason?: string;
+      };
+      if (rawArgs.isBeautyProduct === false) {
+        return {
+          result: null,
+          error:
+            (rawArgs.rejectionReason && rawArgs.rejectionReason.trim()) ||
+            "That doesn't look like a beauty or personal-care product. Try lotion, body wash, makeup, skincare, etc.",
+        };
+      }
+      const parsed = normalizeAnalysis(rawArgs);
+      // Belt-and-braces: reject if the detected category is clearly out of scope.
+      const cat = (parsed.original.category || "").toLowerCase();
+      const outOfScope = ["food", "beverage", "drink", "juice", "soda", "snack", "electronic", "appliance", "clothing", "apparel", "toy", "pet", "cleaner", "detergent"];
+      if (outOfScope.some((w) => cat.includes(w))) {
+        return {
+          result: null,
+          error: `That looks like ${parsed.original.category.toLowerCase()}, not a beauty or personal-care product.`,
+        };
+      }
 
       // Merge in SkinSort-mirrored community dupes for the scanned original.
       // Failure is silent — never blocks the scan.
