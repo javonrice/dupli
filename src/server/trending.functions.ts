@@ -11,7 +11,9 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   getDupeOfTheDay,
   getTrendingDupes,
+  getTrendingOriginals,
   type CommunityDupe,
+  type TrendingOriginal,
 } from "@/server/discover.functions";
 import { slugify } from "@/server/skinsort-slugs";
 
