@@ -50,11 +50,23 @@ function LoginPage() {
     return <Navigate to={next} />;
   }
 
-  const handleGoogle = async () => {
+  // iOS in-app webviews (BuildNatively, Capacitor, generic WKWebView wrappers)
+  // can't use Google OAuth — Google blocks them with `disallowed_useragent`.
+  // Apple Sign In works inside WKWebView, so on iOS in-app we swap providers.
+  const isIOSWebView = (() => {
+    if (typeof navigator === "undefined") return false;
+    const ua = navigator.userAgent || "";
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    if (!isIOS) return false;
+    const isSafari = /Safari\//.test(ua) && !/CriOS|FxiOS|EdgiOS/.test(ua);
+    return !isSafari;
+  })();
+
+  const handleOAuth = async (provider: "google" | "apple") => {
     setError(null);
     setSigningIn(true);
     try {
-      const result = await lovable.auth.signInWithOAuth("google", {
+      const result = await lovable.auth.signInWithOAuth(provider, {
         redirect_uri: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
       });
       if (result.error) {
@@ -67,6 +79,7 @@ function LoginPage() {
       setSigningIn(false);
     }
   };
+
 
   const handleResend = async () => {
     if (!pendingConfirmEmail) return;
