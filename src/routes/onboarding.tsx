@@ -48,11 +48,14 @@ import { LiveCamera } from "@/components/camera/live-camera";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
+  // Signed-in users go through the splash router (/) which decides between
+  // /app (active sub) and /paywall (no sub). Don't shortcut to /app here —
+  // that bypasses the paywall for signed-in users without a subscription.
   beforeLoad: async () => {
     const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await supabase.auth.getSession();
     if (data.session) {
-      throw redirect({ to: "/app" });
+      throw redirect({ to: "/" });
     }
   },
   head: () => ({
