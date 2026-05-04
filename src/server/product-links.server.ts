@@ -247,7 +247,7 @@ async function saveToCache(
           {
             brand_slug: brandSlug,
             product_slug: productSlug,
-            vendors: vendors as unknown as Record<string, unknown>[],
+            vendors: vendors as unknown as import("@/integrations/supabase/types").Json,
             source,
             resolved_at: new Date().toISOString(),
           },
