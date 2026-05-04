@@ -50,7 +50,7 @@ async function waitForOAuthSession(timeoutMs = 4000) {
   });
 }
 
-export const Route = createFileRoute("/")({
+export const Route = createFileRoute("/start")({
   beforeLoad: async () => {
     // First-time visitors (no completed onboarding) always start in onboarding,
     // regardless of whether they're signed in. Onboarding ends with either a
