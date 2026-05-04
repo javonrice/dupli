@@ -113,34 +113,6 @@ function PaywallPage() {
     track("paywall_viewed_after_result");
   }, []);
 
-  const INTENT_KEY = "dupli.paywall.intent";
-  const INTENT_TTL_MS = 15 * 60 * 1000;
-
-  const saveIntent = (kind: "trial" | "intro") => {
-    try {
-      window.sessionStorage.setItem(
-        INTENT_KEY,
-        JSON.stringify({ kind, plan, at: Date.now() }),
-      );
-    } catch {
-      /* ignore */
-    }
-  };
-  const consumeIntent = (): { kind: "trial" | "intro"; plan: Plan } | null => {
-    try {
-      const raw = window.sessionStorage.getItem(INTENT_KEY);
-      if (!raw) return null;
-      window.sessionStorage.removeItem(INTENT_KEY);
-      const parsed = JSON.parse(raw) as { kind: string; plan: string; at: number };
-      if (!parsed?.at || Date.now() - parsed.at > INTENT_TTL_MS) return null;
-      const k = parsed.kind === "intro" ? "intro" : "trial";
-      const p: Plan = parsed.plan === "monthly" ? "monthly" : "yearly";
-      return { kind: k, plan: p };
-    } catch {
-      return null;
-    }
-  };
-
   const startTrial = async (planOverride?: Plan) => {
     const chosen = planOverride ?? plan;
     track("trial_started", { plan: chosen });
