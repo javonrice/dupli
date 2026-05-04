@@ -1,4 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboarded } from "@/lib/onboarding";
 
@@ -38,7 +40,6 @@ async function waitForOAuthSession(timeoutMs = 4000) {
       const { data } = await supabase.auth.getSession();
       resolve(data.session);
     }, timeoutMs);
-    // Race: maybe the session is already set by the time we subscribed.
     supabase.auth.getSession().then(({ data }) => {
       if (data.session && !settled) {
         settled = true;
@@ -50,23 +51,55 @@ async function waitForOAuthSession(timeoutMs = 4000) {
   });
 }
 
+const ALLOWED_NEXT = ["/app", "/paywall"];
+
 export const Route = createFileRoute("/")({
   validateSearch: (s: Record<string, unknown>): { next?: string } => {
     const next = typeof s.next === "string" ? s.next : undefined;
     return next ? { next } : {};
   },
-  beforeLoad: async ({ search }) => {
-    const allowed = ["/app", "/paywall"];
-    const next =
-      search.next && allowed.includes(search.next) ? search.next : null;
-
-    if (typeof window !== "undefined" && !isOnboarded() && !next) {
-      throw redirect({ to: "/onboarding" });
-    }
-    const session = await waitForOAuthSession();
-    if (session) {
-      throw redirect({ to: next ?? "/app" });
-    }
-    throw redirect({ to: "/login" });
-  },
+  // IMPORTANT: do not redirect on the server. Onboarding state lives in
+  // localStorage, which only exists on the client. Resolving the destination
+  // server-side would always send fresh visitors to /login (no localStorage =
+  // looks "onboarded but signed out"), which is not native-app behavior.
+  // We render a tiny client-side splash and route from there.
+  component: IndexSplash,
 });
+
+function IndexSplash() {
+  const navigate = useNavigate();
+  const search = Route.useSearch();
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const next =
+        search.next && ALLOWED_NEXT.includes(search.next) ? search.next : null;
+
+      // 1. New install / not yet onboarded → onboarding (unless an explicit
+      //    `next=` was passed, e.g. from an OAuth callback).
+      if (!isOnboarded() && !next) {
+        if (!cancelled) navigate({ to: "/onboarding", replace: true });
+        return;
+      }
+
+      // 2. Onboarded — wait for any in-flight OAuth and then route.
+      const session = await waitForOAuthSession();
+      if (cancelled) return;
+      if (session) {
+        navigate({ to: next ?? "/app", replace: true });
+      } else {
+        navigate({ to: "/login", search: next ? { next } : undefined, replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate, search.next]);
+
+  return (
+    <div className="flex h-screen-safe items-center justify-center bg-background">
+      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
