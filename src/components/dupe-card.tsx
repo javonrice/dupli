@@ -18,7 +18,7 @@ const verdictStyles: Record<DupeAnalysis["verdict"], { icon: typeof Check; bg: s
 export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
   const {
     original, dupe, matchScore, verdict, notes, bestFor,
-    sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch,
+    sharedIngredients, uniqueToOriginal, uniqueToDupe,
     dupeType, packagingSimilarity, riskLevel, riskFactors, missingActives, safetyNote,
   } = analysis;
   // Older saved scans may not have framing/savingsPct — fall back to classic.
