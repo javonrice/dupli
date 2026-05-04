@@ -37,6 +37,27 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  const [logoTaps, setLogoTaps] = useState(0);
+
+  const handleLogoTap = async () => {
+    const next = logoTaps + 1;
+    setLogoTaps(next);
+    if (next >= 10) {
+      setLogoTaps(0);
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        /* ignore */
+      }
+      try {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+      } catch {
+        /* ignore */
+      }
+      window.location.href = "/onboarding";
+    }
+  };
 
   if (loading) {
     return (
@@ -120,7 +141,14 @@ function LoginPage() {
     <div className="flex h-screen-safe flex-col bg-background">
       <div className="pt-safe" />
       <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
-        <img src={wordmark} alt="Dupli" className="mb-10 h-16 w-auto" width={887} height={414} />
+        <img
+          src={wordmark}
+          alt="Dupli"
+          className="mb-10 h-16 w-auto cursor-pointer select-none"
+          width={887}
+          height={414}
+          onClick={handleLogoTap}
+        />
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           AI Dupe Finder
         </p>

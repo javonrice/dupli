@@ -50,22 +50,6 @@ function ProfilePage() {
     navigate({ to: "/login" });
   };
 
-  const handleResetApp = async () => {
-    if (!confirm("Reset app state? This clears local data and signs you out.")) return;
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      /* ignore */
-    }
-    try {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-    } catch {
-      /* ignore */
-    }
-    window.location.href = "/onboarding";
-  };
-
   const displayName =
     profile?.display_name ??
     user?.user_metadata?.full_name ??
@@ -141,12 +125,6 @@ function ProfilePage() {
               Sign out
             </button>
 
-            <button
-              onClick={handleResetApp}
-              className="tap mt-2 flex h-[44px] w-full items-center justify-center rounded-[14px] text-[13px] font-medium text-muted-foreground"
-            >
-              Reset app state (dev)
-            </button>
           </>
         )}
       </div>
