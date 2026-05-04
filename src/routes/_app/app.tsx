@@ -28,9 +28,10 @@ import wordmark from "@/assets/dupli-wordmark.png";
 
 export const Route = createFileRoute("/_app/app")({
   component: Index,
-  validateSearch: (s: Record<string, unknown>) => ({
-    checkout: typeof s.checkout === "string" ? s.checkout : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>): { checkout?: string } => {
+    const checkout = typeof s.checkout === "string" ? s.checkout : undefined;
+    return checkout ? { checkout } : {};
+  },
   head: () => ({
     meta: [
       { title: "Dupli — Snap a product, find the dupe" },
