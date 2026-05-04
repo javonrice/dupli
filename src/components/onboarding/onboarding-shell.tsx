@@ -42,7 +42,7 @@ export function OnboardingShell({
           ) : (
             <div className="h-9 w-9" aria-hidden />
           )}
-          <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+          <div className={`relative h-1.5 flex-1 overflow-hidden rounded-full bg-secondary transition-opacity ${hideProgress ? "opacity-0" : "opacity-100"}`}>
             <div
               className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-[width] duration-500 ease-out"
               style={{ width: `${pct}%` }}
