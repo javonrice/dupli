@@ -57,6 +57,7 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
           <div className="flex min-w-0 items-center gap-2">
             <Eye className="h-3.5 w-3.5 shrink-0 text-foreground/70" strokeWidth={2.25} />
             <span className="truncate text-[10px] font-semibold uppercase tracking-widest text-foreground">
+              {isSteal && dupeType === "Lookalike packaging" && "Caught a lookalike — "}
               {dupeType ?? "Dupe"}
               {typeof packagingSimilarity === "number" && packagingSimilarity > 0 && (
                 <span className="ml-1.5 font-bold tabular-nums">· {packagingSimilarity}% visual</span>
