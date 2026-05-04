@@ -9,6 +9,7 @@ import { DupeOfTheDay } from "@/components/home/dupe-of-the-day";
 import { TrendingRail, ForYouGrid } from "@/components/home/community-feeds";
 import { RecentScansSection } from "@/components/home/recent-scans";
 import { ScanFab } from "@/components/home/scan-fab";
+import { LiveCamera } from "@/components/camera/live-camera";
 import { useScanFlow } from "@/lib/use-scan-flow";
 import {
   getRecentScans,
@@ -75,29 +76,25 @@ function Index() {
       <DiscoveryHub error={flow.error} />
       <ScanFab onCamera={flow.openCamera} onLibrary={flow.openLibrary} />
       <FileInputs flow={flow} />
+      {flow.cameraOpen && (
+        <LiveCamera
+          onCapture={flow.handleCameraCapture}
+          onClose={flow.closeCamera}
+        />
+      )}
     </>
   );
 }
 
 function FileInputs({ flow }: { flow: ReturnType<typeof useScanFlow> }) {
   return (
-    <>
-      <input
-        ref={flow.cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => e.target.files?.[0] && flow.handleFile(e.target.files[0])}
-      />
-      <input
-        ref={flow.libraryRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => e.target.files?.[0] && flow.handleFile(e.target.files[0])}
-      />
-    </>
+    <input
+      ref={flow.libraryRef}
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={(e) => e.target.files?.[0] && flow.handleFile(e.target.files[0])}
+    />
   );
 }
 

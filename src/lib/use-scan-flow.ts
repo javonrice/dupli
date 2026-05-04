@@ -50,6 +50,7 @@ export function useScanFlow() {
   const persistPromiseRef = useRef<Promise<{ id: string | null }> | null>(null);
 
   const [stage, setStage] = useState<ScanStage>("idle");
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [preview, setPreview] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<DupeAnalysis | null>(null);
   const [scanId, setScanId] = useState<string | null>(null);
@@ -65,15 +66,15 @@ export function useScanFlow() {
     setScanId(null);
     setIsSaved(false);
     setError(null);
+    setCameraOpen(false);
     if (cameraRef.current) cameraRef.current.value = "";
     if (libraryRef.current) libraryRef.current.value = "";
   }, []);
 
-  const handleFile = useCallback(
-    async (file: File) => {
+  const startScan = useCallback(
+    async (rawDataUrl: string) => {
       setError(null);
-      const raw = await fileToDataUrl(file);
-      const small = await downscaleImage(raw, 1024);
+      const small = await downscaleImage(rawDataUrl, 1024);
       setPreview(small);
       setStage("scanning");
 
@@ -96,7 +97,24 @@ export function useScanFlow() {
     [scan, persistScan],
   );
 
-  const openCamera = useCallback(() => cameraRef.current?.click(), []);
+  const handleFile = useCallback(
+    async (file: File) => {
+      const raw = await fileToDataUrl(file);
+      await startScan(raw);
+    },
+    [startScan],
+  );
+
+  const handleCameraCapture = useCallback(
+    async (dataUrl: string) => {
+      setCameraOpen(false);
+      await startScan(dataUrl);
+    },
+    [startScan],
+  );
+
+  const openCamera = useCallback(() => setCameraOpen(true), []);
+  const closeCamera = useCallback(() => setCameraOpen(false), []);
   const openLibrary = useCallback(() => libraryRef.current?.click(), []);
 
   const handleShare = useCallback(
@@ -144,6 +162,7 @@ export function useScanFlow() {
     cameraRef,
     libraryRef,
     stage,
+    cameraOpen,
     preview,
     analysis,
     scanId,
@@ -152,7 +171,9 @@ export function useScanFlow() {
     preparingShare,
     canSave: !!scanId,
     handleFile,
+    handleCameraCapture,
     openCamera,
+    closeCamera,
     openLibrary,
     reset,
     handleShare,

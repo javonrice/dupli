@@ -1,75 +1,63 @@
-## Trending: switch from "pairings" to "originals with N dupes"
+## Goal
 
-The hub's trending section should be **one card per original product**. The original is the hero photo + name; below it, "N dupes from $X avg". Tap → product detail page (already exists at `/p/$productId`) which shows the dupes for that original.
+Replace the native iOS/Android camera handoff with an in-app camera screen: dupli wordmark header, live viewfinder, animated corner brackets, custom shutter, and a close button. Captures feed into the existing `scanProduct` pipeline — no backend changes.
 
-### What changes
+## What changes for the user
 
-**1. New server function `getTrendingOriginals`** (in `src/server/discover.functions.ts`)
+- Tapping the FAB → "Take Photo" no longer launches Apple's camera app. Instead, a full-screen in-app camera opens with our chrome on top of the live preview.
+- "Choose from Library" still uses the hidden file input (unchanged).
+- After tapping the shutter, the existing scanning state and results screen run exactly as today.
 
-Pulls the `dupes` table (overall_match ≥ 70, top ~limit×24 rows), groups by `original.id`, and returns:
+## What we're NOT building (deliberate cuts)
 
-```ts
-type TrendingOriginal = {
-  id: string;                          // original product id
-  original: { id, brand, productName, imageUrl, lowestPriceUsd, ... };
-  dupes: ProductLite[];                // up to 4 dupe previews
-  dupeCount: number;                   // total available
-  avgDupePriceUsd: number | null;      // mean of priced dupes
-  minDupePriceUsd: number | null;      // cheapest dupe
-  bestMatch: number;                   // top overall_match in group
-  maxSavingsPct: number | null;        // best % savings vs original
-};
-```
+- No flash/torch button. Safari doesn't expose `MediaStreamTrack` torch constraints, and we want zero buttons that don't actually work.
+- No library button inside the camera (the FAB sheet already offers "Choose from Library" — no need to duplicate).
+- No live "Product detected" pill while aiming. Real-time Gemini calls per frame are too slow/expensive.
+- No pinch-zoom, tap-to-focus, front/back swap, or barcode fast-path in v1.
 
-Ranked by `bestMatch * log(1 + dupeCount)` so an original with many strong dupes outranks a one-off.
+## New files
 
-**2. New `getTrendingOriginalsBlended`** in `src/server/trending.functions.ts`
+- `src/components/camera/live-camera.tsx` — full-screen camera component. Owns the `<video>`, the overlay chrome, and renders the dupli wordmark header.
+- `src/lib/use-camera-stream.ts` — hook that requests `getUserMedia({ video: { facingMode: 'environment' } })`, manages start/stop, and exposes `videoRef`, `error`, and `capture()` returning a JPEG dataURL via an offscreen canvas.
 
-Mirrors `getTrendingDupesBlended`: prefer save-driven (group `trending_saved_dupes` rows by their original brand/product), fall back to `getTrendingOriginals`. Same `MIN_SAVES` / `SAVE_PATH_COVERAGE` tunables.
+## Files to modify
 
-**3. New `CommunityOriginalCard`** (new file `src/components/home/community-original-card.tsx`)
+- `src/lib/use-scan-flow.ts` — add `cameraOpen` state plus `openLiveCamera()` / `closeLiveCamera()`. `openCamera` (FAB action) now opens the live camera instead of clicking the hidden file input. The hidden camera `<input>` is removed; the library `<input>` stays for the FAB's "Choose from Library" path.
+- Wherever `useScanFlow` is rendered (Discovery Hub, etc.) — render `<LiveCamera />` when `cameraOpen` is true, wired to `handleFile(dataUrl)` on shutter and `closeLiveCamera()` on dismiss.
+
+## UI structure (matches the mockup, trimmed)
 
 ```text
-┌──────────────────────────┐
-│                          │
-│      [original image]    │   square hero, full card width
-│                          │
-├──────────────────────────┤
-│ DRUNK ELEPHANT      $68  │   brand · price (original price)
-│ Protini Polypeptide      │   product name, 2-line clamp
-│                          │
-│ ◆ 7 dupes from $14 avg   │   summary line: count · avg price
-│   ▢ ▢ ▢ ▢                │   tiny dupe thumbnail strip (up to 4)
-└──────────────────────────┘
-   [SAVE 79%] badge top-right of hero when maxSavingsPct ≥ 25
+┌─────────────────────────────────┐
+│  ✕            dupli             │  top bar (safe-area padded)
+│                                 │
+│      ┌─┐                 ┌─┐    │  corner brackets (subtle pulse)
+│                                 │
+│         [ live <video> ]        │
+│                                 │
+│      └─┘                 └─┘    │
+│                                 │
+│              ( ⚪ )              │  shutter only
+└─────────────────────────────────┘
 ```
 
-- `variant="card"` (rail, 220px wide) and `variant="tile"` (grid, full width) — same component, only image/text scale.
-- Tap → `/p/$productId` using `original.id`. (No need for the `saved:` scan-link branch since this card always represents a catalog product. The save-driven path still emits `original.brandSlug/productSlug` so we route to `/community/$brand/$product` for the saved-only case where original.id is empty.)
-- Tiny dupe strip is decorative — 4 small avatars with `ShoppingBag` fallback. Reinforces "real dupes exist, here's a peek."
+- Uses existing tokens (`bg-background`, `text-foreground`, `tap`, safe-area padding).
+- Corner brackets: 4 absolutely-positioned divs with 2px borders, ~10% inset.
+- Shutter: 72px white ring with inner fill, centered above the safe-area inset.
+- Header uses the `dupli` wordmark exactly as the rest of the app renders it.
 
-**4. Rewrite `community-feeds.tsx`**
+## Capture flow
 
-- Replace `TrendingRail` and `ForYouGrid` so they accept `TrendingOriginal[]` and render `CommunityOriginalCard`.
-- Same section headers, same layout shells.
+1. User taps shutter → draw current `<video>` frame to an offscreen `<canvas>` at native resolution.
+2. `canvas.toDataURL('image/jpeg', 0.9)` → pass into the existing scan path. Reuse `downscaleImage(dataUrl, 1024)` so payload size matches today.
+3. Stop the `MediaStream` tracks immediately to release the camera.
+4. `useScanFlow` transitions to `scanning` → `results` exactly as today.
 
-**5. Update `src/routes/_app/app.tsx`**
+## Permissions and edge cases
 
-- Swap `getTrendingDupesBlended` → `getTrendingOriginalsBlended` for the `trending` and `popular` state.
-- Type updates: `TrendingOriginal[]` instead of `CommunityDupe[]`.
-- Dedup `popular` against `trending` by `original.id`.
-- `DupeOfTheDay` and `RecentScansSection` stay untouched (they're pairing-based and that's correct for those moments).
+- First open prompts for camera permission. If denied or `getUserMedia` throws, show a centered fallback message with a single "Close" action. The user can still use "Choose from Library" from the FAB sheet.
+- iOS Safari: `<video>` will have `playsInline` and `muted` so it renders inline.
+- On unmount or close, stop all tracks (cleanup in the hook's `useEffect` return).
+- HTTPS only — preview and production are HTTPS, so this is fine.
 
-**6. Leave alone**
-
-- `CommunityDupeCard` (still used by `p.$productId.tsx` for "Dupes for this" / "Also a dupe for" — those sections ARE about pairings, by design).
-- `dupe-of-the-day.tsx` — single editorial pairing, keep as-is.
-- `community.$brand.$product.tsx` route — still useful for save-path links.
-
-### Files touched
-
-- **edit** `src/server/discover.functions.ts` — add `TrendingOriginal` type + `getTrendingOriginals`
-- **edit** `src/server/trending.functions.ts` — add `getTrendingOriginalsBlended`
-- **new** `src/components/home/community-original-card.tsx`
-- **edit** `src/components/home/community-feeds.tsx` — rewrite props/usage
-- **edit** `src/routes/_app/app.tsx` — swap server fn + state types
+After approval I'll implement the hook, the `LiveCamera` component, and rewire `useScanFlow` + the FAB.
