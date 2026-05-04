@@ -802,44 +802,49 @@ function SampleResultScreen({
         <Sparkles className="h-3 w-3" />
         Sample result
       </div>
-      <GuidedLineReveal headline="Here's the closest lower-cost match we found.">
-        <div className="grid grid-cols-2 gap-3">
-          <MiniProduct
-            label="Original"
-            brand="Maison Lumière"
-            name="Crème Hydratante Riche"
-            price="$58–$68"
+      <GuidedLineReveal headline="Here's what a real result looks like.">
+        {/* Phone hero — actual app screenshot framed in a device */}
+        <div className="relative -mx-2 overflow-hidden rounded-[24px] bg-[#F5F0E8]">
+          <img
+            src={heroResultPhone}
+            alt="Dupli result on iPhone showing a 17% cheaper match"
+            className="h-auto w-full object-contain animate-[result-rise_900ms_cubic-bezier(0.2,0.8,0.2,1)_120ms_both]"
+            draggable={false}
           />
-          <MiniProduct
-            label="Match"
-            brand="Everyday Glow"
-            name="Rich Hydrating Cream"
-            price="$14–$18"
-            highlight
-          />
+          {/* Floating savings tag */}
+          <div className="absolute right-4 top-4 rounded-full bg-success px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-background shadow-lift animate-[result-pop_500ms_cubic-bezier(0.34,1.7,0.64,1)_700ms_both]">
+            Save 17%
+          </div>
         </div>
         <div className="rounded-full border border-success/30 bg-success-soft px-3 py-1.5 text-center text-[12px] font-semibold text-foreground">
           <span className="mr-1 inline-block h-1.5 w-1.5 rounded-full bg-success align-middle" />
-          Strong Match · 86% confidence
+          Strong Match · 85% ingredient overlap
         </div>
         <div className="rounded-[18px] border border-border bg-card p-4 shadow-soft">
           <p className="font-display text-[14px] font-bold tracking-tight">Why it matched</p>
           <ul className="mt-2 space-y-1.5 text-[13px] text-muted-foreground">
             <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" /> Similar product type
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" /> Same product type and use case
             </li>
             <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" /> Similar use case
+              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" /> Shared key active ingredients
             </li>
             <li className="flex items-start gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-success" /> Shared key ingredients and roles
-            </li>
-            <li className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" /> Price check needed — savings not guaranteed
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" /> Risk: comparable — verify before buying
             </li>
           </ul>
         </div>
       </GuidedLineReveal>
+      <style>{`
+        @keyframes result-rise {
+          from { opacity: 0; transform: translateY(28px) scale(0.97); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes result-pop {
+          from { opacity: 0; transform: scale(0.4) rotate(-8deg); }
+          to { opacity: 1; transform: scale(1) rotate(0); }
+        }
+      `}</style>
     </OnboardingShell>
   );
 }
