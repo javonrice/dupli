@@ -20,13 +20,17 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
     sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch,
     dupeType, packagingSimilarity, riskLevel, riskFactors, missingActives, safetyNote,
   } = analysis;
+  // Older saved scans may not have framing/savingsPct — fall back to classic.
+  const framing = analysis.framing ?? "classic-dupe";
+  const isSteal = framing === "steal-find";
   const v = verdictStyles[verdict];
   const Icon = v.icon;
 
-  const savings =
+  const fallbackSavings =
     dupe && original.estimatedPriceUsd > 0
       ? Math.max(0, Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100))
       : 0;
+  const savings = analysis.savingsPct ?? fallbackSavings;
 
   const showLookalikeBand =
     !!dupe && (
