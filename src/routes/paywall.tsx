@@ -171,19 +171,27 @@ function PaywallPage() {
         <button
           type="button"
           onClick={startTrial}
-          className="tap flex h-[58px] w-full flex-col items-center justify-center rounded-[16px] bg-foreground text-background shadow-lift"
+          disabled={busy}
+          className="tap flex h-[58px] w-full flex-col items-center justify-center rounded-[16px] bg-foreground text-background shadow-lift disabled:opacity-60"
         >
-          <span className="text-[15px] font-semibold">Start My Free Trial</span>
-          <span className="text-[11px] opacity-80">
-            7 days free, then {plan === "yearly" ? "$39.99/year" : "$9.99/month"} · cancel anytime
-          </span>
+          {checkoutLoading ? (
+            <Loader2 className="h-5 w-5 animate-spin" />
+          ) : (
+            <>
+              <span className="text-[15px] font-semibold">Start My Free Trial</span>
+              <span className="text-[11px] opacity-80">
+                7 days free, then {plan === "yearly" ? "$39.99/year" : "$9.99/month"} · cancel anytime
+              </span>
+            </>
+          )}
         </button>
         <button
           type="button"
           onClick={startCheap}
-          className="tap w-full text-center text-[12px] font-medium text-muted-foreground underline-offset-4 hover:underline"
+          disabled={busy}
+          className="tap w-full text-center text-[12px] font-medium text-muted-foreground underline-offset-4 hover:underline disabled:opacity-60"
         >
-          Or try for $0.99 your first month
+          {introLoading ? "Opening checkout…" : "Or try for $0.99 your first month"}
         </button>
       </div>
     </div>
