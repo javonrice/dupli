@@ -2,6 +2,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { resolveProductLinks, type ProductLink } from "@/server/product-links.server";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { slugify } from "@/server/skinsort-slugs";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
@@ -354,9 +356,29 @@ export const scanProduct = createServerFn({ method: "POST" })
       }
       const parsed = normalizeAnalysis(JSON.parse(argsRaw) as Partial<DupeAnalysis>);
 
-      // NOTE: DB cross-reference intentionally disabled — keep results pure AI for now.
-      // The SkinSort-backed dupes table is populated but not consulted.
-      // To re-enable, restore the call to crossReferenceDupeDb(parsed) here.
+      // Merge in SkinSort-mirrored community dupes for the scanned original.
+      // Failure is silent — never blocks the scan.
+      try {
+        const extras = await fetchSkinsortDupes(
+          parsed.original?.brand,
+          parsed.original?.productName,
+          4,
+        );
+        if (extras.length > 0 && parsed.dupes) {
+          const seen = new Set(
+            parsed.dupes.map((d) => `${slugify(d.brand)}/${slugify(d.productName)}`),
+          );
+          for (const e of extras) {
+            const key = `${slugify(e.brand)}/${slugify(e.productName)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            parsed.dupes.push(e);
+            if (parsed.dupes.length >= 8) break;
+          }
+        }
+      } catch (err) {
+        console.warn("[skinsort merge] failed, ignoring:", err);
+      }
 
       // Best-effort: enrich the original AND every dupe candidate with real product photos in parallel.
       // Capped at 7 candidates by the schema. Each lookup is wrapped so a failure never wipes the analysis.
