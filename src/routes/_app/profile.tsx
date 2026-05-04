@@ -123,20 +123,38 @@ function ProfilePage() {
               <StatCard label="Saved" value={counts.saved} />
             </div>
 
-            {/* Settings group */}
-            <SectionLabel>Settings</SectionLabel>
+            {/* Subscription */}
+            <SectionLabel>Subscription</SectionLabel>
             <SettingsGroup>
-              <Row icon={Bell} label="Notifications" />
-              <Row icon={Palette} label="Appearance" />
-              <Row icon={Shield} label="Privacy & data" />
-              <Row icon={HelpCircle} label="Help & support" last />
+              <button
+                type="button"
+                onClick={handleManageSubscription}
+                disabled={portalLoading}
+                className="tap flex h-12 w-full items-center gap-3 px-4 text-left disabled:opacity-60"
+              >
+                <CreditCard className="h-[18px] w-[18px] text-muted-foreground" strokeWidth={1.75} />
+                <span className="flex-1 text-[15px] text-foreground">Manage subscription</span>
+                {portalLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/60" strokeWidth={2} />
+                )}
+              </button>
             </SettingsGroup>
 
+            {/* Support / Legal */}
             <SectionLabel>About</SectionLabel>
             <SettingsGroup>
               <Row label="Version" trailing={<span className="text-muted-foreground">1.0.0</span>} />
-              <Row label="Terms of Service" />
-              <Row label="Privacy Policy" last />
+              <a href="/terms" className="block">
+                <Row label="Terms of Service" />
+              </a>
+              <a href="/privacy" className="block">
+                <Row label="Privacy Policy" />
+              </a>
+              <a href="mailto:support@trydupli.com" className="block">
+                <Row icon={HelpCircle} label="Contact support" last />
+              </a>
             </SettingsGroup>
 
             <button
