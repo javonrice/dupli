@@ -1,47 +1,22 @@
-## Problem
+# Add opt-out X button to the paywall
 
-The onboarding welcome screen has a `I already have an account · Sign in` text link that routes to `/login?next=/app`. Two issues:
+Right now `/paywall` is a hard wall — once a signed-in user without an active subscription lands there, `_app.tsx` keeps redirecting them back, so there's no way out without closing the tab. Add an X in the top-right corner that lets the user exit gracefully.
 
-1. `/login` shows a "Don't have an account? Sign up" toggle, so a returning-user link becomes a sign-up path that **bypasses onboarding and the paywall** entirely.
-2. There is no way back to the start of onboarding from `/login` — the user is stuck.
+## Behavior
 
-## Fix
+- **Signed-in user without subscription** → tap X → sign out → land on `/onboarding` (the public landing/funnel). This is the case you just hit on `jaysfreeapps@gmail.com`.
+- **Anonymous visitor** (paywall shown as part of the onboarding funnel) → tap X → go back to `/onboarding`. No sign-out needed.
 
-Create a dedicated **sign-in only** route for the returning-user flow from onboarding, and route the welcome-screen link there instead of `/login`.
+Signing the user out on close is what actually breaks the paywall loop — otherwise `_app.tsx` would just bounce them back the next time they hit any protected route. From the user's perspective: "I closed the upgrade screen and I'm back at the start."
 
-### 1. New route: `src/routes/signin.tsx`
+## Changes
 
-A stripped-down variant of `/login`:
+**`src/routes/paywall.tsx`**
 
-- **Sign-in only.** No mode toggle, no "Create account" button, no sign-up form. Only email + password + "Sign in", plus "Forgot password?".
-- **Back button** in the header that returns to `/onboarding` (using `navigate({ to: "/onboarding" })`), so an accidental tap is recoverable.
-- Copy: "Welcome back" / "Sign in to your Dupli account."
-- A small footer line: *"New here? Go back and finish setup."* — links back to `/onboarding`, never to a sign-up form.
-- On successful sign-in, route through `/` (the splash router) so the existing logic decides `/app` vs `/paywall` based on subscription state. This preserves the paywall gate for returning users without an active sub.
-- Same `beforeLoad` as `/login`: if already signed in, redirect to `/`.
+1. Import `X` from `lucide-react`.
+2. Add a `handleClose` function:
+   - If `user`, call `supabase.auth.signOut()`.
+   - Then `navigate({ to: "/onboarding", replace: true })`.
+3. Render a fixed close button in the top-right of the paywall layout (inside the `pt-safe` header area), styled like the existing back chevron in `signin.tsx`: a 9x9 round tap target with the X icon, `aria-label="Close"`.
 
-### 2. Update `src/routes/onboarding.tsx`
-
-Change the welcome-screen `textLink` (line 193–194) from:
-
-```ts
-onClick: () => navigate({ to: "/login", search: { next: "/app" } })
-```
-
-to:
-
-```ts
-onClick: () => navigate({ to: "/signin" })
-```
-
-### 3. Leave `/login` as-is
-
-`/login` keeps its dual sign-in / sign-up behavior because it's still the correct destination for the post-paywall and post-checkout flows (where account creation is expected and required).
-
-## Edge cases handled
-
-- **Accidental tap on welcome screen** → back button returns to onboarding step 1.
-- **No sign-up path** from `/signin` → cannot bypass onboarding + paywall by signing up.
-- **Returning user with no active sub** → routed via `/` splash, lands on `/paywall` (existing behavior).
-- **Already signed in** → `beforeLoad` redirects to `/`, same as `/login`.
-- **Forgot password** → reuses existing `/reset-password` route.
+That's the whole change — the rest of the paywall (plan toggles, trial buttons, intro offer) stays as-is.
