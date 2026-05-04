@@ -4,6 +4,16 @@ import type { CommunityDupe } from "@/server/discover.functions";
 
 type Variant = "card" | "tile";
 
+/** Save-sourced cards encode `saved:<pair_key>:<scanId>` in their id and link
+ *  to the public scan view; catalog cards link to the product page as before. */
+function dupeLinkProps(dupe: CommunityDupe) {
+  if (dupe.id.startsWith("saved:")) {
+    const scanId = dupe.id.split(":")[2] ?? "";
+    return { to: "/scan/$id" as const, params: { id: scanId } };
+  }
+  return { to: "/p/$productId" as const, params: { productId: dupe.dupe.id } };
+}
+
 /** A community-sourced dupe pairing rendered as a tappable card.
  *  - "tile" (default) — vertical card for grids.
  *  - "card" — wider card for horizontal rails.
@@ -17,10 +27,10 @@ export function CommunityDupeCard({
 }) {
   const widthClass =
     variant === "card" ? "w-[200px] shrink-0" : "w-full";
+  const linkProps = dupeLinkProps(dupe);
   return (
     <Link
-      to="/p/$productId"
-      params={{ productId: dupe.dupe.id }}
+      {...linkProps}
       className={`tap snap-start group flex ${widthClass} flex-col gap-2 rounded-[16px] border border-border bg-card p-3 text-left shadow-soft`}
     >
       {/* Pair preview: original on the left, dupe on the right with a savings chip */}
