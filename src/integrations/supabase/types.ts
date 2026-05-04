@@ -116,6 +116,33 @@ export type Database = {
         }
         Relationships: []
       }
+      product_link_cache: {
+        Row: {
+          brand_slug: string
+          id: string
+          product_slug: string
+          resolved_at: string
+          source: string
+          vendors: Json
+        }
+        Insert: {
+          brand_slug: string
+          id?: string
+          product_slug: string
+          resolved_at?: string
+          source?: string
+          vendors?: Json
+        }
+        Update: {
+          brand_slug?: string
+          id?: string
+          product_slug?: string
+          resolved_at?: string
+          source?: string
+          vendors?: Json
+        }
+        Relationships: []
+      }
       product_vendors: {
         Row: {
           currency: string

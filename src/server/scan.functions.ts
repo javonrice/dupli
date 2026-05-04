@@ -1,6 +1,7 @@
 // Lovable AI vision: identify a beauty product AND suggest a dupe in one call.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { resolveProductLinks, type ProductLink } from "@/server/product-links.server";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
@@ -13,6 +14,8 @@ export type ScannedProduct = {
   estimatedPriceUsd: number;
   keyIngredients: string[];
   imageUrl?: string;
+  /** Verified retailer links resolved server-side after the AI call. */
+  links?: ProductLink[];
 };
 
 export type DupeSuggestion = {
@@ -24,6 +27,8 @@ export type DupeSuggestion = {
   buyUrl: string;
   keyIngredients: string[];
   imageUrl?: string;
+  /** Verified retailer links resolved server-side after the AI call. */
+  links?: ProductLink[];
   // Per-candidate comparison fields (mirrors top-level for the #1 pick).
   matchScore?: number;
   dupeType?: "Lookalike packaging" | "Formula dupe" | "Both" | "Neither";
@@ -369,6 +374,30 @@ export const scanProduct = createServerFn({ method: "POST" })
         if (dupeImgs[i]) c.imageUrl = dupeImgs[i];
       });
       // Re-sync the headline `dupe` (which is candidates[0]) so its imageUrl matches.
+      if (parsed.dupe && candidates[0]) parsed.dupe = candidates[0];
+
+      // Resolve REAL buyable retailer links for the original + every dupe candidate.
+      // Each call is best-effort and time-budgeted; failures never block the scan.
+      const safeLinks = async (b?: string | null, n?: string | null) => {
+        try {
+          return await resolveProductLinks(b, n);
+        } catch (err) {
+          console.warn("[resolveProductLinks] threw, ignoring:", err);
+          return [];
+        }
+      };
+      const linkLookups = await Promise.all([
+        parsed.original
+          ? safeLinks(parsed.original.brand, parsed.original.productName)
+          : Promise.resolve([] as ProductLink[]),
+        ...candidates.map((c) => safeLinks(c.brand, c.productName)),
+      ]);
+      const [originalLinks, ...dupeLinks] = linkLookups;
+      if (parsed.original && originalLinks.length > 0) parsed.original.links = originalLinks;
+      candidates.forEach((c, i) => {
+        if (dupeLinks[i] && dupeLinks[i].length > 0) c.links = dupeLinks[i];
+      });
+      // Re-sync headline dupe again so its links field matches.
       if (parsed.dupe && candidates[0]) parsed.dupe = candidates[0];
 
       return { result: parsed, error: null };

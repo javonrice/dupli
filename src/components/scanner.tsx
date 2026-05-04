@@ -88,7 +88,13 @@ export function ResultsScreen({
   const displayedAnalysis: DupeAnalysis = selectDupe(analysis, safeIdx);
 
   const dupe = displayedAnalysis.dupe;
-  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  // Prefer a verified retailer link (cheapest first) over a generic Google search.
+  const verifiedVendor = dupe?.links && dupe.links.length > 0 ? dupe.links[0] : null;
+  const fallbackLink = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  const link = verifiedVendor
+    ? { label: verifiedVendor.merchant, url: verifiedVendor.url }
+    : fallbackLink;
+  const linkPrice = verifiedVendor?.priceUsd ?? null;
   const alternates = candidates.slice(1);
   return (
     <IOSScreen
@@ -161,7 +167,16 @@ export function ResultsScreen({
               className="tap flex h-[50px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
             >
               <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={2} />
-              Shop on Google
+              {verifiedVendor ? (
+                <span className="flex items-center gap-1.5">
+                  Buy at {link.label}
+                  {linkPrice != null && (
+                    <span className="tabular-nums opacity-80">· ${linkPrice.toFixed(2)}</span>
+                  )}
+                </span>
+              ) : (
+                <>Shop on Google</>
+              )}
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
             </a>
           ) : (
