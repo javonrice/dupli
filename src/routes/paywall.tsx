@@ -72,19 +72,19 @@ function PaywallPage() {
         </h1>
 
         <div className="mt-6">
-          <TrialTimeline price={plan === "yearly" ? "$39.99" : "$9.99"} />
+          <TrialTimeline
+            price={plan === "yearly" ? "$39.99" : "$9.99"}
+            cadence={plan === "yearly" ? "year" : "month"}
+          />
         </div>
 
-        <ul className="mt-6 space-y-2">
+        <ul className="mt-6 space-y-1.5">
           {BENEFITS.map((b) => (
-            <li
-              key={b}
-              className="flex items-center gap-3 rounded-[14px] border border-border bg-card px-4 py-3"
-            >
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-foreground text-background">
-                <Check className="h-3.5 w-3.5" strokeWidth={3} />
+            <li key={b} className="flex items-center gap-3 px-1 py-1.5">
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-success-soft text-foreground">
+                <Check className="h-3 w-3" strokeWidth={3} />
               </span>
-              <span className="text-[14px] font-semibold">{b}</span>
+              <span className="text-[14px] font-medium text-foreground">{b}</span>
             </li>
           ))}
         </ul>
