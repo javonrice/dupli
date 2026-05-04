@@ -14,6 +14,8 @@ export type ScannedProduct = {
   estimatedPriceUsd: number;
   keyIngredients: string[];
   imageUrl?: string;
+  /** Verified retailer links resolved server-side after the AI call. */
+  links?: ProductLink[];
 };
 
 export type DupeSuggestion = {
