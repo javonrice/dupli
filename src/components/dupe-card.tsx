@@ -272,8 +272,7 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
 function ProductSide({
   label,
   item,
-  muted = false,
-  highlight = false,
+  accent = false,
 }: {
   label: string;
   item: {
@@ -284,40 +283,54 @@ function ProductSide({
     imageUrl?: string;
     links?: { merchant: string; url: string; priceUsd: number | null }[];
   };
-  muted?: boolean;
-  highlight?: boolean;
+  accent?: boolean;
 }) {
   return (
-    <div className={`p-5 ${muted ? "bg-background" : "bg-card"} ${highlight ? "ring-2 ring-inset ring-success" : ""}`}>
-      <div className={`mb-3 text-[10px] font-semibold uppercase tracking-widest ${highlight ? "text-success" : "text-muted-foreground"}`}>{label}</div>
-      {item.imageUrl && (
-        <div className="mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary/40">
+    <div
+      className={`flex min-w-0 flex-col rounded-2xl bg-background p-3 shadow-sm ${
+        accent ? "border-2 border-foreground" : "border border-border"
+      }`}
+    >
+      <div
+        className={`mb-2 text-[10px] font-bold uppercase tracking-widest ${
+          accent ? "text-foreground" : "text-muted-foreground"
+        }`}
+      >
+        {label}
+      </div>
+      <div className="mb-2 flex aspect-square w-full items-center justify-center overflow-hidden rounded-xl bg-secondary/40">
+        {item.imageUrl ? (
           <img
             src={item.imageUrl}
             alt={`${item.brand} ${item.productName}`}
             loading="lazy"
-            className="h-full w-full object-contain"
+            className="h-full w-full object-contain p-1.5"
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).style.display = "none";
             }}
           />
-        </div>
-      )}
-      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{item.brand}</div>
-      <h3 className="mt-1 font-display text-base font-semibold leading-tight">{item.productName}</h3>
-      <div className="mt-3 flex items-baseline gap-1">
-        <span className="font-display text-2xl font-bold">{priceTag(item.estimatedPriceUsd)}</span>
+        ) : (
+          <div className="text-3xl text-muted-foreground/40">·</div>
+        )}
       </div>
-      <p className="mt-1 text-[11px] text-muted-foreground">{item.category}</p>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {item.brand}
+      </div>
+      <h3 className="mt-0.5 line-clamp-2 font-display text-sm font-semibold leading-tight">
+        {item.productName}
+      </h3>
+      <div className="mt-auto pt-2 font-display text-2xl font-extrabold tracking-tight">
+        {priceTag(item.estimatedPriceUsd)}
+      </div>
       {item.links && item.links.length > 0 && (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {item.links.slice(0, 3).map((link) => (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {item.links.slice(0, 2).map((link) => (
             <a
               key={link.url}
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="tap inline-flex items-center gap-1 rounded-full border border-border bg-background px-2.5 py-1 text-[11px] font-semibold text-foreground hover:bg-secondary"
+              className="tap inline-flex items-center gap-1 rounded-full border border-border bg-background px-2 py-0.5 text-[10px] font-semibold text-foreground hover:bg-secondary"
             >
               {link.merchant}
               {link.priceUsd != null && (
