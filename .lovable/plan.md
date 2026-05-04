@@ -1,100 +1,31 @@
 ## Goal
 
-Replace the AI-hallucinated `buyUrl` with **real, verified product links** for both the original and every dupe candidate, using only free infrastructure we already have.
+Stop showing the marketing landing page at `/`. Keep the landing page in the codebase and reachable, but only via a direct URL that isn't linked from anywhere in the app. Onboarding will replace it later — not part of this change.
 
-## Where the links come from
+## Behavior change
 
-For each product the AI returns, run a tiered server-side resolver and stop at the first step that produces a verified URL:
+- Visiting `/` no longer renders the landing page.
+  - If the user has a session → send them to `/app`.
+  - If not → send them to `/login`.
+- The landing page content moves to `/landing` (unlisted route, no nav links to it). Anyone with the direct URL can still view it.
+- No other UI changes. No onboarding flow added yet — `/` just routes to login or app for now. That's a deliberate placeholder until onboarding is built.
 
-```text
-brand + productName
-  ├─ 1. Cache lookup
-  │     SELECT vendors FROM product_link_cache
-  │     WHERE brand_slug = X AND product_slug = Y
-  │       AND resolved_at > now() - 30 days
-  │     -> instant return
-  │
-  ├─ 2. Live web search (the new step)
-  │     Query DuckDuckGo first, fall back to Bing — same scraper
-  │     pattern src/server/scan.functions.ts already uses for
-  │     findProductImage.
-  │     Search query: `"<brand> <product>" buy site:(amazon|target|...)`
-  │     Filter results to a retailer allowlist:
-  │       amazon, target, walmart, ulta, sephora, cvs, walgreens,
-  │       sallybeauty, dollartree, dollargeneral, costco, kohls
-  │     Verify each candidate with GET + Range: bytes=0-0, 5s timeout.
-  │     Keep the top 1-3 reachable hits, normalize merchant names.
-  │
-  ├─ 3. Skinsort vendor cache (bonus enrichment)
-  │     If our existing products + product_vendors row exists for this
-  │     brand_slug/product_slug, merge any extra merchants/prices we
-  │     don't already have from step 2.
-  │
-  └─ 4. Fallback (only when 2+3 produced nothing)
-        Build retailer search URLs with existing buildQuery() +
-        RETAILER_TEMPLATES, then googleShoppingLink() as last resort.
-```
+## Files to change
 
-Every successful resolution is written back to `product_link_cache` so the next user scanning the same product gets step-1 speed.
+1. **`src/routes/index.tsx`** — replace the `LandingPage` component with a route that redirects in `beforeLoad`:
+   - Check the Supabase session (same pattern as `src/routes/_app.tsx`).
+   - `throw redirect({ to: "/app" })` if signed in, else `throw redirect({ to: "/login" })`.
+   - Drop the `LandingPage` JSX from this file.
 
-## Database
+2. **`src/routes/landing.tsx`** (new) — move the existing `LandingPage` component here verbatim with `createFileRoute("/landing")`. Keep the same `head()` meta so the page still has its OG/Twitter tags if someone shares the direct link.
 
-One new table + RLS:
+3. **`src/routes/login.tsx`** — audit for any `<Link to="/">` that points back to the marketing page and either remove it or repoint to `/landing`. (Will confirm during implementation.)
 
-```sql
-create table public.product_link_cache (
-  id uuid primary key default gen_random_uuid(),
-  brand_slug text not null,
-  product_slug text not null,
-  vendors jsonb not null default '[]'::jsonb,
-  source text not null default 'web-search',
-  resolved_at timestamptz not null default now(),
-  unique (brand_slug, product_slug)
-);
-alter table public.product_link_cache enable row level security;
-create policy "Cache readable by authenticated"
-  on public.product_link_cache for select
-  to authenticated using (true);
--- Writes happen via supabaseAdmin from the resolver; no INSERT policy needed.
-```
+4. **`src/routes/__root.tsx`** — no change needed; meta tags stay generic for the app.
 
-`vendors` shape: `[{ merchant: string, url: string, priceUsd: number | null }]`.
+## Notes
 
-## Code changes
-
-### New files
-
-- **`src/server/product-links.server.ts`** — server-only helpers:
-  - `RETAILER_ALLOWLIST` + `normalizeMerchant(host)` (e.g. `amazon.com` → "Amazon").
-  - `searchDuckDuckGo(query)` and `searchBing(query)` reusing the same fetch+parse pattern as `findProductImage`. Each returns `{ url, title }[]`.
-  - `verifyUrl(url)` — `GET` with `Range: bytes=0-0`, 5s timeout, follow redirects, accept 200/206/301/302/403 (Amazon often 403s HEAD-style requests but the URL is valid; we accept it if the final host is still allowlisted).
-  - `resolveProductLinks(brand, productName)` — runs the 4-step pipeline above, reads/writes `product_link_cache` via `supabaseAdmin`, hard-caps total work at 3s (returns whatever it has when the budget elapses).
-
-### Edits
-
-- **`src/server/scan.functions.ts`**:
-  - Add `links?: { merchant: string; url: string; priceUsd: number | null }[]` to `ScannedProduct` and `DupeSuggestion`.
-  - After the existing `findProductImage` `Promise.all`, run a sibling `Promise.all` of `resolveProductLinks` calls for the original + every candidate. Attach to `parsed.original.links` and each candidate's `.links`. Re-sync `parsed.dupe = candidates[0]` afterwards (already done for images).
-  - Stop using `safeUrl` as the primary CTA source — keep it only as a deep fallback inside `resolveProductLinks` step 4.
-
-- **`src/components/dupe-card.tsx`** (`ProductSide`): below the price, render up to 3 vendor chips when `item.links?.length`. Each chip is `<a href={url} target="_blank" rel="noopener noreferrer">{merchant}{price ? ` · $${price}` : ""}</a>`. Show on both the original and dupe sides.
-
-- **`src/components/scanner.tsx`** (`ResultsScreen` bottom bar):
-  - If the selected dupe has `links`, primary CTA becomes `Buy at {cheapest merchant} — ${price}` linking to that vendor URL.
-  - Add a small secondary "More retailers" button that opens a sheet listing all resolved vendors.
-  - If no links resolved → keep the current Google Shopping fallback button (zero regression).
-
-## Latency budget
-
-- Cache hit: ~50ms.
-- First-time scan: search + verify in parallel across all 8 candidates ≈ 1.5–2.5s added.
-- Hard 3s ceiling — we ship the analysis with whatever we have at the deadline. The scan never blocks waiting on a slow retailer.
-
-After the first few hundred scans, popular products (CeraVe, e.l.f., Drunk Elephant, etc.) live in the cache and add basically zero latency.
-
-## Out of scope
-
-- Affiliate-link wrapping.
-- Background re-validation of stale cache entries (TTL refresh on next scan is fine).
-- Admin tooling to fix bad URLs manually.
-- Swapping in a paid search API (Firecrawl / Serper / Brave) — easy to add later by replacing only the `searchDuckDuckGo` / `searchBing` functions.
+- `routeTree.gen.ts` regenerates automatically — don't touch it.
+- The landing page's "Get started" / "Open app" CTAs continue to work from `/landing`.
+- This is purely a routing change; no DB, no auth changes, no removed features.
+- Once you're ready for onboarding, `/` becomes the onboarding flow and the unauth redirect target switches from `/login` to `/` (or onboarding stays at `/onboarding` and `/` shows it for new users). We'll decide then.
