@@ -121,6 +121,17 @@ function OnboardingPage() {
   };
 
   // ---------- Real scan path: hand off to existing scan flow components.
+  if (flow.cameraOpen) {
+    return (
+      <LiveCamera
+        onCapture={(dataUrl) => {
+          track("first_real_scan_started");
+          flow.handleCameraCapture(dataUrl);
+        }}
+        onClose={flow.closeCamera}
+      />
+    );
+  }
   if (flow.stage === "scanning") {
     return (
       <>
