@@ -1,5 +1,6 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, Sparkles, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
+import { Check, AlertCircle, Sparkles, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
+import wordmark from "@/assets/dupli-wordmark.png";
 
 function priceTag(n: number) {
   if (n < 10) return `$${n.toFixed(2)}`;
@@ -17,14 +18,13 @@ const verdictStyles: Record<DupeAnalysis["verdict"], { icon: typeof Check; bg: s
 export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
   const {
     original, dupe, matchScore, verdict, notes, bestFor,
-    sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch,
+    sharedIngredients, uniqueToOriginal, uniqueToDupe,
     dupeType, packagingSimilarity, riskLevel, riskFactors, missingActives, safetyNote,
   } = analysis;
   // Older saved scans may not have framing/savingsPct — fall back to classic.
   const framing = analysis.framing ?? "classic-dupe";
   const isSteal = framing === "steal-find";
   const v = verdictStyles[verdict];
-  const Icon = v.icon;
 
   const fallbackSavings =
     dupe && original.estimatedPriceUsd > 0
@@ -68,18 +68,27 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       {/* Hero header — mirrors share card */}
       <header className="bg-gradient-to-br from-secondary/50 to-card px-5 pt-4 pb-6">
         <div className="flex items-center justify-between gap-2">
+          <img src={wordmark} alt="Dupli" className="h-6 w-auto" width={887} height={414} />
           <div className="flex items-center gap-1.5">
-            <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${v.bg} ${v.fg}`}>
-              <Icon className="h-2.5 w-2.5" strokeWidth={3} />
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground">{verdict}</span>
-          </div>
-          {riskLevel && (
-            <div className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${riskTone.chipBg} ${riskTone.chipFg}`}>
-              <riskTone.Icon className="h-3 w-3" strokeWidth={2.5} />
-              {riskLevel}
+            {riskLevel && (
+              <div className={`inline-flex shrink-0 items-center gap-1 rounded-full border-2 bg-background px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                riskLevel === "Higher risk" ? "border-warning text-warning" :
+                riskLevel === "Lower risk" ? "border-success text-success" :
+                "border-foreground text-foreground"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${
+                  riskLevel === "Higher risk" ? "bg-warning" :
+                  riskLevel === "Lower risk" ? "bg-success" :
+                  "bg-foreground"
+                }`} />
+                Risk: {riskLevel.replace(" risk", "")}
+              </div>
+            )}
+            <div className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${v.bg} ${v.fg}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-90" />
+              {verdict}
             </div>
-          )}
+          </div>
         </div>
 
         {dupe && savings > 0 && (
@@ -150,19 +159,13 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       {dupe &&
         ((sharedIngredients?.length ?? 0) +
           (uniqueToOriginal?.length ?? 0) +
-          (uniqueToDupe?.length ?? 0) > 0 ||
-          !!contextMatch) && (
+          (uniqueToDupe?.length ?? 0) > 0) && (
           <div className="space-y-4 border-t border-border bg-secondary/30 px-5 py-4">
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Formula breakdown
             </div>
 
-            {contextMatch && (
-              <p className="flex items-start gap-2 text-xs italic leading-relaxed text-muted-foreground">
-                <Sparkles className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
-                <span>{contextMatch}</span>
-              </p>
-            )}
+
 
             {sharedIngredients && sharedIngredients.length > 0 && (
               <div className="space-y-1.5">
