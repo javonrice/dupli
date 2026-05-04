@@ -1,8 +1,12 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Check, X } from "lucide-react";
+import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import { markOnboardingComplete, track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
+import { useAuth } from "@/hooks/use-auth";
+import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
+import { getPaddleDiscountId } from "@/lib/paddle";
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
@@ -21,26 +25,73 @@ const BENEFITS = [
   "Notifications when better matches appear",
 ];
 
+const PRICE_IDS = {
+  yearly: "dupli_pro_yearly",
+  monthly: "dupli_pro_monthly",
+  intro: "dupli_pro_intro_monthly",
+} as const;
+
+const INTRO_DISCOUNT_DESCRIPTION = "Dupli Intro - $0.99 first month";
+
 type Plan = "yearly" | "monthly";
 
 function PaywallPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { openCheckout, loading: checkoutLoading } = usePaddleCheckout();
+  const [introLoading, setIntroLoading] = useState(false);
   const [plan, setPlan] = useState<Plan>("yearly");
 
   useEffect(() => {
     track("paywall_viewed_after_result");
   }, []);
 
-  const startTrial = () => {
-    track("trial_started", { plan });
-    markOnboardingComplete();
-    navigate({ to: "/app" });
+  const requireUser = (): string | null => {
+    if (!user) {
+      toast.error("Please sign in to start a trial.");
+      navigate({ to: "/login" });
+      return null;
+    }
+    return user.id;
   };
 
-  const startCheap = () => {
+  const startTrial = async () => {
+    const userId = requireUser();
+    if (!userId) return;
+    track("trial_started", { plan });
+    try {
+      await openCheckout({
+        priceId: PRICE_IDS[plan],
+        customerEmail: user?.email,
+        customData: { userId },
+        successUrl: `${window.location.origin}/app?checkout=success`,
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error("Couldn't start checkout. Please try again.");
+    }
+  };
+
+  const startCheap = async () => {
+    const userId = requireUser();
+    if (!userId) return;
     track("trial_started", { plan: "intro_99c" });
-    markOnboardingComplete();
-    navigate({ to: "/app" });
+    setIntroLoading(true);
+    try {
+      const discountId = await getPaddleDiscountId(INTRO_DISCOUNT_DESCRIPTION);
+      await openCheckout({
+        priceId: PRICE_IDS.intro,
+        discountId,
+        customerEmail: user?.email,
+        customData: { userId },
+        successUrl: `${window.location.origin}/app?checkout=success`,
+      });
+    } catch (e) {
+      console.error(e);
+      toast.error("Couldn't start checkout. Please try again.");
+    } finally {
+      setIntroLoading(false);
+    }
   };
 
   const dismiss = () => {
@@ -48,6 +99,8 @@ function PaywallPage() {
     markOnboardingComplete();
     navigate({ to: "/app" });
   };
+
+  const busy = checkoutLoading || introLoading;
 
   return (
     <div className="flex h-screen-safe flex-col bg-background">
