@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -7,9 +7,16 @@ import { TrialTimeline } from "@/components/onboarding/trial-timeline";
 import { useAuth } from "@/hooks/use-auth";
 import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
 import { getPaddleDiscountId } from "@/lib/paddle";
+import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      throw redirect({ to: "/login", search: { next: "/paywall" } });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Go Premium — Dupli" },
