@@ -965,14 +965,14 @@ async function fetchSkinsortDupes(
     } | null;
   };
   const candidates: DupeSuggestion[] = ((rows ?? []) as Row[])
-    .map((r) => {
+    .map((r): DupeSuggestion | null => {
       const d = r.dupe;
       if (!d) return null;
       const price =
         typeof d.lowest_price_usd === "string"
           ? parseFloat(d.lowest_price_usd)
           : (d.lowest_price_usd ?? 0);
-      return {
+      const c: DupeSuggestion = {
         productName: d.product_name,
         brand: d.brand_name,
         category: d.category ?? "Beauty product",
@@ -982,9 +982,9 @@ async function fetchSkinsortDupes(
         keyIngredients: [],
         imageUrl: d.image_url ?? undefined,
         matchScore: r.overall_match,
-        dupeType: "Formula dupe" as const,
+        dupeType: "Formula dupe",
         packagingSimilarity: 0,
-        riskLevel: "Comparable" as const,
+        riskLevel: "Comparable",
         riskFactors: [],
         missingActives: [],
         safetyNote: "",
@@ -993,7 +993,8 @@ async function fetchSkinsortDupes(
         uniqueToDupe: [],
         contextMatch: "",
         notes: r.rationale ?? "",
-      } satisfies DupeSuggestion;
+      };
+      return c;
     })
     .filter((x): x is DupeSuggestion => x !== null);
 
