@@ -286,7 +286,7 @@ function PaywallPage() {
       <div className="pb-safe space-y-2 px-6 pt-3">
         <button
           type="button"
-          onClick={startTrial}
+          onClick={() => startTrial()}
           disabled={busy}
           className="tap flex h-[58px] w-full flex-col items-center justify-center rounded-[16px] bg-foreground text-background shadow-lift disabled:opacity-60"
         >
