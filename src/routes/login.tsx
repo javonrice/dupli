@@ -44,7 +44,7 @@ function LoginPage() {
   }
 
   if (user) {
-    return <Navigate to="/app" />;
+    return <Navigate to={next} />;
   }
 
   const handleGoogle = async () => {
@@ -52,14 +52,13 @@ function LoginPage() {
     setSigningIn(true);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
       });
       if (result.error) {
         setError(result.error.message ?? "Sign-in failed.");
         setSigningIn(false);
         return;
       }
-      // result.redirected => browser will navigate; we just wait.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed.");
       setSigningIn(false);
