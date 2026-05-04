@@ -1,36 +1,36 @@
-import type { CommunityDupe } from "@/server/discover.functions";
-import { CommunityDupeCard } from "./community-dupe-card";
+import type { TrendingOriginal } from "@/server/discover.functions";
+import { CommunityOriginalCard } from "./community-original-card";
 
-/** Horizontal swipeable rail of trending community dupes. */
+/** Horizontal swipeable rail of trending originals (each shows N dupes summary). */
 export function TrendingRail({
-  dupes,
+  items,
   title = "Trending this week",
 }: {
-  dupes: CommunityDupe[];
+  items: TrendingOriginal[];
   title?: string;
 }) {
-  if (!dupes.length) return null;
+  if (!items.length) return null;
   return (
     <section className="space-y-2">
       <SectionHeader title={title} />
       <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {dupes.map((d) => (
-          <CommunityDupeCard key={d.id} dupe={d} variant="card" />
+        {items.map((it) => (
+          <CommunityOriginalCard key={it.id} item={it} variant="card" />
         ))}
       </div>
     </section>
   );
 }
 
-/** 2-column grid of community dupes — the "For you" / popular feed. */
-export function ForYouGrid({ dupes }: { dupes: CommunityDupe[] }) {
-  if (!dupes.length) return null;
+/** 2-column grid of trending originals — the "For you" / popular feed. */
+export function ForYouGrid({ items }: { items: TrendingOriginal[] }) {
+  if (!items.length) return null;
   return (
     <section className="space-y-2">
-      <SectionHeader title="Popular dupes" />
+      <SectionHeader title="Popular originals" />
       <div className="grid grid-cols-2 gap-3 pt-1">
-        {dupes.map((d) => (
-          <CommunityDupeCard key={d.id} dupe={d} variant="tile" />
+        {items.map((it) => (
+          <CommunityOriginalCard key={it.id} item={it} variant="tile" />
         ))}
       </div>
     </section>

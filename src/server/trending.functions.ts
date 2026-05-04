@@ -11,7 +11,9 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   getDupeOfTheDay,
   getTrendingDupes,
+  getTrendingOriginals,
   type CommunityDupe,
+  type TrendingOriginal,
 } from "@/server/discover.functions";
 import { slugify } from "@/server/skinsort-slugs";
 
@@ -112,6 +114,73 @@ export const getTrendingDupesBlended = createServerFn({ method: "GET" })
 
       const catalog = await getTrendingDupes({ data: { limit } });
       return { dupes: catalog.dupes, source: "catalog" };
+    },
+  );
+
+/** Trending ORIGINALS — group save-driven dupes by their original product,
+ *  fall back to catalog-grouped originals when there isn't enough save signal. */
+export const getTrendingOriginalsBlended = createServerFn({ method: "GET" })
+  .inputValidator((data) =>
+    z.object({ limit: z.number().min(1).max(50).optional() }).parse(data),
+  )
+  .handler(
+    async ({
+      data,
+    }): Promise<{ originals: TrendingOriginal[]; source: TrendingSource }> => {
+      const limit = data.limit ?? 12;
+
+      // Pull a wide save window so each original ends up with multiple dupes.
+      const saved = await fetchSavedTrending(limit * 8);
+      const grouped = new Map<string, TrendingOriginal>();
+      for (const m of saved) {
+        const key = `slug:${m.original.brandSlug}/${m.original.productSlug}`;
+        let bucket = grouped.get(key);
+        if (!bucket) {
+          bucket = {
+            id: key,
+            original: m.original,
+            dupes: [],
+            dupeCount: 0,
+            avgDupePriceUsd: null,
+            minDupePriceUsd: null,
+            bestMatch: 0,
+            maxSavingsPct: null,
+          };
+          grouped.set(key, bucket);
+        }
+        if (bucket.dupes.length < 4) bucket.dupes.push(m.dupe);
+        bucket.dupeCount += 1;
+        if (m.overallMatch > bucket.bestMatch) bucket.bestMatch = m.overallMatch;
+      }
+
+      const savedOriginals: TrendingOriginal[] = [];
+      for (const b of grouped.values()) {
+        const prices = b.dupes
+          .map((d) => d.lowestPriceUsd)
+          .filter((p): p is number => p != null && p > 0);
+        if (prices.length > 0) {
+          b.avgDupePriceUsd = prices.reduce((a, c) => a + c, 0) / prices.length;
+          b.minDupePriceUsd = Math.min(...prices);
+          if (b.original.lowestPriceUsd && b.original.lowestPriceUsd > 0) {
+            const op = b.original.lowestPriceUsd;
+            const savings = prices.map((p) => Math.round(((op - p) / op) * 100));
+            b.maxSavingsPct = Math.max(...savings);
+          }
+        }
+        savedOriginals.push(b);
+      }
+      savedOriginals.sort(
+        (a, b) =>
+          b.bestMatch * Math.log(1 + b.dupeCount) -
+          a.bestMatch * Math.log(1 + a.dupeCount),
+      );
+
+      if (savedOriginals.length >= Math.ceil(limit * SAVE_PATH_COVERAGE)) {
+        return { originals: savedOriginals.slice(0, limit), source: "saved" };
+      }
+
+      const catalog = await getTrendingOriginals({ data: { limit } });
+      return { originals: catalog.originals, source: "catalog" };
     },
   );
 
