@@ -48,15 +48,16 @@ function PaywallPage() {
   const [plan, setPlan] = useState<Plan>("yearly");
   const [gateChecking, setGateChecking] = useState(true);
 
-  // Client-side gate: require auth, and skip the paywall if the user already
-  // has an active subscription. (Done here, not in beforeLoad, so SSR doesn't
-  // bounce fresh visitors to /login.)
+  // Client-side gate: skip the paywall ONLY if the user is already signed in
+  // and has an active subscription. We intentionally do NOT redirect anonymous
+  // visitors to /login — the paywall is part of the onboarding funnel and must
+  // be shown before account creation. Login is required later, at checkout.
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
     (async () => {
       if (!user) {
-        navigate({ to: "/login", search: { next: "/paywall" }, replace: true });
+        if (!cancelled) setGateChecking(false);
         return;
       }
       try {
