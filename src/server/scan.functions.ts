@@ -460,12 +460,31 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
 
   const headline = dupes[0] ?? null;
 
+  // Steal-find detection: deterministic, never trust the model. We only flip
+  // framing when both prices are present, the dupe is meaningfully more
+  // expensive than the scanned item (>25% buffer to ignore noise), and we
+  // actually have a headline candidate.
+  const originalPrice = safeNumber(original.estimatedPriceUsd);
+  const dupePrice = headline ? headline.estimatedPriceUsd : 0;
+  const isStealFind =
+    !!headline &&
+    originalPrice > 0 &&
+    dupePrice > 0 &&
+    dupePrice > originalPrice * 1.25;
+
+  let savingsPct = 0;
+  if (headline && originalPrice > 0 && dupePrice > 0) {
+    savingsPct = isStealFind
+      ? Math.round(((dupePrice - originalPrice) / dupePrice) * 100)
+      : Math.max(0, Math.round(((originalPrice - dupePrice) / originalPrice) * 100));
+  }
+
   return {
     original: {
       productName: safeText(original.productName, "Unknown product"),
       brand: safeText(original.brand, "Unknown brand"),
       category: safeText(original.category, "Beauty product"),
-      estimatedPriceUsd: safeNumber(original.estimatedPriceUsd),
+      estimatedPriceUsd: originalPrice,
       keyIngredients: safeList(original.keyIngredients),
       imageUrl: original.imageUrl,
     },
@@ -504,6 +523,8 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
     riskFactors: safeList(input.riskFactors ?? headline?.riskFactors),
     missingActives: safeList(input.missingActives ?? headline?.missingActives),
     safetyNote: safeText(input.safetyNote ?? headline?.safetyNote, ""),
+    framing: isStealFind ? "steal-find" : "classic-dupe",
+    savingsPct,
   };
 }
 
