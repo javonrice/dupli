@@ -25,7 +25,6 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
   const framing = analysis.framing ?? "classic-dupe";
   const isSteal = framing === "steal-find";
   const v = verdictStyles[verdict];
-  const Icon = v.icon;
 
   const fallbackSavings =
     dupe && original.estimatedPriceUsd > 0
