@@ -191,7 +191,7 @@ function OnboardingPage() {
           onClick: () => navigate({ to: "/login", search: { next: "/app" } }),
         }}
       >
-        <div className="relative -mx-5 -mt-2 flex h-full flex-col">
+        <div className="relative -mx-6 -mt-2 flex h-full flex-col">
           {/* Immersive hero — camera POV scanning a real product */}
           <div className="relative h-[58vh] min-h-[360px] w-full overflow-hidden">
             <img
