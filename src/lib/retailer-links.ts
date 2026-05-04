@@ -97,11 +97,15 @@ function isUsableUrl(url: string | undefined | null): url is string {
  * - Otherwise build a retailer search URL from `whereToBuy` + brand + product name.
  * - Falls back to a generic Google Shopping search.
  */
+/**
+ * Fallback retailer link when we don't have a verified product page.
+ * Always points at a real retailer search (Amazon) — never Google.
+ */
 export function googleShoppingLink(brand: string, productName: string): RetailerLink {
   const query = buildQuery(brand, productName);
   return {
-    label: "Google Shopping",
-    url: `https://www.google.com/search?tbm=shop&q=${encodeURIComponent(query)}`,
+    label: "Amazon",
+    url: `https://www.amazon.com/s?k=${encodeURIComponent(query)}`,
   };
 }
 
