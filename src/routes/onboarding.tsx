@@ -608,11 +608,45 @@ function FileInputs({ flow }: { flow: ReturnType<typeof useScanFlow> }) {
 }
 
 function ReceiptCard() {
-  const items = [
-    ["Serum", "$48"],
-    ["Moisturizer", "$38"],
-    ["Cleanser", "$29"],
+  const items: [string, number][] = [
+    ["Serum", 48],
+    ["Moisturizer", 38],
+    ["Cleanser", 29],
   ];
+  const total = items.reduce((s, [, v]) => s + v, 0);
+  const [revealed, setRevealed] = useState(0);
+  const [showTotal, setShowTotal] = useState(false);
+  const [counter, setCounter] = useState(0);
+
+  // Stagger the line items in, then slam the total.
+  useEffect(() => {
+    const timeouts: number[] = [];
+    items.forEach((_, i) => {
+      timeouts.push(window.setTimeout(() => setRevealed(i + 1), 350 + i * 450));
+    });
+    timeouts.push(
+      window.setTimeout(() => setShowTotal(true), 350 + items.length * 450 + 250),
+    );
+    return () => timeouts.forEach(clearTimeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Count up the total once it slams in.
+  useEffect(() => {
+    if (!showTotal) return;
+    const start = performance.now();
+    const duration = 600;
+    let raf = 0;
+    const tick = (now: number) => {
+      const t = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setCounter(Math.round(eased * total));
+      if (t < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [showTotal, total]);
+
   return (
     <div className="rounded-[20px] border border-border bg-card p-5 shadow-soft">
       <div className="flex items-center gap-2">
@@ -622,18 +656,32 @@ function ReceiptCard() {
         </p>
       </div>
       <div className="mt-3 space-y-2">
-        {items.map(([k, v]) => (
+        {items.map(([k, v], i) => (
           <div
             key={k}
-            className="flex items-baseline justify-between border-b border-dashed border-border/60 pb-1.5 text-[15px]"
+            className="flex items-baseline justify-between border-b border-dashed border-border/60 pb-1.5 text-[15px] transition-all duration-500 ease-out"
+            style={{
+              opacity: i < revealed ? 1 : 0,
+              transform: i < revealed ? "translateX(0)" : "translateX(-12px)",
+            }}
           >
             <span className="text-foreground">{k}</span>
-            <span className="font-mono font-medium text-foreground">{v}</span>
+            <span className="font-mono font-medium text-foreground">${v}</span>
           </div>
         ))}
-        <div className="flex items-baseline justify-between pt-1.5 text-[16px] font-semibold">
+        <div
+          className="flex items-baseline justify-between pt-2 text-[18px] font-bold"
+          style={{
+            opacity: showTotal ? 1 : 0,
+            transform: showTotal ? "scale(1)" : "scale(1.6)",
+            transition:
+              "opacity 180ms ease-out, transform 260ms cubic-bezier(0.34, 1.8, 0.64, 1)",
+          }}
+        >
           <span>Total</span>
-          <span className="font-mono">$115</span>
+          <span className="font-mono tabular-nums text-destructive">
+            ${counter}
+          </span>
         </div>
       </div>
     </div>
