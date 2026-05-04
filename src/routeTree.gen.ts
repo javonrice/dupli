@@ -24,6 +24,7 @@ import { Route as AppAppRouteImport } from './routes/_app/app'
 import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
 import { Route as AppPProductIdRouteImport } from './routes/_app/p.$productId'
 import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
+import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
 import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
 import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
 import { Route as ApiPublicHooksEnqueueVendorBackfillRouteImport } from './routes/api/public/hooks/enqueue-vendor-backfill'
@@ -104,6 +105,12 @@ const AppScanIdIndexRoute = AppScanIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppScanIdRoute,
 } as any)
+const ApiPublicPaymentsWebhookRoute =
+  ApiPublicPaymentsWebhookRouteImport.update({
+    id: '/api/public/payments/webhook',
+    path: '/api/public/payments/webhook',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksRunIngestionRoute =
   ApiPublicHooksRunIngestionRouteImport.update({
     id: '/api/public/hooks/run-ingestion',
@@ -153,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -173,6 +181,7 @@ export interface FileRoutesByTo {
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/scan/$id': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesById {
@@ -196,6 +205,7 @@ export interface FileRoutesById {
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
+  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/_app/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -219,6 +229,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
+    | '/api/public/payments/webhook'
     | '/scan/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -239,6 +250,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
+    | '/api/public/payments/webhook'
     | '/scan/$id'
   id:
     | '__root__'
@@ -261,6 +273,7 @@ export interface FileRouteTypes {
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
+    | '/api/public/payments/webhook'
     | '/_app/scan/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -276,6 +289,7 @@ export interface RootRouteChildren {
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
   ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
+  ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -385,6 +399,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScanIdIndexRouteImport
       parentRoute: typeof AppScanIdRoute
     }
+    '/api/public/payments/webhook': {
+      id: '/api/public/payments/webhook'
+      path: '/api/public/payments/webhook'
+      fullPath: '/api/public/payments/webhook'
+      preLoaderRoute: typeof ApiPublicPaymentsWebhookRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/run-ingestion': {
       id: '/api/public/hooks/run-ingestion'
       path: '/api/public/hooks/run-ingestion'
@@ -472,6 +493,7 @@ const rootRouteChildren: RootRouteChildren = {
     ApiPublicHooksEnqueueVendorBackfillRoute,
   ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
   ApiPublicHooksRunIngestionRoute: ApiPublicHooksRunIngestionRoute,
+  ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
