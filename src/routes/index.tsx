@@ -38,13 +38,14 @@ async function waitForOAuthSession(timeoutMs = 4000) {
       const { data } = await supabase.auth.getSession();
       resolve(data.session);
     }, timeoutMs);
-    const timer = setTimeout(async () => {
-      const { data } = await supabase.auth.getSession();
-      finish(data.session);
-    }, timeoutMs);
     // Race: maybe the session is already set by the time we subscribed.
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) finish(data.session);
+      if (data.session && !settled) {
+        settled = true;
+        sub.data.subscription.unsubscribe();
+        clearTimeout(timer);
+        resolve(data.session);
+      }
     });
   });
 }
