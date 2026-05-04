@@ -169,22 +169,8 @@ function PaywallPage() {
     }
   };
 
-  // Auto-resume checkout after sign-in if a recent intent exists.
-  useEffect(() => {
-    if (authLoading || gateChecking) return;
-    if (!user) return;
-    if (resumedRef.current) return;
-    const intent = consumeIntent();
-    if (!intent) return;
-    resumedRef.current = true;
-    setPlan(intent.plan);
-    if (intent.kind === "intro") {
-      void startCheap();
-    } else {
-      void startTrial(intent.plan);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, gateChecking, user]);
+  // (Removed legacy intent-resume: anonymous users now go directly to checkout.)
+
 
   const busy = checkoutLoading || introLoading;
 
