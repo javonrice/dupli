@@ -6,8 +6,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import wordmark from "@/assets/dupli-wordmark.png";
 
+const ALLOWED_NEXT = ["/app", "/paywall", "/onboarding"] as const;
+function safeNext(n: unknown): string {
+  if (typeof n !== "string") return "/app";
+  return (ALLOWED_NEXT as readonly string[]).includes(n) ? n : "/app";
+}
+
 export const Route = createFileRoute("/login")({
   component: LoginPage,
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — Dupli" },
@@ -18,6 +27,8 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const { user, loading } = useAuth();
+  const search = Route.useSearch();
+  const next = safeNext(search.next);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
