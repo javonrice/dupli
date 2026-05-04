@@ -32,7 +32,9 @@ function LoginPage() {
   const next = safeNext(search.next);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">(
+    safeNext(search.next) === "/paywall" ? "signup" : "signin",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
