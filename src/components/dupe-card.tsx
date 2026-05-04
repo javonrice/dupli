@@ -1,5 +1,5 @@
 import type { DupeAnalysis } from "@/server/scan.functions";
-import { Check, TrendingDown, AlertCircle, Sparkles, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
+import { Check, AlertCircle, Sparkles, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
 import wordmark from "@/assets/dupli-wordmark.png";
 
 function priceTag(n: number) {
