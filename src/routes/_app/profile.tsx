@@ -46,9 +46,30 @@ function ProfilePage() {
       .finally(() => setLoading(false));
   }, [getProfile]);
 
+  const openPortal = useServerFn(createCustomerPortalSession);
+  const [portalLoading, setPortalLoading] = useState(false);
+
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/login" });
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ignore */
+    }
+    window.location.assign("/login");
+  };
+
+  const handleManageSubscription = async () => {
+    if (portalLoading) return;
+    setPortalLoading(true);
+    try {
+      const res = await openPortal({ data: { environment: getPaddleEnvironment() } });
+      if (res.url) window.open(res.url, "_blank", "noopener,noreferrer");
+      else toast.error(res.error ?? "Couldn't open subscription portal.");
+    } catch {
+      toast.error("Couldn't open subscription portal.");
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   const displayName =
