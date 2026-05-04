@@ -50,25 +50,6 @@ function LoginPage() {
     return <Navigate to={next} />;
   }
 
-  const handleOAuth = async (provider: "apple") => {
-    setError(null);
-    setSigningIn(true);
-    try {
-      const result = await lovable.auth.signInWithOAuth(provider, {
-        redirect_uri: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
-      });
-      if (result.error) {
-        setError(result.error.message ?? "Sign-in failed.");
-        setSigningIn(false);
-        return;
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Sign-in failed.");
-      setSigningIn(false);
-    }
-  };
-
-
   const handleResend = async () => {
     if (!pendingConfirmEmail) return;
     setResendState("sending");
