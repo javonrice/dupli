@@ -3,11 +3,13 @@ import { ArrowRight, Sparkles, ShoppingBag } from "lucide-react";
 import type { CommunityDupe } from "@/server/discover.functions";
 
 function heroLinkProps(dupe: CommunityDupe) {
-  if (dupe.id.startsWith("saved:")) {
-    const scanId = dupe.id.split(":")[2] ?? "";
-    return { to: "/scan/$id" as const, params: { id: scanId } };
+  if (dupe.original.id) {
+    return { to: "/p/$productId" as const, params: { productId: dupe.original.id } };
   }
-  return { to: "/p/$productId" as const, params: { productId: dupe.dupe.id } };
+  return {
+    to: "/community/$brand/$product" as const,
+    params: { brand: dupe.original.brandSlug, product: dupe.original.productSlug },
+  };
 }
 
 /** The "Dupe of the Day" hero card — prominent editorial moment at the top of the hub. */
