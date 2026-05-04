@@ -4,7 +4,7 @@ import { Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
-import { claimSubscriptions } from "@/server/claim.functions";
+import { claimSubscriptions, claimSubscriptionsByCustomerId } from "@/server/claim.functions";
 import wordmark from "@/assets/dupli-wordmark.png";
 
 export const Route = createFileRoute("/checkout/account")({
@@ -35,9 +35,28 @@ function CheckoutAccountPage() {
     (async () => {
       setClaiming(true);
       try {
-        const { claimed } = await claimSubscriptions();
+        // Try email-based claim first, then fall back to customer-id claim
+        // for cases where Paddle returned an anonymized email.
+        const [{ claimed: claimedByEmail }, cidResult] = await Promise.all([
+          claimSubscriptions(),
+          (async () => {
+            let cid: string | null = null;
+            try {
+              cid = localStorage.getItem("dupli.paddle.customer_id");
+            } catch {}
+            if (!cid) return { claimed: 0 };
+            return claimSubscriptionsByCustomerId({ data: { customerId: cid } });
+          })(),
+        ]);
         if (cancelled) return;
-        if (claimed > 0) toast.success("Welcome to Dupli Pro 🎉");
+        const total = (claimedByEmail || 0) + (cidResult?.claimed || 0);
+        if (total > 0) {
+          toast.success("Welcome to Dupli Pro 🎉");
+          try {
+            localStorage.removeItem("dupli.paddle.customer_id");
+            localStorage.removeItem("dupli.paddle.customer_email");
+          } catch {}
+        }
         navigate({ to: "/app", search: { checkout: "success" }, replace: true });
       } catch (e) {
         console.error("[checkout/account] claim failed", e);
