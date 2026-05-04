@@ -100,7 +100,26 @@ export const getScan = createServerFn({ method: "GET" })
     },
   );
 
-export const deleteScan = createServerFn({ method: "POST" })
+/** Public read of a scan — used to render community / save-sourced detail pages
+ *  without requiring sign-in. Strips user_id so we don't leak who scanned it. */
+export type PublicScanRow = Omit<ScanRow, "user_id">;
+
+export const getPublicScan = createServerFn({ method: "GET" })
+  .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(
+    async ({ data }): Promise<{ scan: PublicScanRow | null; error: string | null }> => {
+      const { data: row, error } = await supabaseAdmin
+        .from("scans")
+        .select(
+          "id, original_brand, original_product_name, original_image_url, dupe_brand, dupe_product_name, dupe_image_url, match_score, verdict, thumbnail_data_url, analysis, created_at",
+        )
+        .eq("id", data.id)
+        .maybeSingle();
+      if (error) return { scan: null, error: error.message };
+      if (!row) return { scan: null, error: "Scan not found" };
+      return { scan: row as unknown as PublicScanRow, error: null };
+    },
+  );
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }): Promise<{ ok: boolean; error: string | null }> => {
