@@ -24,6 +24,8 @@ import {
 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import dupliWordmark from "@/assets/dupli-wordmark.png";
+import heroCameraScan from "@/assets/onboarding/hero-camera-scan.jpg";
+import heroResultPhone from "@/assets/onboarding/hero-result-phone.jpg";
 import { GuidedLineReveal } from "@/components/onboarding/guided-line-reveal";
 import { LearningCard } from "@/components/onboarding/learning-card";
 import { TapCard } from "@/components/onboarding/tap-card";
@@ -181,25 +183,57 @@ function OnboardingPage() {
         hideProgress
         primary={{ label: "Get Started", onClick: goNext("gender") }}
       >
-        <div className="flex h-full flex-col items-center justify-center text-center">
-          <img
-            src={dupliWordmark}
-            alt="Dupli"
-            className="h-16 w-auto select-none"
-            draggable={false}
-          />
-          <p className="mt-6 max-w-[18rem] font-display text-[22px] font-semibold leading-tight tracking-tight">
-            Find better beauty for less.
-          </p>
-          <div className="mt-5 flex items-center gap-1">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Star key={i} className="h-4 w-4 fill-warning text-warning" strokeWidth={1.5} />
-            ))}
-            <span className="ml-1.5 text-[12px] font-semibold text-muted-foreground">
-              4.8 · 12,000+ shoppers
-            </span>
+        <div className="relative -mx-5 -mt-2 flex h-full flex-col">
+          {/* Immersive hero — camera POV scanning a real product */}
+          <div className="relative h-[58vh] min-h-[360px] w-full overflow-hidden">
+            <img
+              src={heroCameraScan}
+              alt="Scanning a beauty product with Dupli"
+              className="absolute inset-0 h-full w-full object-cover animate-[hero-zoom_8s_ease-out_forwards]"
+              draggable={false}
+            />
+            {/* Soft fade-out into copy */}
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-b from-transparent to-background" />
+            {/* Live scan pill */}
+            <div className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full bg-foreground/70 px-2.5 py-1 text-[11px] font-semibold text-background backdrop-blur animate-[hero-fade_700ms_ease-out_400ms_both]">
+              <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
+              Live scan
+            </div>
+          </div>
+
+          <div className="flex flex-1 flex-col items-center px-5 pt-2 text-center">
+            <img
+              src={dupliWordmark}
+              alt="Dupli"
+              className="h-10 w-auto select-none"
+              draggable={false}
+            />
+            <h1 className="mt-4 max-w-[20rem] font-display text-[26px] font-bold leading-[1.05] tracking-tight">
+              Snap a product. Find the dupe.
+            </h1>
+            <p className="mt-2 max-w-[20rem] text-[14px] leading-relaxed text-muted-foreground">
+              Point your camera at any beauty product to find a lower-cost match in seconds.
+            </p>
+            <div className="mt-4 flex items-center gap-1">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Star key={i} className="h-4 w-4 fill-warning text-warning" strokeWidth={1.5} />
+              ))}
+              <span className="ml-1.5 text-[12px] font-semibold text-muted-foreground">
+                4.8 · 12,000+ shoppers
+              </span>
+            </div>
           </div>
         </div>
+        <style>{`
+          @keyframes hero-zoom {
+            from { transform: scale(1.08); }
+            to { transform: scale(1); }
+          }
+          @keyframes hero-fade {
+            from { opacity: 0; transform: translateY(-6px); }
+            to { opacity: 1; transform: translateY(0); }
+          }
+        `}</style>
       </OnboardingShell>
     );
   }
