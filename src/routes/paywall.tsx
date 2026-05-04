@@ -160,12 +160,6 @@ function PaywallPage() {
     }
   };
 
-  const dismiss = () => {
-    track("paywall_dismissed");
-    markOnboardingComplete();
-    navigate({ to: "/app" });
-  };
-
   const busy = checkoutLoading || introLoading;
 
   if (authLoading || gateChecking) {
@@ -179,16 +173,7 @@ function PaywallPage() {
   return (
     <div className="flex h-screen-safe flex-col bg-background">
       <div className="pt-safe" />
-      <div className="flex h-12 items-center justify-end px-3">
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Close"
-          className="tap flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+      <div className="h-3" />
 
       <div className="flex-1 overflow-y-auto px-6 pb-4">
         <p className="text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
