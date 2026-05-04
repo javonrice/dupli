@@ -1,59 +1,66 @@
-## Goal
+## Two related issues to fix
 
-Reskin the top half of `DupeCard` (verdict bar + product pair) to mirror the `ShareCard` layout, with "You found a steal" given a stronger, hero treatment — but still tasteful, not the bright green pill we just killed.
+### 1. Trending dupes cards on the home screen are confusing
 
-Everything below the pair (ingredient match, formula breakdown, risk panel, notes) stays exactly as is.
+The current `CommunityDupeCard` (`src/components/home/community-dupe-card.tsx`) stacks two product images side‑by‑side with a tiny match-% chip floating between them, then lists Original / Dupe text below with a single price at the very bottom. It's unclear which image is the original vs the dupe, which price belongs to which product, or why one is a "steal." On a 200px-wide rail card the truncation makes it worse.
 
-## New top-half structure
-
-Replicates the share card top-to-bottom:
+**Redesign — one clear vertical card:**
 
 ```text
-┌────────────────────────────────────────────────────┐
-│ [verdict pill]                    [risk pill]      │  ← header row (small)
-│                                                    │
-│  YOU FOUND A STEAL                                 │  ← eyebrow, success-green, tracked
-│  96% cheaper                                       │  ← huge display number
-│  $1 vs $34 name brand                              │  ← price subtitle
-│                                                    │
-│  ┌──────────────┐   ┌──────────────┐               │
-│  │ YOU SCANNED  │   │ WHAT IT DUPES│               │  ← two product cards
-│  │   [image]    │   │   [image]    │     side-by-  │
-│  │   Brand      │   │   Brand      │     side, the │
-│  │   Name       │   │   Name       │     scanned   │
-│  │   $1.25      │   │   $34        │     one has a │
-│  └──────────────┘   └──────────────┘     dark accent│
-└────────────────────────────────────────────────────┘
+┌─────────────────────────┐
+│   [DUPE image, large]   │   ← the dupe is the hero
+│                         │
+├──── 92% MATCH ──────────┤   ← clear match pill, full width
+│ CERAVE                  │
+│ Moisturizing Cream      │   ← dupe brand + name (emphasized)
+│ $14.99                  │   ← dupe price (big, tabular)
+├─────────────────────────┤
+│ dupe for                │
+│ [tiny img] La Mer       │   ← original as small reference row
+│           Crème · $190  │
+└─────────────────────────┘
+   STEAL · 92% CHEAPER       ← optional badge overlaid on hero
 ```
 
-In **classic-dupe** mode the eyebrow says "We found the dupe", display reads "Save 42%", subtitle "$40 → $12", and the dupe card gets the accent (matches share card behavior).
+Specifics:
+- Hero = the **dupe** product image (square, full card width). The dupe is what the user buys, so it leads.
+- Match-% becomes a full-width divider pill (`92% match`) — no more floating chip you can't read.
+- Dupe brand (uppercase tracking), product name (display font, 2-line clamp), and price stack cleanly underneath.
+- "Dupe for" footer row shows the original as a small 32px thumbnail + brand/name + crossed-out-feel price, so the comparison is unambiguous.
+- Steal badge (when `detectSteal` returns a value) overlays the top-left of the hero image as a bold pill (`★ STEAL · 40% off`) instead of a tiny inline chip.
+- Keep both `variant="card"` (200px rail) and `variant="tile"` (grid) — the layout works identically, just different widths.
+- Keep the existing `dupeLinkProps` routing (saved scans → `/scan/$id`, catalog → `/p/$productId`).
 
-## Specifics
+This is purely a visual rewrite of `src/components/home/community-dupe-card.tsx`. No data shape changes, no server changes.
 
-In `src/components/dupe-card.tsx`:
+### 2. Scan results "Also could be a dupe" rail should include SkinSort dupes
 
-1. **Replace the existing verdict bar** (lines 75–96) with a new `<header>` block that:
-   - Top mini-row: verdict chip on the left (smaller version of current verdict styling), risk chip on the right (move the risk chip up here from the lookalike band so it's prominent).
-   - Eyebrow line: `YOU FOUND A STEAL` / `WE FOUND THE DUPE` — `text-[11px] font-bold uppercase tracking-[0.22em]`, color `text-success` when steal else `text-muted-foreground`.
-   - Display headline: `{savings}% cheaper` (steal) or `Save {savings}%` (classic) — `font-display text-5xl font-extrabold tracking-tight leading-none`.
-   - Subtitle: steal → `<strong>$1</strong> vs $34 name brand`; classic → `$40 → <strong>$12</strong>` — `text-sm text-muted-foreground mt-1.5`.
-   - Background: subtle warm gradient like share card (`bg-gradient-to-br from-secondary/40 to-card`), padded `px-5 pt-5 pb-6`.
+Today the rail (`src/components/scanner.tsx` lines 225–280) only shows `analysis.dupes` from the AI scan — typically 2–6 candidates. The SkinSort-mirrored database (`dupes` table, queried by `lookupDupes` in `src/server/dupes.functions.ts`) already has up to 10 community-validated dupes per known product, but they're never surfaced on the scan screen.
 
-2. **Restyle the pair grid** (lines 98–112) to look like share card's `ProductCard`:
-   - Switch from `grid grid-cols-2 divide-x` to `grid grid-cols-2 gap-3 px-3 pb-4` (no divider; two distinct cards with rounded corners + soft shadow).
-   - Update `ProductSide` so the highlighted side gets `border-2 border-foreground` (dark accent, like share card) instead of green ring. Keep success-green text for the "YOU SCANNED" eyebrow only when steal — reinforces the win without the loud pill.
-   - Card body: white bg, `rounded-2xl`, `shadow-sm`, internal padding, image in a square `bg-secondary/40` tile. Match share card proportions.
+**Wire SkinSort dupes into the scan result:**
 
-3. **Lookalike band**: keep but remove the risk chip from it (now lives in the header mini-row). Band stays as a thin info strip just for the lookalike + visual-similarity %. If only risk was driving its display and there's no `dupeType`/`packagingSimilarity`, hide the band entirely.
+1. In `scanProduct` (`src/server/scan.functions.ts`), after the AI analysis is built and we know `parsed.original.brand` + `parsed.original.productName`, call the same DB query `lookupDupes` uses (read products by `brand_slug`+`product_slug`, then `dupes` table joined to dupe products).
+2. Convert each SkinSort row into a `DupeSuggestion` shape:
+   - `productName`, `brand`, `category`, `imageUrl` from the joined product
+   - `matchScore` = `overall_match`
+   - `estimatedPriceUsd` = the joined product's `lowest_price_usd` (0 if missing — UI already handles that)
+   - `dupeType: "Formula dupe"`, `riskLevel: "Comparable"` defaults
+   - `notes` = `rationale` (so the verdict text isn't empty)
+   - empty arrays for ingredient breakdowns (we don't have per-pair detail)
+3. **Randomly sample 3–4** of these (cap configurable, default 4) using a deterministic shuffle seeded by `parsed.original.brand+productName` so the same scan always returns the same picks but different products feel varied.
+4. **Merge into `parsed.dupes`**, after the AI candidates, then **dedupe** by `slugify(brand)+"/"+slugify(productName)` so we don't show the same product twice if AI and SkinSort agree.
+5. Cap the merged total at ~8 so the rail stays scrollable but not endless. The AI's top pick stays the headline (index 0); SkinSort additions live purely in the "Also could be a dupe" rail.
+6. Run `resolveProductLinks` for the SkinSort-sourced candidates too, inside the existing `Promise.all` so they get real buy buttons just like AI candidates.
 
-4. **No green "You found a steal" pill anywhere** — that copy lives only as the eyebrow text now.
+**Failure modes handled:**
+- Product not in DB → `lookupDupes` already returns `{ found: false }`; we just skip the merge silently and enqueue ingestion (already does).
+- DB query throws → wrap in try/catch, log, fall back to AI-only dupes (never block the scan).
+- SkinSort dupe has no price → keep it in the list; the rail card already gracefully shows nothing when `estimatedPriceUsd` is 0 (we'll add a small `—` fallback in the alternates rail in scanner.tsx so it doesn't render `$0`).
 
-## Why this works
+No schema changes, no migrations. Pure read of existing `products` + `dupes` tables.
 
-- "You found a steal" is the loudest thing on the screen by far (huge display number + eyebrow), so prominence is solved by hierarchy, not color volume.
-- Mirrors the share asset, so what users see in-app is what they post — consistent brand moment.
-- Removes the visually-competing risk chip from the band by promoting it to the header.
+## Files changed
 
-## Files
-
-- `src/components/dupe-card.tsx` — only file changed. No data, no backend, no share card edits.
+- `src/components/home/community-dupe-card.tsx` — full visual rewrite (single hero, clear match pill, original-as-footer reference, prominent steal badge).
+- `src/server/scan.functions.ts` — after AI parse: query DB for SkinSort dupes of the scanned product, sample 3–4, merge into `parsed.dupes` with dedupe + link resolution.
+- `src/components/scanner.tsx` — guard against `$0` price display in the alternates rail (small polish so SkinSort items without prices look clean).

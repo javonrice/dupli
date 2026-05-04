@@ -2,6 +2,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { resolveProductLinks, type ProductLink } from "@/server/product-links.server";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { slugify } from "@/server/skinsort-slugs";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
@@ -354,9 +356,29 @@ export const scanProduct = createServerFn({ method: "POST" })
       }
       const parsed = normalizeAnalysis(JSON.parse(argsRaw) as Partial<DupeAnalysis>);
 
-      // NOTE: DB cross-reference intentionally disabled — keep results pure AI for now.
-      // The SkinSort-backed dupes table is populated but not consulted.
-      // To re-enable, restore the call to crossReferenceDupeDb(parsed) here.
+      // Merge in SkinSort-mirrored community dupes for the scanned original.
+      // Failure is silent — never blocks the scan.
+      try {
+        const extras = await fetchSkinsortDupes(
+          parsed.original?.brand,
+          parsed.original?.productName,
+          4,
+        );
+        if (extras.length > 0 && parsed.dupes) {
+          const seen = new Set(
+            parsed.dupes.map((d) => `${slugify(d.brand)}/${slugify(d.productName)}`),
+          );
+          for (const e of extras) {
+            const key = `${slugify(e.brand)}/${slugify(e.productName)}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            parsed.dupes.push(e);
+            if (parsed.dupes.length >= 8) break;
+          }
+        }
+      } catch (err) {
+        console.warn("[skinsort merge] failed, ignoring:", err);
+      }
 
       // Best-effort: enrich the original AND every dupe candidate with real product photos in parallel.
       // Capped at 7 candidates by the schema. Each lookup is wrapped so a failure never wipes the analysis.
@@ -876,3 +898,105 @@ function pickBestProductImage(
 // reintroduce a `crossReferenceDupeDb` helper in a `.server.ts` module and
 // import it here, then call it from the scan handler.
 
+
+// --- SkinSort dupes merge ----------------------------------------------------
+// Reads the local mirror (products + dupes tables) for the scanned product and
+// returns up to `limit` extra DupeSuggestion candidates. Deterministically
+// shuffled by the original brand+name so the same scan always yields the same
+// picks, but different products feel varied.
+
+function seededShuffle<T>(arr: T[], seedStr: string): T[] {
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i++) {
+    h ^= seedStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const rand = () => {
+    h ^= h << 13;
+    h ^= h >>> 17;
+    h ^= h << 5;
+    return ((h >>> 0) % 10000) / 10000;
+  };
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+async function fetchSkinsortDupes(
+  brand: string | undefined,
+  productName: string | undefined,
+  limit: number,
+): Promise<DupeSuggestion[]> {
+  if (!brand || !productName) return [];
+  const brandSlug = slugify(brand);
+  const productSlug = slugify(productName);
+  if (!brandSlug || !productSlug) return [];
+
+  const { data: product } = await supabaseAdmin
+    .from("products")
+    .select("id")
+    .eq("brand_slug", brandSlug)
+    .eq("product_slug", productSlug)
+    .maybeSingle();
+  if (!product) return [];
+
+  const { data: rows } = await supabaseAdmin
+    .from("dupes")
+    .select(
+      `overall_match, rationale,
+       dupe:products!dupes_dupe_product_id_fkey ( brand_name, product_name, category, image_url, lowest_price_usd )`,
+    )
+    .eq("original_product_id", product.id)
+    .order("overall_match", { ascending: false })
+    .limit(15);
+
+  type Row = {
+    overall_match: number;
+    rationale: string | null;
+    dupe: {
+      brand_name: string;
+      product_name: string;
+      category: string | null;
+      image_url: string | null;
+      lowest_price_usd: number | string | null;
+    } | null;
+  };
+  const candidates: DupeSuggestion[] = ((rows ?? []) as Row[])
+    .map((r): DupeSuggestion | null => {
+      const d = r.dupe;
+      if (!d) return null;
+      const price =
+        typeof d.lowest_price_usd === "string"
+          ? parseFloat(d.lowest_price_usd)
+          : (d.lowest_price_usd ?? 0);
+      const c: DupeSuggestion = {
+        productName: d.product_name,
+        brand: d.brand_name,
+        category: d.category ?? "Beauty product",
+        estimatedPriceUsd: Number.isFinite(price) && price > 0 ? price : 0,
+        whereToBuy: "Online",
+        buyUrl: "",
+        keyIngredients: [],
+        imageUrl: d.image_url ?? undefined,
+        matchScore: r.overall_match,
+        dupeType: "Formula dupe",
+        packagingSimilarity: 0,
+        riskLevel: "Comparable",
+        riskFactors: [],
+        missingActives: [],
+        safetyNote: "",
+        sharedIngredients: [],
+        uniqueToOriginal: [],
+        uniqueToDupe: [],
+        contextMatch: "",
+        notes: r.rationale ?? "",
+      };
+      return c;
+    })
+    .filter((x): x is DupeSuggestion => x !== null);
+
+  return seededShuffle(candidates, `${brandSlug}/${productSlug}`).slice(0, limit);
+}

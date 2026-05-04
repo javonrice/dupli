@@ -274,9 +274,11 @@ export function ResultsScreen({
                     </div>
                     <div className="mt-auto flex items-center justify-between">
                       <span className="font-display text-[15px] font-bold tabular-nums">
-                        {c.estimatedPriceUsd < 10
-                          ? `$${c.estimatedPriceUsd.toFixed(2)}`
-                          : `$${Math.round(c.estimatedPriceUsd)}`}
+                        {c.estimatedPriceUsd > 0
+                          ? c.estimatedPriceUsd < 10
+                            ? `$${c.estimatedPriceUsd.toFixed(2)}`
+                            : `$${Math.round(c.estimatedPriceUsd)}`
+                          : "—"}
                       </span>
                       {typeof c.matchScore === "number" && c.matchScore > 0 && (
                         <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background">
