@@ -155,7 +155,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
             color: "#6b6b6b",
           }}
         >
-          We found the dupe
+          {isSteal ? "You found a steal" : "We found the dupe"}
         </div>
         <div
           style={{
@@ -166,7 +166,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
             letterSpacing: "-0.035em",
           }}
         >
-          {savings !== null && savings > 0 ? `Save ${savings}%` : "The dupe"}
+          {isSteal && savings && savings > 0
+            ? `${savings}% cheaper`
+            : savings !== null && savings > 0
+              ? `Save ${savings}%`
+              : "The dupe"}
         </div>
         {dupe && (
           <div
@@ -178,10 +182,21 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
               fontWeight: 400,
             }}
           >
-            ${original.estimatedPriceUsd.toFixed(0)} →{" "}
-            <span style={{ color: "#0d0d0d", fontWeight: 700 }}>
-              ${dupe.estimatedPriceUsd.toFixed(0)}
-            </span>
+            {isSteal ? (
+              <>
+                <span style={{ color: "#0d0d0d", fontWeight: 700 }}>
+                  ${original.estimatedPriceUsd.toFixed(0)}
+                </span>{" "}
+                vs ${dupe.estimatedPriceUsd.toFixed(0)} name brand
+              </>
+            ) : (
+              <>
+                ${original.estimatedPriceUsd.toFixed(0)} →{" "}
+                <span style={{ color: "#0d0d0d", fontWeight: 700 }}>
+                  ${dupe.estimatedPriceUsd.toFixed(0)}
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
