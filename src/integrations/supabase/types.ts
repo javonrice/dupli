@@ -375,12 +375,14 @@ export type Database = {
         Returns: {
           dupe_brand: string
           dupe_image_url: string
+          dupe_price_usd: number
           dupe_product_name: string
           last_saved_at: string
           latest_scan_id: string
           match_score: number
           original_brand: string
           original_image_url: string
+          original_price_usd: number
           original_product_name: string
           pair_key: string
           save_count: number
