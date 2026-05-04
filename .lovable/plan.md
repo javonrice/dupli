@@ -1,31 +1,76 @@
-## Goal
+# Onboarding v2 — Cal AI conversion pattern
 
-Stop showing the marketing landing page at `/`. Keep the landing page in the codebase and reachable, but only via a direct URL that isn't linked from anywhere in the app. Onboarding will replace it later — not part of this change.
+## What's wrong with v1
 
-## Behavior change
+- Too many "lesson" screens stacked back-to-back (`pain` + `trust_gap` + `match_quality`) — reads like a brochure, not an app.
+- Reveal animation is slow (380ms stagger × multiple lines + cards) — first tap takes 3–5s. Cal AI feels *instant*.
+- No commitment beats: no rating prompt, no notifications ask, no testimonials, no "we made you a plan" personalization payoff.
+- Sample result is buried behind a choice screen instead of being the climax.
+- Paywall appears flat — no anchor price, no "trial timeline," no urgency.
 
-- Visiting `/` no longer renders the landing page.
-  - If the user has a session → send them to `/app`.
-  - If not → send them to `/login`.
-- The landing page content moves to `/landing` (unlisted route, no nav links to it). Anyone with the direct URL can still view it.
-- No other UI changes. No onboarding flow added yet — `/` just routes to login or app for now. That's a deliberate placeholder until onboarding is built.
+## New flow (14 fast screens, ~60s)
 
-## Files to change
+```
+1.  Welcome              big logo + 1 line + Get Started
+2.  Gender               Female / Male / Other          (1 tap)
+3.  Age range            18-24 / 25-34 / 35-44 / 45+    (1 tap)
+4.  "How often do you buy beauty?"                      (existing freq)
+5.  "What do you shop for?"     multi-select chips      (existing cats)
+6.  "What matters most?"   Save money / Clean ingredients / Find viral dupes / All
+7.  Pain reveal         receipt + "$1,400/yr avg" stat  (1 line, fast)
+8.  Social proof        4.8★ + 3 testimonial cards      auto-scroll
+9.  Trust explainer     ONE screen: looks-similar vs ingredients (collapsed)
+10. "Building your scanner…"  animated checklist tied to user's answers
+11. Personalized plan reveal   "Based on you: ~$340/yr in potential savings"
+12. Notifications ask    "Get notified when we find a match"   Allow / Not now
+13. Sample scan          auto-runs, shows Strong Match result
+14. Paywall              annual trial w/ timeline graphic, $0.99 fallback
+```
 
-1. **`src/routes/index.tsx`** — replace the `LandingPage` component with a route that redirects in `beforeLoad`:
-   - Check the Supabase session (same pattern as `src/routes/_app.tsx`).
-   - `throw redirect({ to: "/app" })` if signed in, else `throw redirect({ to: "/login" })`.
-   - Drop the `LandingPage` JSX from this file.
+After 14: real scan flow OR `/app`.
 
-2. **`src/routes/landing.tsx`** (new) — move the existing `LandingPage` component here verbatim with `createFileRoute("/landing")`. Keep the same `head()` meta so the page still has its OG/Twitter tags if someone shares the direct link.
+## Key design changes
 
-3. **`src/routes/login.tsx`** — audit for any `<Link to="/">` that points back to the marketing page and either remove it or repoint to `/landing`. (Will confirm during implementation.)
+**Speed**: drop reveal stagger from 380ms → 120ms; headline + body appear together; only secondary cards stagger. Tap-to-skip animation.
 
-4. **`src/routes/__root.tsx`** — no change needed; meta tags stay generic for the app.
+**One question per screen** (screens 2–6): giant tappable cards, no Continue button — auto-advance on tap (Cal AI signature). Back chevron only.
 
-## Notes
+**Personalization payoff** (screen 11): use their answers to compute a fake-but-plausible "$X/yr potential savings" number. This is the dopamine hit before paywall.
 
-- `routeTree.gen.ts` regenerates automatically — don't touch it.
-- The landing page's "Get started" / "Open app" CTAs continue to work from `/landing`.
-- This is purely a routing change; no DB, no auth changes, no removed features.
-- Once you're ready for onboarding, `/` becomes the onboarding flow and the unauth redirect target switches from `/login` to `/` (or onboarding stays at `/onboarding` and `/` shows it for new users). We'll decide then.
+**Loading screen with checklist** (screen 10): items reference *their* selected categories ("Indexing skincare matches…", "Tuning for weekly shoppers…"). 2.5s total, items check off in sequence. This is Cal AI's most-copied beat.
+
+**Social proof screen** (screen 8): 4.8★ rating row + 3 short testimonial cards in a horizontal auto-scroll. No Continue gating.
+
+**Paywall redesign**:
+- Header: "Start your 7-day free trial"
+- 3-step timeline: Today (unlock all) → Day 5 (reminder) → Day 7 (charged $39.99)
+- Toggle: Yearly $39.99 (save 67%) / Monthly $9.99
+- Big CTA: "Start My Free Trial"
+- Small text: "No payment due now" (if Apple) or current copy
+- "$0.99 first month" as ghost link below
+
+## Files
+
+- **`src/routes/onboarding.tsx`** — full rewrite of step machine. New steps: `welcome`, `gender`, `age`, `frequency`, `categories`, `goal`, `pain`, `social_proof`, `trust`, `building`, `plan_reveal`, `notifications`, `sample_loading`, `sample_result`. Drop separate `trust_gap` and `match_quality`; merge into one trust screen.
+- **`src/lib/onboarding.ts`** — extend `OnboardingState` with `gender`, `ageRange`, `goal`. Add `estimatedYearlySavings(state): number` helper used by plan reveal.
+- **`src/components/onboarding/onboarding-shell.tsx`** — add `hideProgress` prop for welcome/social-proof; tighten transitions.
+- **`src/components/onboarding/guided-line-reveal.tsx`** — reduce default `stagger` to 120, `delay` to 40; add `instant` prop for speed-critical screens.
+- **`src/components/onboarding/tap-card.tsx`** *(new)* — large tappable answer card used by gender/age/goal screens; auto-advances on tap with a subtle scale+check animation.
+- **`src/components/onboarding/social-proof.tsx`** *(new)* — rating header + horizontal testimonial scroller.
+- **`src/components/onboarding/plan-reveal.tsx`** *(new)* — animated savings counter (counts up to estimated $/yr), category badges, "Your plan is ready" headline.
+- **`src/components/onboarding/trial-timeline.tsx`** *(new)* — 3-dot vertical timeline used in paywall.
+- **`src/routes/paywall.tsx`** — restructure: plan toggle, timeline, single primary CTA, $0.99 as text link.
+
+## Behavior rules preserved
+
+- Failed scans don't trigger paywall (sample loading is fake-success only; real scan failure stays in scan flow).
+- Onboarding completion still persists via `markOnboardingComplete()`.
+- Real scan path still routes through `useScanFlow` and existing `ScanningScreen` / `ResultsScreen`.
+- Language stays "Strong/Good/Possible Match" — no "exact dupe."
+- Paywall only after value (sample result OR first real result OR explicit premium tap).
+
+## Out of scope
+
+- No backend / DB changes (all state stays in localStorage).
+- No real Apple/Google IAP wiring — paywall buttons still call `markOnboardingComplete()` + navigate.
+- Testimonials are static copy for now; can swap to real ones later.
