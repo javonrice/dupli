@@ -604,7 +604,7 @@ function OnboardingPage() {
         progress={progress}
         onScanOwn={() => {
           track("onboarding_scan_selected");
-          flow.openCamera();
+          navigate({ to: "/paywall" });
         }}
         onSeeFull={() => {
           navigate({ to: "/paywall" });
