@@ -416,6 +416,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_subscriptions_by_customer_id: {
+        Args: { p_customer_id: string }
+        Returns: number
+      }
       claim_subscriptions_for_current_user: { Args: never; Returns: number }
       has_active_subscription: {
         Args: { check_env?: string; user_uuid: string }
