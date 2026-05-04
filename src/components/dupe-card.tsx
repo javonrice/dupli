@@ -167,12 +167,7 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
               Formula breakdown
             </div>
 
-            {contextMatch && (
-              <p className="flex items-start gap-2 text-xs italic leading-relaxed text-muted-foreground">
-                <Sparkles className="mt-0.5 h-3 w-3 shrink-0" strokeWidth={2} />
-                <span>{contextMatch}</span>
-              </p>
-            )}
+
 
             {sharedIngredients && sharedIngredients.length > 0 && (
               <div className="space-y-1.5">
