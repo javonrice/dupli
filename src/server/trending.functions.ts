@@ -31,12 +31,20 @@ type SavedDupeRow = {
   original_brand: string;
   original_product_name: string;
   original_image_url: string | null;
+  original_price_usd: number | string | null;
   dupe_brand: string | null;
   dupe_product_name: string | null;
   dupe_image_url: string | null;
+  dupe_price_usd: number | string | null;
   match_score: number | null;
   verdict: string | null;
 };
+
+function toNum(v: number | string | null | undefined): number | null {
+  if (v == null) return null;
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
 
 /** Adapt a save-aggregated row into the existing CommunityDupe shape so the
  *  UI doesn't have to branch. The `id` is prefixed `saved:<pair_key>:<scanId>`
@@ -59,7 +67,7 @@ function adaptSavedRow(row: SavedDupeRow): CommunityDupe | null {
       productName: row.original_product_name,
       category: null,
       imageUrl: row.original_image_url,
-      lowestPriceUsd: null,
+      lowestPriceUsd: toNum(row.original_price_usd),
     },
     dupe: {
       id: "",
@@ -69,7 +77,7 @@ function adaptSavedRow(row: SavedDupeRow): CommunityDupe | null {
       productName: row.dupe_product_name,
       category: null,
       imageUrl: row.dupe_image_url,
-      lowestPriceUsd: null,
+      lowestPriceUsd: toNum(row.dupe_price_usd),
     },
   };
 }

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { ShoppingBag, TrendingDown } from "lucide-react";
+import { ShoppingBag, Sparkles, TrendingDown } from "lucide-react";
 import type { CommunityDupe } from "@/server/discover.functions";
 
 type Variant = "card" | "tile";
@@ -12,6 +12,20 @@ function dupeLinkProps(dupe: CommunityDupe) {
     return { to: "/scan/$id" as const, params: { id: scanId } };
   }
   return { to: "/p/$productId" as const, params: { productId: dupe.dupe.id } };
+}
+
+/** Steal detection — same 25% buffer rule as the scanner. Returns the savings %
+ *  when the scanned item (`original` slot here is just the name brand reference;
+ *  but for save-driven rows both prices are the actual scanned/dupe prices) is
+ *  meaningfully cheaper than its counterpart. */
+function detectSteal(dupe: CommunityDupe): number | null {
+  const op = dupe.original.lowestPriceUsd;
+  const dp = dupe.dupe.lowestPriceUsd;
+  if (op == null || dp == null || op <= 0 || dp <= 0) return null;
+  if (dp > op * 1.25) {
+    return Math.round(((dp - op) / dp) * 100);
+  }
+  return null;
 }
 
 /** A community-sourced dupe pairing rendered as a tappable card.
@@ -28,6 +42,7 @@ export function CommunityDupeCard({
   const widthClass =
     variant === "card" ? "w-[200px] shrink-0" : "w-full";
   const linkProps = dupeLinkProps(dupe);
+  const stealPct = detectSteal(dupe);
   return (
     <Link
       {...linkProps}
@@ -47,10 +62,17 @@ export function CommunityDupeCard({
           brand={dupe.original.brand}
           name={dupe.original.productName}
         />
-        <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-          <TrendingDown className="h-3 w-3" strokeWidth={2.5} />
-          Dupe
-        </div>
+        {stealPct != null ? (
+          <div className="inline-flex items-center gap-1 rounded-full bg-success px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success-foreground">
+            <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+            Steal · {stealPct}% cheaper
+          </div>
+        ) : (
+          <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            <TrendingDown className="h-3 w-3" strokeWidth={2.5} />
+            Dupe
+          </div>
+        )}
         <ProductLine
           brand={dupe.dupe.brand}
           name={dupe.dupe.productName}

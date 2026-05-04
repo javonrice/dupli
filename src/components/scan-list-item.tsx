@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 export function ScanListItem({ scan, linkable = true }: { scan: ScanRow; linkable?: boolean }) {
   const thumb = scan.thumbnail_data_url ?? scan.original_image_url;
   const isHigherRisk = scan.analysis?.riskLevel === "Higher risk";
+  const isSteal = scan.analysis?.framing === "steal-find";
   const date = new Date(scan.created_at);
   const dateLabel = date.toLocaleDateString(undefined, {
     month: "short",
@@ -46,6 +47,15 @@ export function ScanListItem({ scan, linkable = true }: { scan: ScanRow; linkabl
       </div>
       {typeof scan.match_score === "number" && (
         <div className="ml-1 flex shrink-0 items-center gap-1.5">
+          {isSteal && (
+            <span
+              aria-label="You found a steal"
+              title="You found a steal"
+              className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-success text-success-foreground"
+            >
+              <Sparkles className="h-2.5 w-2.5" strokeWidth={2.5} />
+            </span>
+          )}
           {isHigherRisk && (
             <span
               aria-label="Higher risk than original"

@@ -20,13 +20,17 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
     sharedIngredients, uniqueToOriginal, uniqueToDupe, contextMatch,
     dupeType, packagingSimilarity, riskLevel, riskFactors, missingActives, safetyNote,
   } = analysis;
+  // Older saved scans may not have framing/savingsPct — fall back to classic.
+  const framing = analysis.framing ?? "classic-dupe";
+  const isSteal = framing === "steal-find";
   const v = verdictStyles[verdict];
   const Icon = v.icon;
 
-  const savings =
+  const fallbackSavings =
     dupe && original.estimatedPriceUsd > 0
       ? Math.max(0, Math.round(((original.estimatedPriceUsd - dupe.estimatedPriceUsd) / original.estimatedPriceUsd) * 100))
       : 0;
+  const savings = analysis.savingsPct ?? fallbackSavings;
 
   const showLookalikeBand =
     !!dupe && (
@@ -53,6 +57,7 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
           <div className="flex min-w-0 items-center gap-2">
             <Eye className="h-3.5 w-3.5 shrink-0 text-foreground/70" strokeWidth={2.25} />
             <span className="truncate text-[10px] font-semibold uppercase tracking-widest text-foreground">
+              {isSteal && dupeType === "Lookalike packaging" && "Caught a lookalike — "}
               {dupeType ?? "Dupe"}
               {typeof packagingSimilarity === "number" && packagingSimilarity > 0 && (
                 <span className="ml-1.5 font-bold tabular-nums">· {packagingSimilarity}% visual</span>
@@ -76,18 +81,34 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
           <span className="text-xs font-semibold uppercase tracking-widest text-foreground">{verdict}</span>
         </div>
         {dupe && savings > 0 && (
-          <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
-            <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.5} />
-            Save {savings}%
-          </div>
+          isSteal ? (
+            <div className="inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-success-foreground">
+              <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+              You found a steal · {savings}% cheaper
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
+              <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.5} />
+              Save {savings}%
+            </div>
+          )
         )}
       </div>
 
       {/* Pair grid */}
       {dupe ? (
         <div className="grid grid-cols-2 divide-x divide-border">
-          <ProductSide label="Original" item={original} muted />
-          <ProductSide label="The dupe" item={dupe} />
+          <ProductSide
+            label={isSteal ? "You scanned" : "Original"}
+            item={original}
+            muted={!isSteal}
+            highlight={isSteal}
+          />
+          <ProductSide
+            label={isSteal ? "What it dupes" : "The dupe"}
+            item={dupe}
+            muted={isSteal}
+          />
         </div>
       ) : (
         <div className="px-5 py-8 text-center">
@@ -240,6 +261,7 @@ function ProductSide({
   label,
   item,
   muted = false,
+  highlight = false,
 }: {
   label: string;
   item: {
@@ -251,10 +273,11 @@ function ProductSide({
     links?: { merchant: string; url: string; priceUsd: number | null }[];
   };
   muted?: boolean;
+  highlight?: boolean;
 }) {
   return (
-    <div className={`p-5 ${muted ? "bg-background" : "bg-card"}`}>
-      <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
+    <div className={`p-5 ${muted ? "bg-background" : "bg-card"} ${highlight ? "ring-2 ring-inset ring-success" : ""}`}>
+      <div className={`mb-3 text-[10px] font-semibold uppercase tracking-widest ${highlight ? "text-success" : "text-muted-foreground"}`}>{label}</div>
       {item.imageUrl && (
         <div className="mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary/40">
           <img

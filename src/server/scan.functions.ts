@@ -65,6 +65,12 @@ export type DupeAnalysis = {
   riskFactors?: string[]; // specific concerns introduced by the dupe
   missingActives?: string[]; // actives the original has that the dupe drops
   safetyNote?: string; // one plain-English esthetician sentence
+  /** "classic-dupe" = scanned the name brand, dupe is cheaper.
+   *  "steal-find"   = scanned a cheaper product that dupes a pricier name brand. */
+  framing: "classic-dupe" | "steal-find";
+  /** Always positive 0-100. Classic = saved switching to dupe.
+   *  Steal = how much cheaper the scanned item is vs the name brand it dupes. */
+  savingsPct: number;
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
@@ -122,6 +128,7 @@ export const scanProduct = createServerFn({ method: "POST" })
                 "  - 'Risky dupe' = clearly cheaper / lookalike but the formula tradeoff is bad enough we should warn the user",
                 "  - 'Skip' = not a real dupe, or actively worse in ways that matter",
                 "  - 'No dupe found' = no credible counterpart exists (return empty dupes array in this case)",
+                "STEAL-FIND CASE: If the scanned product is meaningfully cheaper than every credible counterpart (drugstore, dollar store, off-brand), the user has FOUND A STEAL. Verdict still reflects formula honesty (Worth the hype if it genuinely matches; Mixed if it cuts corners; Risky dupe if it adds irritants), but the `notes` copy should celebrate the find ('You scored — this $X buy holds its own against the $Y name brand') rather than warn about a swap.",
                 "If you genuinely cannot find ANY credible dupe, set dupes to [], verdict 'No dupe found', and leave comparison/risk lists empty.",
                 "Always call analyze_dupe exactly once.",
               ].join(" "),
@@ -454,12 +461,31 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
 
   const headline = dupes[0] ?? null;
 
+  // Steal-find detection: deterministic, never trust the model. We only flip
+  // framing when both prices are present, the dupe is meaningfully more
+  // expensive than the scanned item (>25% buffer to ignore noise), and we
+  // actually have a headline candidate.
+  const originalPrice = safeNumber(original.estimatedPriceUsd);
+  const dupePrice = headline ? headline.estimatedPriceUsd : 0;
+  const isStealFind =
+    !!headline &&
+    originalPrice > 0 &&
+    dupePrice > 0 &&
+    dupePrice > originalPrice * 1.25;
+
+  let savingsPct = 0;
+  if (headline && originalPrice > 0 && dupePrice > 0) {
+    savingsPct = isStealFind
+      ? Math.round(((dupePrice - originalPrice) / dupePrice) * 100)
+      : Math.max(0, Math.round(((originalPrice - dupePrice) / originalPrice) * 100));
+  }
+
   return {
     original: {
       productName: safeText(original.productName, "Unknown product"),
       brand: safeText(original.brand, "Unknown brand"),
       category: safeText(original.category, "Beauty product"),
-      estimatedPriceUsd: safeNumber(original.estimatedPriceUsd),
+      estimatedPriceUsd: originalPrice,
       keyIngredients: safeList(original.keyIngredients),
       imageUrl: original.imageUrl,
     },
@@ -498,6 +524,8 @@ function normalizeAnalysis(input: Partial<DupeAnalysis>): DupeAnalysis {
     riskFactors: safeList(input.riskFactors ?? headline?.riskFactors),
     missingActives: safeList(input.missingActives ?? headline?.missingActives),
     safetyNote: safeText(input.safetyNote ?? headline?.safetyNote, ""),
+    framing: isStealFind ? "steal-find" : "classic-dupe",
+    savingsPct,
   };
 }
 

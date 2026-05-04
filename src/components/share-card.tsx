@@ -20,7 +20,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   ref,
 ) {
   const { original, dupe, matchScore, verdict, riskLevel } = analysis;
-  const savings =
+  const framing = analysis.framing ?? "classic-dupe";
+  const isSteal = framing === "steal-find";
+  const fallbackSavings =
     dupe && original.estimatedPriceUsd > 0
       ? Math.max(
           0,
@@ -31,6 +33,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           ),
         )
       : null;
+  const savings = dupe ? (analysis.savingsPct ?? fallbackSavings ?? 0) : null;
 
   const verdictColor =
     verdict === "Worth the hype"
@@ -152,7 +155,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
             color: "#6b6b6b",
           }}
         >
-          We found the dupe
+          {isSteal ? "You found a steal" : "We found the dupe"}
         </div>
         <div
           style={{
@@ -163,7 +166,11 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
             letterSpacing: "-0.035em",
           }}
         >
-          {savings !== null && savings > 0 ? `Save ${savings}%` : "The dupe"}
+          {isSteal && savings && savings > 0
+            ? `${savings}% cheaper`
+            : savings !== null && savings > 0
+              ? `Save ${savings}%`
+              : "The dupe"}
         </div>
         {dupe && (
           <div
@@ -175,10 +182,21 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
               fontWeight: 400,
             }}
           >
-            ${original.estimatedPriceUsd.toFixed(0)} →{" "}
-            <span style={{ color: "#0d0d0d", fontWeight: 700 }}>
-              ${dupe.estimatedPriceUsd.toFixed(0)}
-            </span>
+            {isSteal ? (
+              <>
+                <span style={{ color: "#0d0d0d", fontWeight: 700 }}>
+                  ${original.estimatedPriceUsd.toFixed(0)}
+                </span>{" "}
+                vs ${dupe.estimatedPriceUsd.toFixed(0)} name brand
+              </>
+            ) : (
+              <>
+                ${original.estimatedPriceUsd.toFixed(0)} →{" "}
+                <span style={{ color: "#0d0d0d", fontWeight: 700 }}>
+                  ${dupe.estimatedPriceUsd.toFixed(0)}
+                </span>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -194,19 +212,20 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         }}
       >
         <ProductCard
-          label="Original"
+          label={isSteal ? "You scanned" : "Original"}
           brand={original.brand}
           name={original.productName}
           price={original.estimatedPriceUsd}
           image={originalImage}
+          accent={isSteal}
         />
         <ProductCard
-          label="The dupe"
+          label={isSteal ? "What it dupes" : "The dupe"}
           brand={dupe?.brand ?? "—"}
           name={dupe?.productName ?? "No dupe found"}
           price={dupe?.estimatedPriceUsd ?? null}
           image={dupeImage}
-          accent
+          accent={!isSteal}
         />
       </div>
 
