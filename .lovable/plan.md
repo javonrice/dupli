@@ -1,68 +1,100 @@
-## Problem
+## Goal
 
-The vendor backfill is **completely stalled**. Out of 46,689 dupe products, only **100 have vendor prices** — the queue has 46,589 vendor jobs sitting in `pending` and hasn't moved in ~25 minutes.
+Replace the AI-hallucinated `buyUrl` with **real, verified product links** for both the original and every dupe candidate, using only free infrastructure we already have.
 
-Root cause confirmed in worker logs: the pg_cron job has been firing every minute but every single call returns **401 Unauthorized**.
+## Where the links come from
 
+For each product the AI returns, run a tiered server-side resolver and stop at the first step that produces a verified URL:
+
+```text
+brand + productName
+  ├─ 1. Cache lookup
+  │     SELECT vendors FROM product_link_cache
+  │     WHERE brand_slug = X AND product_slug = Y
+  │       AND resolved_at > now() - 30 days
+  │     -> instant return
+  │
+  ├─ 2. Live web search (the new step)
+  │     Query DuckDuckGo first, fall back to Bing — same scraper
+  │     pattern src/server/scan.functions.ts already uses for
+  │     findProductImage.
+  │     Search query: `"<brand> <product>" buy site:(amazon|target|...)`
+  │     Filter results to a retailer allowlist:
+  │       amazon, target, walmart, ulta, sephora, cvs, walgreens,
+  │       sallybeauty, dollartree, dollargeneral, costco, kohls
+  │     Verify each candidate with GET + Range: bytes=0-0, 5s timeout.
+  │     Keep the top 1-3 reachable hits, normalize merchant names.
+  │
+  ├─ 3. Skinsort vendor cache (bonus enrichment)
+  │     If our existing products + product_vendors row exists for this
+  │     brand_slug/product_slug, merge any extra merchants/prices we
+  │     don't already have from step 2.
+  │
+  └─ 4. Fallback (only when 2+3 produced nothing)
+        Build retailer search URLs with existing buildQuery() +
+        RETAILER_TEMPLATES, then googleShoppingLink() as last resort.
 ```
-[19:13:01] POST .../run-ingestion → 401
-[19:12:00] POST .../run-ingestion → 401
-[19:11:00] POST .../run-ingestion → 401
-... (every minute since the cron was set up)
-```
 
-The cron SQL reads the auth token from Postgres `vault.secrets`:
+Every successful resolution is written back to `product_link_cache` so the next user scanning the same product gets step-1 speed.
+
+## Database
+
+One new table + RLS:
+
 ```sql
-'Bearer ' || (SELECT decrypted_secret FROM vault.decrypted_secrets WHERE name = 'INGESTION_TOKEN')
+create table public.product_link_cache (
+  id uuid primary key default gen_random_uuid(),
+  brand_slug text not null,
+  product_slug text not null,
+  vendors jsonb not null default '[]'::jsonb,
+  source text not null default 'web-search',
+  resolved_at timestamptz not null default now(),
+  unique (brand_slug, product_slug)
+);
+alter table public.product_link_cache enable row level security;
+create policy "Cache readable by authenticated"
+  on public.product_link_cache for select
+  to authenticated using (true);
+-- Writes happen via supabaseAdmin from the resolver; no INSERT policy needed.
 ```
 
-But `INGESTION_TOKEN` only exists as a Worker env secret — there's no row in the vault with that name. The subselect returns NULL, the header becomes the literal string `"Bearer "`, and the endpoint correctly rejects it. Every cron tick has been a no-op.
+`vendors` shape: `[{ merchant: string, url: string, priceUsd: number | null }]`.
 
-So the parser fix and the inline-concurrency drain code are both fine — they've just never been allowed to run.
+## Code changes
 
-## Fix (3 small steps)
+### New files
 
-### 1. Put the ingestion token into the Postgres vault
+- **`src/server/product-links.server.ts`** — server-only helpers:
+  - `RETAILER_ALLOWLIST` + `normalizeMerchant(host)` (e.g. `amazon.com` → "Amazon").
+  - `searchDuckDuckGo(query)` and `searchBing(query)` reusing the same fetch+parse pattern as `findProductImage`. Each returns `{ url, title }[]`.
+  - `verifyUrl(url)` — `GET` with `Range: bytes=0-0`, 5s timeout, follow redirects, accept 200/206/301/302/403 (Amazon often 403s HEAD-style requests but the URL is valid; we accept it if the final host is still allowlisted).
+  - `resolveProductLinks(brand, productName)` — runs the 4-step pipeline above, reads/writes `product_link_cache` via `supabaseAdmin`, hard-caps total work at 3s (returns whatever it has when the budget elapses).
 
-Migration that inserts/updates the same token value (read at migration time from the worker env via a one-time hardcoded value isn't ideal — instead we'll have you provide it once). Approach:
+### Edits
 
-- Migration creates the vault entry from a parameter we pass in, OR
-- Simpler: change the cron to call a new SECURITY DEFINER function that uses a token stored in a regular `app_config` table (single-row, RLS-locked, no anon access).
+- **`src/server/scan.functions.ts`**:
+  - Add `links?: { merchant: string; url: string; priceUsd: number | null }[]` to `ScannedProduct` and `DupeSuggestion`.
+  - After the existing `findProductImage` `Promise.all`, run a sibling `Promise.all` of `resolveProductLinks` calls for the original + every candidate. Attach to `parsed.original.links` and each candidate's `.links`. Re-sync `parsed.dupe = candidates[0]` afterwards (already done for images).
+  - Stop using `safeUrl` as the primary CTA source — keep it only as a deep fallback inside `resolveProductLinks` step 4.
 
-Cleanest option: store the token in `vault.secrets` via `vault.create_secret('<token>', 'INGESTION_TOKEN')`. We'll do this in a migration where the literal token value is the existing `INGESTION_TOKEN` value — we'll pull it from the Worker env on first call. To avoid asking the user, the migration will:
+- **`src/components/dupe-card.tsx`** (`ProductSide`): below the price, render up to 3 vendor chips when `item.links?.length`. Each chip is `<a href={url} target="_blank" rel="noopener noreferrer">{merchant}{price ? ` · $${price}` : ""}</a>`. Show on both the original and dupe sides.
 
-a. Create the vault entry only if missing (so it's idempotent / safe to re-run).
-b. Use a one-shot bootstrap server endpoint `/api/public/hooks/bootstrap-cron-token` (token-protected by the same Worker env `INGESTION_TOKEN`) that, when called, writes the token into the vault using `supabaseAdmin`. We invoke it once after deploy, then it's done.
+- **`src/components/scanner.tsx`** (`ResultsScreen` bottom bar):
+  - If the selected dupe has `links`, primary CTA becomes `Buy at {cheapest merchant} — ${price}` linking to that vendor URL.
+  - Add a small secondary "More retailers" button that opens a sheet listing all resolved vendors.
+  - If no links resolved → keep the current Google Shopping fallback button (zero regression).
 
-This avoids hardcoding the secret into a SQL migration file.
+## Latency budget
 
-### 2. Make the cron simpler & more aggressive
+- Cache hit: ~50ms.
+- First-time scan: search + verify in parallel across all 8 candidates ≈ 1.5–2.5s added.
+- Hard 3s ceiling — we ship the analysis with whatever we have at the deadline. The scan never blocks waiting on a slow retailer.
 
-Once the vault entry exists the existing cron command will work, but I'll also:
-- Bump `batch` from 30 → **100** per cron tick.
-- Add a second cron entry that fires the same drain (same minute) so we get **multiple parallel drains per minute** even before the self-cascade kicks in.
-- Self-cascade inside the worker remains as-is and will now actually fire (it uses the env token directly, not the vault).
+After the first few hundred scans, popular products (CeraVe, e.l.f., Drunk Elephant, etc.) live in the cache and add basically zero latency.
 
-### 3. Manually kick the cascade once
+## Out of scope
 
-After (1) and (2), call `/api/public/hooks/run-ingestion` once with the correct bearer to start the cascade immediately rather than waiting for the next minute boundary.
-
-## Expected throughput after the fix
-
-- 100 vendor jobs per drain × 20 concurrency = ~5s per drain (Skinsort fetch + 1 upsert each)
-- Self-cascade keeps drains running back-to-back as long as the queue has work
-- 46,589 jobs ÷ ~20 jobs/sec sustained ≈ **~40 minutes** to fully drain
-- pg_cron fires every minute as a safety net in case any cascade dies
-
-## Files to change
-
-- `supabase/migrations/<new>.sql` — update the cron job to use batch=100 (and add a second twin job for parallelism). Vault bootstrap stays out of SQL.
-- `src/routes/api/public/hooks/bootstrap-cron-token.ts` — new one-shot endpoint that copies the env `INGESTION_TOKEN` into `vault.secrets`. Token-protected with the same secret.
-- After deploy: invoke bootstrap once, then invoke `run-ingestion` once to start the cascade.
-
-## Verification
-
-- Worker logs go from `→ 401` to `→ 200` on cron ticks
-- `SELECT count(*) FROM ingestion_queue WHERE status='done' AND mode='vendors'` climbs every few seconds
-- `SELECT count(*) FROM products WHERE lowest_price_usd IS NOT NULL` climbs in lockstep
-- Done when `pending` count for `mode='vendors'` hits 0
+- Affiliate-link wrapping.
+- Background re-validation of stale cache entries (TTL refresh on next scan is fine).
+- Admin tooling to fix bad URLs manually.
+- Swapping in a paid search API (Firecrawl / Serper / Brave) — easy to add later by replacing only the `searchDuckDuckGo` / `searchBing` functions.
