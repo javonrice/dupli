@@ -41,8 +41,8 @@ export const Route = createRootRoute({
       { name: "twitter:site", content: "@Lovable" },
       { name: "twitter:title", content: "Dupli" },
       { name: "twitter:description", content: "Point your camera at any beauty product and Dupli finds the affordable dupe in seconds." },
-      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/2f729d77-0bc7-44cb-9bfe-fc8ab18d2179" },
-      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/2f729d77-0bc7-44cb-9bfe-fc8ab18d2179" },
+      { property: "og:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/YZUkOINHjxMo2j0LCnhRMSag8l13/social-images/social-1777907734386-icon-512.webp" },
+      { name: "twitter:image", content: "https://storage.googleapis.com/gpt-engineer-file-uploads/YZUkOINHjxMo2j0LCnhRMSag8l13/social-images/social-1777907734386-icon-512.webp" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
