@@ -77,6 +77,7 @@ export type DupeAnalysis = {
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
+  .middleware([requireActiveSubscription])
   .inputValidator((data) => InputSchema.parse(data))
   .handler(async ({ data }): Promise<{ result: DupeAnalysis | null; error: string | null }> => {
     const apiKey = process.env.LOVABLE_API_KEY;
