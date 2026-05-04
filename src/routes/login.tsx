@@ -32,17 +32,20 @@ function LoginPage() {
   const next = safeNext(search.next);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  const [forgotSent, setForgotSent] = useState(false);
   const [logoTaps, setLogoTaps] = useState(0);
 
   const handleLogoTap = async () => {
-    const next = logoTaps + 1;
-    setLogoTaps(next);
-    if (next >= 10) {
+    // Dev-only QA escape hatch — never expose in production builds.
+    if (!import.meta.env.DEV) return;
+    const tapCount = logoTaps + 1;
+    setLogoTaps(tapCount);
+    if (tapCount >= 10) {
       setLogoTaps(0);
       try {
         await supabase.auth.signOut();
