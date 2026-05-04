@@ -212,19 +212,20 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
         }}
       >
         <ProductCard
-          label="Original"
+          label={isSteal ? "You scanned" : "Original"}
           brand={original.brand}
           name={original.productName}
           price={original.estimatedPriceUsd}
           image={originalImage}
+          accent={isSteal}
         />
         <ProductCard
-          label="The dupe"
+          label={isSteal ? "What it dupes" : "The dupe"}
           brand={dupe?.brand ?? "—"}
           name={dupe?.productName ?? "No dupe found"}
           price={dupe?.estimatedPriceUsd ?? null}
           image={dupeImage}
-          accent
+          accent={!isSteal}
         />
       </div>
 
