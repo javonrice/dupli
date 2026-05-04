@@ -67,7 +67,7 @@ function adaptSavedRow(row: SavedDupeRow): CommunityDupe | null {
       productName: row.original_product_name,
       category: null,
       imageUrl: row.original_image_url,
-      lowestPriceUsd: null,
+      lowestPriceUsd: toNum(row.original_price_usd),
     },
     dupe: {
       id: "",
@@ -77,7 +77,7 @@ function adaptSavedRow(row: SavedDupeRow): CommunityDupe | null {
       productName: row.dupe_product_name,
       category: null,
       imageUrl: row.dupe_image_url,
-      lowestPriceUsd: null,
+      lowestPriceUsd: toNum(row.dupe_price_usd),
     },
   };
 }
