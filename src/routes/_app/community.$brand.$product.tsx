@@ -167,62 +167,71 @@ function CommunityDupePage() {
           )}
         </article>
 
-        {/* Alternates rail — other community dupes for the same original */}
+        {/* Other dupes for the same original — image + price tiles */}
         {alternates.length > 0 && (
           <section className="space-y-2 pt-1">
             <div className="flex items-center justify-between px-1">
               <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Also could be a dupe
+                More dupes for this
               </div>
               <div className="text-[10px] font-medium text-muted-foreground">
                 {alternates.length} more
               </div>
             </div>
-            <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <div className="grid grid-cols-2 gap-3 pt-1">
               {dupes.map((d, i) => {
                 if (i === 0) return null;
                 const isActive = i === safeIdx;
+                const price = d.dupe.lowestPriceUsd;
                 return (
                   <button
                     key={d.id}
                     type="button"
                     onClick={() => setSelectedIdx(i)}
-                    className={`tap snap-start flex w-[160px] shrink-0 flex-col gap-2 rounded-[16px] border bg-card p-3 text-left shadow-soft transition ${
+                    className={`tap group flex flex-col overflow-hidden rounded-[16px] border bg-card text-left shadow-soft transition ${
                       isActive ? "border-foreground" : "border-border"
                     }`}
                     aria-pressed={isActive}
                   >
-                    <div className="flex aspect-square w-full items-center justify-center overflow-hidden rounded-[12px] border border-border bg-secondary/40">
-                      {d.dupe.imageUrl ? (
-                        <img
-                          src={d.dupe.imageUrl}
-                          alt={`${d.dupe.brand} ${d.dupe.productName}`}
-                          loading="lazy"
-                          className="h-full w-full object-contain"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <ShoppingBag
-                          className="h-6 w-6 text-muted-foreground/60"
-                          strokeWidth={1.5}
-                        />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {d.dupe.brand}
+                    <div className="relative">
+                      <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-secondary/40">
+                        {d.dupe.imageUrl ? (
+                          <img
+                            src={d.dupe.imageUrl}
+                            alt={`${d.dupe.brand} ${d.dupe.productName}`}
+                            loading="lazy"
+                            className="h-full w-full object-contain p-3"
+                            onError={(e) => {
+                              (e.currentTarget as HTMLImageElement).style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <ShoppingBag
+                            className="h-7 w-7 text-muted-foreground/60"
+                            strokeWidth={1.5}
+                          />
+                        )}
                       </div>
-                      <div className="mt-0.5 line-clamp-2 font-display text-[13px] font-semibold leading-tight text-foreground">
-                        {d.dupe.productName}
-                      </div>
-                    </div>
-                    <div className="mt-auto flex items-center justify-between">
-                      <span className="text-[11px] text-muted-foreground">View</span>
-                      <span className="rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background">
+                      <div className="absolute right-2 top-2 rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background shadow-soft">
                         {d.overallMatch}%
-                      </span>
+                      </div>
+                    </div>
+                    <div className="flex items-baseline justify-between gap-2 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          {d.dupe.brand}
+                        </div>
+                        <div className="line-clamp-1 font-display text-[13px] font-semibold leading-tight text-foreground">
+                          {d.dupe.productName}
+                        </div>
+                      </div>
+                      <div className="shrink-0 font-display text-[15px] font-bold tabular-nums text-foreground">
+                        {price != null && price > 0
+                          ? price < 10
+                            ? `$${price.toFixed(2)}`
+                            : `$${Math.round(price)}`
+                          : "—"}
+                      </div>
                     </div>
                   </button>
                 );
@@ -232,7 +241,7 @@ function CommunityDupePage() {
               <button
                 type="button"
                 onClick={() => setSelectedIdx(0)}
-                className="tap mx-auto block text-[11px] font-semibold uppercase tracking-wider text-muted-foreground underline-offset-4 hover:underline"
+                className="tap mx-auto block pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground underline-offset-4 hover:underline"
               >
                 Back to top pick
               </button>
