@@ -1,140 +1,82 @@
-# Save-Driven Trending (with Skinsort fallback for cold start)
-
 ## The shift
 
-A scan = curiosity. A save = a vote. "Popular / trending / dupe of the day" should ultimately rank by `saved_scans`. But until we have enough save volume, the home screen would look empty — so we keep the Skinsort-mirrored catalog (`products`, `dupes`, `product_vendors`) as a fallback source. No deletes yet. We add the save-driven path next to the existing one and blend them.
+Right now the app assumes: **scanned = expensive original, suggested = cheaper dupe.** Drugstore/Dollar Tree shoppers break that assumption. When someone scans a $1.25 XtraCare lotion and the AI surfaces the $40 Summer Fridays it's mimicking, today we silently suppress the "Save %" chip (because savings would be negative) and the verdict copy still implies the scanned item is the thing being evaluated.
 
-## What we keep (no changes for now)
+We need to detect that case and flip the framing: **"You found a steal — 97% cheaper."** The scanned product becomes the hero, and the savings number reads as how much they saved by *already buying the cheap one*.
 
-- Entire Skinsort ingestion path: `products`, `dupes`, `product_vendors`, `ingestion_queue` tables; `skinsort-parser.ts`, `skinsort-slugs.ts`, `skinsort-vendors-parser.ts`, `dupes.functions.ts`, `product-links.server.ts`, the three `/api/public/hooks/*` webhooks.
-- `discover.functions.ts` — `getDupeOfTheDay`, `getTrendingDupes`, `getCommunityDupe`, `getProductDetail` keep working exactly as today.
-- Routes `_app/p.$productId.tsx` and `_app/community.$brand.$product.tsx` — unchanged.
-- Scan flow (`scan.functions.ts`, `scans.functions.ts`, `useScanFlow`, results screen, save toggle) — unchanged.
+## Detection rule
 
-This is the safety net. If saves are sparse, the hub still looks alive.
+In `normalizeAnalysis` (src/server/scan.functions.ts), after we know `original` and `headline` (the top dupe), compute:
 
-## What we add
+- `isStealFind = headline.estimatedPriceUsd > original.estimatedPriceUsd * 1.25`
+  - 25% buffer avoids flipping on small price noise (a $12 vs $14 swap shouldn't be a "steal")
+  - Both prices must be > 0
+  - Only triggers when there IS a dupe (`headline` exists)
 
-A second, save-driven data path that augments (and eventually replaces) the catalog-driven one.
+When true, set a new field `analysis.framing = "steal-find"` (default `"classic-dupe"`). Also compute and store `savingsPct` once on the analysis object so every UI surface uses the same number:
 
-### 1. New SQL function: `public.trending_saved_dupes`
+- classic: `(original - dupe) / original * 100`
+- steal: `(dupe - original) / dupe * 100` ← "this much cheaper than the name brand"
 
-`security definer`, returns aggregated rows from `saved_scans` joined to `scans`, grouped by the four name fields. The dominant spelling wins by save count automatically.
+## Type changes
 
-```sql
-create or replace function public.trending_saved_dupes(
-  p_limit int default 20,
-  p_min_saves int default 2,        -- threshold below which we treat it as cold-start
-  p_window_days int default null    -- null = all time, otherwise last N days
-)
-returns table (
-  pair_key text,
-  latest_scan_id uuid,
-  save_count bigint,
-  last_saved_at timestamptz,
-  original_brand text,
-  original_product_name text,
-  original_image_url text,
-  dupe_brand text,
-  dupe_product_name text,
-  dupe_image_url text,
-  match_score int,
-  verdict text
-)
-language sql stable security definer set search_path = public as $$
-  select
-    md5(lower(s.original_brand)||'|'||lower(s.original_product_name)||'|'||
-        lower(coalesce(s.dupe_brand,''))||'|'||lower(coalesce(s.dupe_product_name,''))) as pair_key,
-    (array_agg(s.id order by ss.created_at desc))[1] as latest_scan_id,
-    count(distinct ss.user_id) as save_count,
-    max(ss.created_at) as last_saved_at,
-    -- pick the most-recent spelling as the canonical display
-    (array_agg(s.original_brand        order by ss.created_at desc))[1],
-    (array_agg(s.original_product_name order by ss.created_at desc))[1],
-    (array_agg(s.original_image_url    order by ss.created_at desc))[1],
-    (array_agg(s.dupe_brand            order by ss.created_at desc))[1],
-    (array_agg(s.dupe_product_name     order by ss.created_at desc))[1],
-    (array_agg(s.dupe_image_url        order by ss.created_at desc))[1],
-    (array_agg(s.match_score           order by ss.created_at desc))[1],
-    (array_agg(s.verdict               order by ss.created_at desc))[1]
-  from saved_scans ss
-  join scans s on s.id = ss.scan_id
-  where s.dupe_product_name is not null
-    and (p_window_days is null or ss.created_at >= now() - (p_window_days || ' days')::interval)
-  group by 1
-  having count(distinct ss.user_id) >= p_min_saves
-  order by save_count desc, last_saved_at desc
-  limit p_limit;
-$$;
-
-grant execute on function public.trending_saved_dupes(int, int, int)
-  to authenticated, anon;
+`src/server/scan.functions.ts` — extend `DupeAnalysis`:
+```ts
+framing: "classic-dupe" | "steal-find";
+savingsPct: number; // 0-100, always positive
 ```
 
-Granted to `anon` so SSR + unauth landing can call it. Function aggregates only — no PII leaks.
+Both populated in `normalizeAnalysis`. No DB migration needed for `scans` — it's inside the existing `analysis` JSONB column. Old rows just default to `classic-dupe` at read time (handled in the UI components below with `?? "classic-dupe"`).
 
-### 2. New file: `src/server/trending.functions.ts`
+## AI prompt update
 
-Two server functions, each tries the save path first and falls back to the catalog path.
+Same file, the system prompt already mentions "the scanned item is affordable/lookalike → identify the name-brand counterpart." Tighten step 12 (verdict guidance) with a steal-find clause:
 
-```text
-getDupeOfTheDayBlended()           -> { dupe, source: "saved" | "catalog" }
-getTrendingDupesBlended({ limit }) -> { dupes, source: "saved" | "catalog" }
-```
+> If the scanned product is meaningfully cheaper than every credible counterpart (drugstore, dollar store, off-brand), the user has FOUND A STEAL. Verdict should still reflect formula honesty ("Worth the hype" if the cheap product genuinely matches; "Mixed" if it cuts corners; "Risky dupe" if it adds irritants), but the `notes` copy should celebrate the find rather than warn about a swap.
 
-Both reuse the existing `CommunityDupe` shape so the UI doesn't have to branch. To do that we adapt save-aggregated rows into `CommunityDupe` with synthetic ids:
+This nudges the model to produce steal-friendly notes copy. Detection itself stays deterministic in code — we don't trust the model to set the flag.
 
-- `id`: the `pair_key` from the SQL function (used as React key + tap target). Prefixed `saved:<hash>` so we can tell which source it came from.
-- `original.id` / `dupe.id`: empty string (we won't navigate to `/p/$productId` for save-sourced cards — see tap target below).
-- `original.brandSlug` / `productSlug`: derived via existing `slugify()` from `skinsort-slugs.ts`.
-- `lowestPriceUsd`: `null` (we don't have catalog price for save-sourced rows yet).
-- `imageUrl`: from the scan rows.
+## UI changes
 
-`getTrendingDupesBlended` flow:
-1. Call `trending_saved_dupes(p_limit, p_min_saves: 2)`.
-2. If the result has `>= ceil(limit / 2)` rows, return them as `source: "saved"`.
-3. Otherwise call existing `getTrendingDupes({ limit })` and return as `source: "catalog"`.
-4. Once save volume grows, we can later interleave both — but v1 is binary, no ranking math to debug.
+### 1. `src/components/dupe-card.tsx` (the main result card)
 
-`getDupeOfTheDayBlended`:
-- Pull top 50 saved pairs (`p_min_saves: 2`). If at least 1 row exists, deterministic UTC-day pick.
-- Otherwise fall back to existing `getDupeOfTheDay`.
+- **Verdict bar**: when `framing === "steal-find"`, replace the "Save X%" chip with a **"You found a steal · 97% cheaper"** chip (using the actual `savingsPct`) — success green + ✨ icon, not TrendingDown. Number compares scanned price to dupe price.
+- **Pair grid order**: keep "Original" on left and "The dupe" on right structurally (the AI's `original`/`dupe` semantics don't change), but **swap the visual emphasis** — in steal mode the SCANNED product gets the highlighted/featured treatment with a small "You scanned" badge, and the name-brand counterpart gets the muted treatment with a "What it's duping" label. This makes it visually obvious that the cheap thing is the win.
+- **ProductSide labels**: parameterize `label` so steal mode shows "You scanned" / "What it dupes" instead of "Original" / "The dupe".
+- **Lookalike band copy**: when steal mode + `dupeType === "Lookalike packaging"`, prepend "Caught a lookalike — " to the band text. This rewards the user for spotting the copycat.
 
-Tunable thresholds (`p_min_saves`, fallback ratio) live as constants at the top of `trending.functions.ts` so we can flip them without a migration as save volume grows.
+### 2. `src/components/share-card.tsx`
 
-### 3. Tap target for save-sourced cards
+- Same `framing` detection. Headline switches from "Save X%" to **"You found a steal · X% cheaper"** when steal.
+- Subtitle copy: classic = "{Brand} {Product} → {DupeBrand} {DupeProduct}", steal = "{ScannedBrand} {ScannedProduct} dupes {NameBrand} {NameProduct}".
+- This is the share asset, so the steal framing is what gets posted to TikTok/IG — high-leverage surface.
 
-Catalog cards link to `/p/$productId` (works because they have a real product id).
-Save-sourced cards have no product id, so they link to `/scan/$id` using `latestScanId`. The existing read-only scan view already handles "viewing someone else's scan" because `scans.user_id` isn't required on the route — confirm the route's `getScan` server function (currently auth-scoped by RLS to `auth.uid()`). Two options:
+### 3. `src/components/home/community-dupe-card.tsx`
 
-- **A.** Add a new public `getPublicScan` server function (admin client) that returns scan + analysis but strips PII (`user_id`). Route `_app/scan.$id.tsx` calls the public version when the scan isn't owned by the current user. Cleaner.
-- **B.** Quick hack: a new route `_app/dupe.$pairKey.tsx` that just renders the four name fields + images from the trending row passed via search params. No DB read. Works but feels hollow.
+- Same chip swap when the underlying pair is a steal (derive client-side from `originalPrice` vs `dupePrice` already in the row, using the same 25% threshold). Chip reads **"Steal · X% cheaper"** in the compact card.
+- Trending feed labeling: when most loved-by-community pairs are steals, this is the actual product story we want surfaced.
 
-Recommend **A** — it's the right shape long-term and unlocks shareable scan links.
+### 4. `src/routes/_app/community.$brand.$product.tsx` and `src/routes/_app/p.$productId.tsx`
 
-### 4. Hub wiring
+- Same `TrendingDown → Sparkles` icon swap and chip-text swap on price-comparison badges, gated on derived steal flag (compare prices in the row).
 
-`src/routes/_app/app.tsx`: swap `getDupeOfTheDay` → `getDupeOfTheDayBlended`, `getTrendingDupes` → `getTrendingDupesBlended`. Section header text becomes dynamic on `source`:
+### 5. `src/components/scan-list-item.tsx` (history)
 
-- `"saved"` → "Trending this week" / "Loved by the community"
-- `"catalog"` → "Trending dupes" (today's copy)
+- When `scan.analysis.framing === "steal-find"`, show a tiny ✨ badge next to the match score. No copy change — keeps the row dense.
 
-Everything else stays. `RecentScansSection`, `ForYouGrid`, `DupeOfTheDay` components don't change.
+## Trending function (small follow-up)
 
-## Migration
+`public.trending_saved_dupes` already returns enough columns (we have both products' names, but not their prices). Steal-find is most exciting when surfaced in the community feed, so:
 
-One migration: create `public.trending_saved_dupes()` + grants. No drops, no schema changes to existing tables.
+- Add `original_price_usd` and `dupe_price_usd` to the RPC return shape, pulled from `analysis->'original'->>'estimatedPriceUsd'` and `analysis->'dupe'->>'estimatedPriceUsd'` of the latest scan in each pair. One small migration.
+- `community-dupe-card.tsx` then has everything it needs to render the steal chip without a second roundtrip.
 
-## Files touched
+## What we explicitly are NOT doing
 
-- **Add:** `src/server/trending.functions.ts`, one DB migration, optionally `getPublicScan` in `src/server/scans.functions.ts`.
-- **Edit:** `src/routes/_app/app.tsx` (swap two imports + header copy), `src/components/home/community-dupe-card.tsx` + `dupe-of-the-day.tsx` (route to `/scan/$id` when `id` starts with `saved:`).
-- **Delete:** nothing.
+- **No AI re-prompting / re-scanning.** Detection is purely arithmetic on the existing analysis. Zero added cost.
+- **Not changing `original`/`dupe` semantics in the data.** "Original" still means "the name-brand reference," "dupe" still means "the alternative." We only flip presentation. This keeps the saved_scans aggregation, the scans table, and every existing query untouched.
+- **Not touching the verdict enum.** "Worth the hype" / "Mixed" / "Risky dupe" still apply — a steal can still be risky if the cheap formula is harsh.
 
-## When we revisit (the cleanup pass)
+## Copy locked in
 
-Trigger: `trending_saved_dupes(limit:20, p_min_saves:3)` consistently returns ≥ 12 rows for ≥ 14 days.
-
-At that point we run the deletion pass from the previous version of this plan: drop `products` / `dupes` / `product_vendors` / `ingestion_queue`, delete the Skinsort parsers, delete the ingestion webhooks, delete `getCommunityDupe` / `getProductDetail` / the catalog routes, and remove the fallback branch from `trending.functions.ts`.
-
-Until then: dual-source, save path leads when it has signal, catalog covers cold start.
+Headline across result card + share card + community chip: **"You found a steal · {N}% cheaper"** (compact form on small chips: **"Steal · {N}% cheaper"**). The percentage is what makes people stop scrolling and is what does the work in shareable assets.
