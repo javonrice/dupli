@@ -13,13 +13,26 @@ function getSupabase() {
   return _supabase;
 }
 
+async function resolveCustomerEmail(
+  customerId: string | undefined,
+  env: PaddleEnv,
+): Promise<string | null> {
+  if (!customerId) return null;
+  try {
+    const { gatewayFetch } = await import("@/lib/paddle.server");
+    const res = await gatewayFetch(env, `/customers/${customerId}`);
+    if (!res.ok) return null;
+    const json = await res.json();
+    return (json?.data?.email as string | undefined) ?? null;
+  } catch (e) {
+    console.warn("[webhook] failed to fetch customer email", e);
+    return null;
+  }
+}
+
 async function handleSubscriptionCreated(data: any, env: PaddleEnv) {
   const { id, customerId, items, status, currentBillingPeriod, customData } = data;
-  const userId = customData?.userId;
-  if (!userId) {
-    console.error("No userId in customData");
-    return;
-  }
+  const userId: string | null = customData?.userId ?? null;
   const item = items[0];
   const priceId = item.price.importMeta?.externalId;
   const productId = item.product.importMeta?.externalId;
@@ -30,6 +43,9 @@ async function handleSubscriptionCreated(data: any, env: PaddleEnv) {
     });
     return;
   }
+  // For anonymous checkouts (no userId), capture customer email so the user
+  // can claim the subscription after creating an account.
+  const customerEmail = userId ? null : await resolveCustomerEmail(customerId, env);
   await (getSupabase() as any).from("subscriptions").upsert(
     {
       user_id: userId,
@@ -41,6 +57,7 @@ async function handleSubscriptionCreated(data: any, env: PaddleEnv) {
       current_period_start: currentBillingPeriod?.startsAt,
       current_period_end: currentBillingPeriod?.endsAt,
       environment: env,
+      customer_email: customerEmail,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "paddle_subscription_id" },

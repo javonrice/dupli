@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
@@ -55,7 +55,6 @@ function PaywallPage() {
     }
   });
   const [gateChecking, setGateChecking] = useState(true);
-  const resumedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -113,49 +112,21 @@ function PaywallPage() {
     track("paywall_viewed_after_result");
   }, []);
 
-  const INTENT_KEY = "dupli.paywall.intent";
-  const INTENT_TTL_MS = 15 * 60 * 1000;
-
-  const saveIntent = (kind: "trial" | "intro") => {
-    try {
-      window.sessionStorage.setItem(
-        INTENT_KEY,
-        JSON.stringify({ kind, plan, at: Date.now() }),
-      );
-    } catch {
-      /* ignore */
-    }
-  };
-  const consumeIntent = (): { kind: "trial" | "intro"; plan: Plan } | null => {
-    try {
-      const raw = window.sessionStorage.getItem(INTENT_KEY);
-      if (!raw) return null;
-      window.sessionStorage.removeItem(INTENT_KEY);
-      const parsed = JSON.parse(raw) as { kind: string; plan: string; at: number };
-      if (!parsed?.at || Date.now() - parsed.at > INTENT_TTL_MS) return null;
-      const k = parsed.kind === "intro" ? "intro" : "trial";
-      const p: Plan = parsed.plan === "monthly" ? "monthly" : "yearly";
-      return { kind: k, plan: p };
-    } catch {
-      return null;
-    }
-  };
-
   const startTrial = async (planOverride?: Plan) => {
     const chosen = planOverride ?? plan;
-    if (!user) {
-      saveIntent("trial");
-      toast.message("Create your account to start your trial.");
-      navigate({ to: "/login", search: { next: "/paywall" } });
-      return;
-    }
     track("trial_started", { plan: chosen });
+    // Signed-in users: webhook attaches sub via customData.userId, send to /app.
+    // Anonymous users: no userId yet; success URL routes to a claim screen
+    // where they create/sign in to an account that gets linked by email.
+    const successUrl = user
+      ? `${window.location.origin}/app?checkout=success`
+      : `${window.location.origin}/checkout/account`;
     try {
       await openCheckout({
         priceId: PRICE_IDS[chosen],
-        customerEmail: user.email,
-        customData: { userId: user.id },
-        successUrl: `${window.location.origin}/app?checkout=success`,
+        customerEmail: user?.email,
+        customData: user ? { userId: user.id } : undefined,
+        successUrl,
       });
     } catch (e) {
       console.error("[paywall] trial checkout failed", e);
@@ -171,14 +142,11 @@ function PaywallPage() {
   };
 
   const startCheap = async () => {
-    if (!user) {
-      saveIntent("intro");
-      toast.message("Create your account to claim the $0.99 offer.");
-      navigate({ to: "/login", search: { next: "/paywall" } });
-      return;
-    }
     track("trial_started", { plan: "intro_99c" });
     setIntroLoading(true);
+    const successUrl = user
+      ? `${window.location.origin}/app?checkout=success`
+      : `${window.location.origin}/checkout/account`;
     try {
       const discountId = await getPaddleDiscountId(INTRO_DISCOUNT_DESCRIPTION);
       if (!discountId) {
@@ -188,9 +156,9 @@ function PaywallPage() {
       await openCheckout({
         priceId: PRICE_IDS.intro,
         discountId,
-        customerEmail: user.email,
-        customData: { userId: user.id },
-        successUrl: `${window.location.origin}/app?checkout=success`,
+        customerEmail: user?.email,
+        customData: user ? { userId: user.id } : undefined,
+        successUrl,
       });
     } catch (e) {
       console.error("[paywall] intro checkout failed", e);
@@ -200,22 +168,8 @@ function PaywallPage() {
     }
   };
 
-  // Auto-resume checkout after sign-in if a recent intent exists.
-  useEffect(() => {
-    if (authLoading || gateChecking) return;
-    if (!user) return;
-    if (resumedRef.current) return;
-    const intent = consumeIntent();
-    if (!intent) return;
-    resumedRef.current = true;
-    setPlan(intent.plan);
-    if (intent.kind === "intro") {
-      void startCheap();
-    } else {
-      void startTrial(intent.plan);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authLoading, gateChecking, user]);
+  // (Removed legacy intent-resume: anonymous users now go directly to checkout.)
+
 
   const busy = checkoutLoading || introLoading;
 
