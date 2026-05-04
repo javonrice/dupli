@@ -140,6 +140,13 @@ function ProfilePage() {
               <LogOut className="h-[18px] w-[18px]" strokeWidth={2} />
               Sign out
             </button>
+
+            <button
+              onClick={handleResetApp}
+              className="tap mt-2 flex h-[44px] w-full items-center justify-center rounded-[14px] text-[13px] font-medium text-muted-foreground"
+            >
+              Reset app state (dev)
+            </button>
           </>
         )}
       </div>
