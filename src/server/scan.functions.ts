@@ -376,6 +376,30 @@ export const scanProduct = createServerFn({ method: "POST" })
       // Re-sync the headline `dupe` (which is candidates[0]) so its imageUrl matches.
       if (parsed.dupe && candidates[0]) parsed.dupe = candidates[0];
 
+      // Resolve REAL buyable retailer links for the original + every dupe candidate.
+      // Each call is best-effort and time-budgeted; failures never block the scan.
+      const safeLinks = async (b?: string | null, n?: string | null) => {
+        try {
+          return await resolveProductLinks(b, n);
+        } catch (err) {
+          console.warn("[resolveProductLinks] threw, ignoring:", err);
+          return [];
+        }
+      };
+      const linkLookups = await Promise.all([
+        parsed.original
+          ? safeLinks(parsed.original.brand, parsed.original.productName)
+          : Promise.resolve([] as ProductLink[]),
+        ...candidates.map((c) => safeLinks(c.brand, c.productName)),
+      ]);
+      const [originalLinks, ...dupeLinks] = linkLookups;
+      if (parsed.original && originalLinks.length > 0) parsed.original.links = originalLinks;
+      candidates.forEach((c, i) => {
+        if (dupeLinks[i] && dupeLinks[i].length > 0) c.links = dupeLinks[i];
+      });
+      // Re-sync headline dupe again so its links field matches.
+      if (parsed.dupe && candidates[0]) parsed.dupe = candidates[0];
+
       return { result: parsed, error: null };
     } catch (e) {
       console.error("scanProduct failed", e);
