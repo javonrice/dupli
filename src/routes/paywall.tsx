@@ -1,8 +1,8 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { Check, Loader2, X } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { markOnboardingComplete, track } from "@/lib/onboarding";
+import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
 import { useAuth } from "@/hooks/use-auth";
 import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
