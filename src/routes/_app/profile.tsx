@@ -4,16 +4,17 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Loader2,
   ChevronRight,
-  Bell,
-  Palette,
-  Shield,
+  CreditCard,
   HelpCircle,
   LogOut,
 } from "lucide-react";
+import { toast } from "sonner";
 import { getMyProfile, type ProfileRow } from "@/server/profile.functions";
+import { createCustomerPortalSession } from "@/server/billing.functions";
 import { TabBarSpacer } from "@/components/tab-bar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { getPaddleEnvironment } from "@/lib/paddle";
 
 export const Route = createFileRoute("/_app/profile")({
   component: ProfilePage,
