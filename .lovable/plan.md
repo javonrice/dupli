@@ -1,139 +1,121 @@
-# MVP Launch Readiness — QA Findings & Fix Plan
+## What I found
 
-I pressure-tested onboarding → auth → paywall → checkout → app. Below is every issue ranked by severity, then the proposed fix plan.
+The payment catalog itself looks present: monthly and yearly prices exist in both test and live, and the payment webhooks are configured.
 
----
+The main UX issue is earlier in the funnel: when a signed-out user taps **Start My Free Trial** or **$0.99 first month**, the app routes to login instead of opening checkout. That can feel like “nothing payment-related is triggering,” because there is no checkout handoff after account creation/sign-in. The route also behaves inconsistently between preview and published/live URLs.
 
-## CRITICAL — will break paying customers on day one
+I also found these launch-risk edge cases:
 
-### C1. Post-checkout return drops users on `/login`
-`src/routes/_app.tsx` runs `supabase.auth.getSession()` inside `beforeLoad`. `beforeLoad` runs during SSR. The browser Supabase client has no storage on the server, so `getSession()` always returns `null` server-side and the route throws `redirect({ to: "/login" })`.
+1. **Signed-out checkout dead-end**
+   - Anonymous user taps paywall CTA.
+   - App sends them to `/login?next=/paywall`.
+   - After sign-in/sign-up they return to the paywall, but checkout does not automatically resume.
+   - User must understand they need to tap the CTA again. This is not native-feeling.
 
-Paddle's `successUrl` is a full page navigation to `/app?checkout=success`. That goes through SSR → redirected to `/login` → search params (including `checkout=success`) are lost → the 20-second grace window in `AppLayout` never arms → user who just paid sees a login screen.
+2. **Login page copy is misleading for checkout**
+   - Login says “Sign in to save your dupes,” not “Create your account to start your trial.”
+   - The user loses context that they are in a purchase flow.
 
-The same bug breaks every deep link to `/app/*` (bookmarks, share links, scan deep links, browser refresh).
+3. **Preview route mismatch / 412 risk**
+   - One preview host showed a top-level HTTP 412 for `/paywall`, while the stable preview/published host loads the page. This can make testing feel broken even when the route exists.
+   - The fix should make testing use the stable app URL and avoid relying on an unstable sandbox host state.
 
-**Fix:** Remove the SSR session check from `_app` `beforeLoad` (mirroring the comment already in `paywall.tsx` and `index.tsx`). Keep the client-side guard in `AppLayout`. Persist the grace window to `sessionStorage` so it survives the cleanup `replace` in `app.tsx`.
+4. **Intro $0.99 plan has a live-catalog mismatch**
+   - The test discount exists.
+   - The live discount lookup currently returns no active matching discount.
+   - In live, tapping the $0.99 offer may open the full $9.99 intro price or fail discount application depending on provider behavior.
 
-### C2. Premium server functions are not subscription-gated
-`scanProduct`, `saveScan`, etc. only require auth (`requireSupabaseAuth`). Any signed-in user can call them directly with curl/devtools regardless of subscription. The paywall is a client-only fence.
+5. **Checkout errors are too generic**
+   - If checkout script loading, price resolution, missing discount, or blocked popups fail, the app only says “Couldn’t start checkout.”
+   - For launch, users need a recovery path: “Try again,” “Sign in again,” or “Use monthly/yearly plan.”
 
-**Fix:** Add a small `requireActiveSubscription` server helper and apply it to premium server functions (scan, save, share). It reads the user's latest subscription row in the current env and reproduces the `isActive` logic, returning 402/403 otherwise. Keep onboarding's "first sample scan" path on a separate non-gated handler (or rate-limit by IP) so the funnel still works for anonymous users.
+6. **Payment return is only partly hardened**
+   - There is a 30-second post-checkout grace window, which is good.
+   - But if webhooks are delayed beyond that, paying users can bounce back to paywall even after a successful checkout.
 
-### C3. Paywall "X" button creates a redirect loop / bypass
-`dismiss()` calls `markOnboardingComplete()` and `navigate({ to: "/app" })`. With C1 fixed, `_app` will bounce them right back to `/paywall`, producing a loop. Without C1, they end up on `/login`.
+7. **Backend gating is now stronger, but environment detection has a risk**
+   - The premium scan function is subscription-gated.
+   - Server-side subscription checking defaults to test mode unless an environment variable is explicitly set. In live, that could reject valid live subscribers if the server environment is not aligned.
 
-**Fix:** The X should not pretend to grant access. Either:
-- Remove the close button entirely (recommended for a hard paywall), or
-- Send the user back to `/onboarding`'s last screen / `/` splash, never to `/app`.
+## Plan to fix the paywall payment trigger
 
-Pick one in the next message; default to "remove X".
+### 1. Preserve the user’s purchase intent before login
+Update the paywall CTA behavior so when a signed-out user taps a paid plan, the app stores a short-lived pending checkout intent:
 
----
+- selected plan: monthly, yearly, or intro
+- timestamp
+- return target: `/paywall`
 
-## HIGH — broken UX or data correctness
+Then route to login with a clear `next=/paywall`.
 
-### H1. No password-reset flow
-`login.tsx` has no "Forgot password" link and no `/reset-password` route exists. A user who forgets their password is locked out forever. This is a launch blocker per Lovable's auth requirements.
+### 2. Auto-resume checkout after sign-in/sign-up
+When the user returns to `/paywall` authenticated, detect the pending checkout intent and automatically open the correct checkout once.
 
-**Fix:** Add a "Forgot password?" link → screen that calls `supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin + "/reset-password" })`. Add a public `/reset-password` route that detects `type=recovery` and calls `supabase.auth.updateUser({ password })`.
+Guardrails:
+- only resume if the intent is recent, e.g. under 15 minutes
+- clear it after checkout opens or errors
+- prevent duplicate checkout overlays from opening on re-render
+- do not open checkout for users who already have an active subscription
 
-### H2. Email confirmation traps freshly-paid users
-If a user signs up *during* checkout (the paywall pushes anon users to `/login?next=/paywall`), Supabase email confirmation is on by default → they hit "Check your inbox" → can't return to checkout in the same tab. We currently never auto-confirm.
+### 3. Make login copy contextual for paywall
+When `next=/paywall`, adjust the login screen copy only, keeping the visual style the same:
 
-**Fix:** Enable auto-confirm signups (`mailer_autoconfirm = true`) so account creation completes the trip back to `/paywall` and into Paddle's overlay. (You confirmed in the prior turn this is the desired behavior for paid flow.) If you want email verification, we instead need to: (a) require account creation BEFORE paywall and (b) handle the "verify then return to checkout" round trip via a stored intent.
+- title/subcopy should indicate account creation is needed to start the trial
+- submit buttons remain the same
+- no redesign
 
-### H3. Realtime subscription channel doesn't filter env
-`useSubscription` realtime filter is `user_id=eq.…` only. After publish, both sandbox + live rows fire events into the same client channel. The `load()` re-query does filter by env, so functionally OK today, but a transient event for the wrong env can flicker `isActive` true→false→true. Low risk but noted.
+### 4. Improve checkout error handling
+Add specific error handling around:
 
-**Fix:** Add a refetch debounce (50ms) and ignore payloads whose `environment` doesn't match.
+- payment script failed to load
+- price not found
+- discount not found
+- checkout object unavailable
+- unauthenticated session changed mid-flow
 
-### H4. Webhook silently defaults to `sandbox` on missing `?env=`
-`webhook.ts` defaults to `sandbox` if the query param is missing. If a misconfigured live notification ever omits `?env=`, a real paying customer's row lands in sandbox and they get bounced to paywall in production.
+User-facing behavior:
+- show a concise toast
+- keep the CTA enabled after failure
+- for intro discount failure, fall back safely or tell the user to use the main trial CTA
 
-**Fix:** Reject (`400`) when `?env=` is missing or not in `('sandbox','live')`. Log loudly.
+### 5. Fix the intro discount edge case
+Decide one of these safe launch options during implementation based on provider state:
 
-### H5. Logout button only signs out, leaves stale state
-`profile.tsx` `handleSignOut` calls `signOut()` then `navigate({ to: "/login" })`. The cached `useSubscription` data and any in-flight loaders for `/_app/*` aren't invalidated. On a fast device, the next mount of `_app` may briefly show authed UI before the `onAuthStateChange` listener fires.
+- If live discount can be created/synced through payments tooling, wire the live discount so the $0.99 CTA is real in both test and live.
+- If not, hide or disable the $0.99 CTA in live until the matching discount exists, to avoid overcharging or broken checkout.
 
-**Fix:** After `signOut()`, do a hard `window.location.assign("/login")` to wipe all client state.
+### 6. Align server-side subscription environment detection
+Update the server-side subscription gate so it does not silently default to test mode in live.
 
----
+Safer approach:
+- infer expected environment from request host where possible
+- use explicit config only if present
+- fail closed with clear logs if environment cannot be determined
 
-## MEDIUM
+This protects paying live users from being denied access because the server checked the wrong subscription environment.
 
-### M1. `/login` 10-tap logo backdoor in production
-`handleLogoTap` in `login.tsx` clears `localStorage` + `sessionStorage` + signs out after 10 taps. Useful for QA, dangerous as a hidden button in production. A curious user could nuke their own session/onboarding answers by accident.
+### 7. Add a payment-ready QA checklist
+After implementation, verify these scenarios:
 
-**Fix:** Gate behind `import.meta.env.DEV` only.
+- Fresh anonymous user: onboarding → paywall → tap yearly → login/signup → checkout opens automatically.
+- Fresh anonymous user: paywall → tap monthly → login/signup → monthly checkout opens.
+- Fresh anonymous user: tap intro offer → login/signup → intro checkout opens only when discount exists.
+- Returning signed-in non-paying user: `/app` redirects to paywall; CTA opens checkout immediately.
+- Returning signed-in paying user: `/paywall` redirects to `/app`.
+- Failed checkout load: CTA recovers and user sees a useful message.
+- Successful checkout return: `/app?checkout=success` shows grace state and does not trap the user.
+- Delayed webhook: app refreshes subscription state and only re-gates if no valid subscription arrives.
+- Backend bypass: premium scan endpoint returns payment-required for signed-in non-paying users.
+- Live mode: yearly/monthly IDs resolve; intro CTA is either correctly discounted or hidden.
 
-### M2. `landing.tsx` is orphaned
-Nothing links to `/landing`. Either wire it as the public marketing page (and route SEO crawlers there) or delete it. Today `/` is a splash → onboarding/login, which is bad for SEO and shareability.
+## Technical notes
 
-**Fix:** Decide: keep as `/` for unauthenticated visitors, or delete. Recommend keeping and using as `/` for first-touch with onboarding behind a CTA.
+Files likely to change:
 
-### M3. No "Already have an account?" on the paywall
-A returning user who lands on `/paywall` from a marketing link has no path to sign in (only "Start trial" / "$0.99" / X). They'd be forced to create a duplicate account.
+- `src/routes/paywall.tsx`
+- `src/routes/login.tsx`
+- `src/hooks/use-paddle-checkout.ts`
+- `src/lib/paddle.ts`
+- `src/server/subscription-middleware.ts`
 
-**Fix:** Add a small "Already a member? Sign in" link at the bottom that routes to `/login?next=/app`.
-
-### M4. `_app.tsx` shows a spinner while `!isActive && !inGrace`
-The render guard `(!isActive && !inGrace)` keeps the spinner up while `useEffect` schedules the redirect to `/paywall`. Net effect is OK (spinner → paywall), but if the paywall itself decides the user IS active (race with realtime), they'll see two redirects. Minor.
-
-**Fix:** Replace the navigate-on-effect with a `throw redirect()` style guard or render `<Navigate to="/paywall" />` to make the transition synchronous.
-
-### M5. Profile rows: `Notifications`, `Appearance`, `Privacy & data`, `Help & support`, `Terms`, `Privacy Policy` are inert
-They look tappable, do nothing.
-
-**Fix:** Either wire them (Terms → `/terms`, Privacy → `/privacy` already exist) or remove. Minimum: wire the two legal links and hide the others until built. Add a "Manage subscription" row that opens Paddle's customer portal (server fn returning `customerPortalSessions.create(...)`).
-
-### M6. No "Manage / cancel subscription" UI
-Paying customers have no in-app way to cancel or update payment method. Required for Paddle compliance and basic customer trust.
-
-**Fix:** Add a "Manage subscription" row in Profile → server function that creates a Paddle customer portal session for the current user's `paddle_customer_id` and opens it in a new tab.
-
----
-
-## LOW / polish
-
-- L1. `onboarding.tsx` `beforeLoad` also calls `getSession()` server-side; same SSR-no-session issue as C1 but the wrong direction is harmless (signed-in user sees onboarding briefly until client redirect). Fix consistently.
-- L2. `paywall.tsx` `requireUser` doesn't preserve which plan the user picked. After login, they land back on paywall but plan resets to "yearly". Stash `plan` in `sessionStorage` and restore.
-- L3. `tab-bar` is rendered globally inside `_app`. On scan/results screens it overlaps the bottom CTA. Confirm it hides when `flow.stage !== 'idle'`.
-- L4. No consistent error UI when a server function 401s. Wire `errorComponent` on each `_app/*` route.
-- L5. The post-purchase toast `"Welcome to Dupli Pro 🎉"` fires on every visit with `?checkout=success`, including refreshes before we replace the URL. Add a `sessionStorage` flag so it only fires once.
-
----
-
-## Final QA checklist after fixes
-
-| Scenario | Expected |
-| --- | --- |
-| Fresh install → `/` | Onboarding |
-| Finish onboarding → paywall → "Start trial" anonymous | Routes to login with `next=/paywall` |
-| Login → returns to paywall | Plan + intro selection preserved |
-| Pay in Paddle overlay → success URL | Lands in `/app`, grace covers webhook latency, `isActive` flips true |
-| Hard refresh `/app` while signed-in subscriber | Stays on `/app` (no SSR bounce to login) |
-| Hard refresh `/app` while signed-in non-subscriber | Routed to `/paywall` |
-| Curl `scanProduct` without active sub | 402/403 (C2) |
-| Forgot password | Email link → `/reset-password` → new password works |
-| Cancel from Paddle portal | Access until `current_period_end`, then paywall |
-| Logout from Profile | Hard reload to `/login`, no stale data |
-| Paywall X button | Either gone, or routes back to onboarding (no `/app` bypass) |
-| Webhook with missing `?env=` | 400, no row written |
-| Production login logo taps | No backdoor (dev-only) |
-
----
-
-## Implementation order for next turn
-
-1. **C1** — strip SSR session check from `_app` and persist grace window.
-2. **C2** — `requireActiveSubscription` middleware + apply to premium server fns.
-3. **C3** — remove or redirect-back the paywall X.
-4. **H1** — Forgot password + `/reset-password`.
-5. **H2** — enable email auto-confirm (one-line auth config).
-6. **H4** — webhook env validation.
-7. **H5 / M4 / M5** — logout hard-reload, Navigate-based redirect, wire profile rows.
-8. **M6** — Paddle customer portal in Profile.
-9. **M1, M3, L1–L5** — polish pass.
-
-I'll implement in that order. Want me to also (a) keep email confirmation ON and instead build a "verify then resume checkout" round-trip, or (b) auto-confirm as recommended? And on **C3**: remove the paywall X entirely, or redirect-back to onboarding?
+No visual redesign. No weakening of the paywall. Non-paying users stay blocked from premium scans. Paying users get a cleaner path into checkout and back into the app.
