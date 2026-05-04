@@ -19,8 +19,7 @@ export function usePaddleCheckout() {
       const paddlePriceId = await getPaddlePriceId(options.priceId);
 
       // (eventCallback for checkout.completed is registered in initializePaddle.)
-
-
+      window.Paddle.Checkout.open({
         items: [{ priceId: paddlePriceId, quantity: 1 }],
         customer: options.customerEmail ? { email: options.customerEmail } : undefined,
         customData: options.customData,
