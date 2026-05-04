@@ -1,6 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { installSupabaseFetchAuth } from "@/integrations/supabase/install-fetch-auth";
+import { PaymentTestModeBanner } from "@/components/payment-test-mode-banner";
 
 import appCss from "../styles.css?url";
 
@@ -74,5 +75,10 @@ function RootComponent() {
   useEffect(() => {
     installSupabaseFetchAuth();
   }, []);
-  return <Outlet />;
+  return (
+    <>
+      <PaymentTestModeBanner />
+      <Outlet />
+    </>
+  );
 }
