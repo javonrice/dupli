@@ -65,6 +65,12 @@ export type DupeAnalysis = {
   riskFactors?: string[]; // specific concerns introduced by the dupe
   missingActives?: string[]; // actives the original has that the dupe drops
   safetyNote?: string; // one plain-English esthetician sentence
+  /** "classic-dupe" = scanned the name brand, dupe is cheaper.
+   *  "steal-find"   = scanned a cheaper product that dupes a pricier name brand. */
+  framing: "classic-dupe" | "steal-find";
+  /** Always positive 0-100. Classic = saved switching to dupe.
+   *  Steal = how much cheaper the scanned item is vs the name brand it dupes. */
+  savingsPct: number;
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
