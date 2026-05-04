@@ -120,6 +120,8 @@ export const getPublicScan = createServerFn({ method: "GET" })
       return { scan: row as unknown as PublicScanRow, error: null };
     },
   );
+
+export const deleteScan = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }): Promise<{ ok: boolean; error: string | null }> => {
