@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveProductLinks, type ProductLink } from "@/server/product-links.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { slugify } from "@/server/skinsort-slugs";
+import { requireActiveSubscription } from "@/server/subscription-middleware";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
@@ -76,6 +77,7 @@ export type DupeAnalysis = {
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
+  .middleware([requireActiveSubscription])
   .inputValidator((data) => InputSchema.parse(data))
   .handler(async ({ data }): Promise<{ result: DupeAnalysis | null; error: string | null }> => {
     const apiKey = process.env.LOVABLE_API_KEY;
