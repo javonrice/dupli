@@ -12,6 +12,25 @@ export function selectDupe(analysis: DupeAnalysis, idx: number): DupeAnalysis {
   const safeIdx = Math.min(Math.max(0, idx), candidates.length - 1);
   if (safeIdx === 0 && analysis.dupe === candidates[0]) return analysis;
   const c = candidates[safeIdx];
+
+  // Recompute framing + savings for this specific candidate so the hero
+  // headline ("X% cheaper" / "Save X%") and price subtitle stay accurate
+  // when the user picks an alternate.
+  const originalPrice = analysis.original.estimatedPriceUsd;
+  const dupePrice = c.estimatedPriceUsd;
+  let framing: DupeAnalysis["framing"] = analysis.framing ?? "classic-dupe";
+  let savingsPct = 0;
+  if (originalPrice > 0 && dupePrice > 0) {
+    if (dupePrice > originalPrice) {
+      // Scanned item is the cheap one — the alternate is the pricier name brand.
+      framing = "steal-find";
+      savingsPct = Math.max(0, Math.round(((dupePrice - originalPrice) / dupePrice) * 100));
+    } else {
+      framing = "classic-dupe";
+      savingsPct = Math.max(0, Math.round(((originalPrice - dupePrice) / originalPrice) * 100));
+    }
+  }
+
   return {
     ...analysis,
     dupe: c,
@@ -30,5 +49,7 @@ export function selectDupe(analysis: DupeAnalysis, idx: number): DupeAnalysis {
     missingActives: c.missingActives ?? analysis.missingActives,
     safetyNote: c.safetyNote ?? analysis.safetyNote,
     notes: c.notes && c.notes.trim() ? c.notes : analysis.notes,
+    framing,
+    savingsPct,
   };
 }
