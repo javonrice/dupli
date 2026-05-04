@@ -81,18 +81,34 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
           <span className="text-xs font-semibold uppercase tracking-widest text-foreground">{verdict}</span>
         </div>
         {dupe && savings > 0 && (
-          <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
-            <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.5} />
-            Save {savings}%
-          </div>
+          isSteal ? (
+            <div className="inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-success-foreground">
+              <Sparkles className="h-3 w-3" strokeWidth={2.5} />
+              You found a steal · {savings}% cheaper
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
+              <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.5} />
+              Save {savings}%
+            </div>
+          )
         )}
       </div>
 
       {/* Pair grid */}
       {dupe ? (
         <div className="grid grid-cols-2 divide-x divide-border">
-          <ProductSide label="Original" item={original} muted />
-          <ProductSide label="The dupe" item={dupe} />
+          <ProductSide
+            label={isSteal ? "You scanned" : "Original"}
+            item={original}
+            muted={!isSteal}
+            highlight={isSteal}
+          />
+          <ProductSide
+            label={isSteal ? "What it dupes" : "The dupe"}
+            item={dupe}
+            muted={isSteal}
+          />
         </div>
       ) : (
         <div className="px-5 py-8 text-center">
