@@ -13,7 +13,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { getProductDetail, type ProductDetail } from "@/server/discover.functions";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
-import { CommunityDupeCard } from "@/components/home/community-dupe-card";
+
 
 export const Route = createFileRoute("/_app/p/$productId")({
   component: ProductDetailPage,
