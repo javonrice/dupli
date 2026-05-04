@@ -243,13 +243,15 @@ async function saveToCache(
     await supabaseAdmin
       .from("product_link_cache")
       .upsert(
-        {
-          brand_slug: brandSlug,
-          product_slug: productSlug,
-          vendors: vendors as unknown as Record<string, unknown>[],
-          source,
-          resolved_at: new Date().toISOString(),
-        },
+        [
+          {
+            brand_slug: brandSlug,
+            product_slug: productSlug,
+            vendors: vendors as unknown as Record<string, unknown>[],
+            source,
+            resolved_at: new Date().toISOString(),
+          },
+        ],
         { onConflict: "brand_slug,product_slug" },
       );
   } catch (e) {
