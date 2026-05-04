@@ -23,6 +23,7 @@ import {
   Star,
 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
+import dupliWordmark from "@/assets/dupli-wordmark.png";
 import { GuidedLineReveal } from "@/components/onboarding/guided-line-reveal";
 import { LearningCard } from "@/components/onboarding/learning-card";
 import { TapCard } from "@/components/onboarding/tap-card";
@@ -169,16 +170,16 @@ function OnboardingPage() {
         primary={{ label: "Get Started", onClick: goNext("gender") }}
       >
         <div className="flex h-full flex-col items-center justify-center text-center">
-          <div className="flex h-16 w-16 items-center justify-center rounded-3xl bg-foreground text-background shadow-lift">
-            <Sparkles className="h-7 w-7" />
-          </div>
-          <h1 className="mt-6 font-display text-[40px] font-bold leading-[1.05] tracking-tight">
+          <img
+            src={dupliWordmark}
+            alt="Dupli"
+            className="h-16 w-auto select-none"
+            draggable={false}
+          />
+          <p className="mt-6 max-w-[18rem] font-display text-[22px] font-semibold leading-tight tracking-tight">
             Find better beauty for less.
-          </h1>
-          <p className="mt-3 max-w-xs text-[15px] leading-relaxed text-muted-foreground">
-            Scan any beauty product and Dupli surfaces lower-cost alternatives worth comparing.
           </p>
-          <div className="mt-6 flex items-center gap-1">
+          <div className="mt-5 flex items-center gap-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <Star key={i} className="h-4 w-4 fill-warning text-warning" strokeWidth={1.5} />
             ))}
@@ -404,16 +405,9 @@ function OnboardingPage() {
               Beauty shoppers overpay <span className="italic">a lot.</span>
             </>
           }
-          lines={[
-            "The average beauty shopper spends ~$1,400/yr — and a big chunk of that has cheaper, comparable alternatives.",
-          ]}
+          lines={["~$1,400/yr — much of it has cheaper alternatives."]}
         >
           <ReceiptCard />
-          <LearningCard
-            tone="success"
-            icon={<Sparkles className="h-4 w-4" />}
-            title="Dupli helps you compare before you buy."
-          />
         </GuidedLineReveal>
       </OnboardingShell>
     );
@@ -442,25 +436,14 @@ function OnboardingPage() {
       >
         <GuidedLineReveal
           headline="Not every dupe is a real dupe."
-          lines={[
-            "Dupli compares product type, purpose, and ingredients — not just packaging or hype.",
-          ]}
+          lines={["We compare ingredients, not just packaging."]}
         >
-          <LearningCard
-            icon={<AlertTriangle className="h-4 w-4" />}
-            title="Looks similar"
-            body="Not enough — packaging can mislead."
-          />
           <LearningCard
             tone="success"
             icon={<ShieldCheck className="h-4 w-4" />}
-            title="Similar purpose + ingredients"
-            body="That's what Dupli looks for."
-            className="mt-2"
+            title="Strong · Good · Possible"
+            body='Honest match scoring — never "exact dupe."'
           />
-          <p className="mt-3 text-center text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-            Strong · Good · Possible — never "exact dupe."
-          </p>
         </GuidedLineReveal>
       </OnboardingShell>
     );
