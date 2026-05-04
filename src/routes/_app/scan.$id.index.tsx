@@ -107,7 +107,7 @@ function ScanDetailPage() {
       preview={preview}
       scanId={id}
       isSaved={isSaved}
-      canSave
+      canSave={isOwner}
       onToggleSave={handleToggleSave}
       onReset={goBack}
     />
