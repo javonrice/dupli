@@ -42,6 +42,7 @@ import {
 } from "@/lib/onboarding";
 import { useScanFlow } from "@/lib/use-scan-flow";
 import { ScanningScreen, ResultsScreen } from "@/components/scanner";
+import { LiveCamera } from "@/components/camera/live-camera";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
@@ -580,33 +581,18 @@ function freqLabel(f: Frequency): string {
 
 function FileInputs({ flow }: { flow: ReturnType<typeof useScanFlow> }) {
   return (
-    <>
-      <input
-        ref={flow.cameraRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files?.[0]) {
-            track("first_real_scan_started");
-            flow.handleFile(e.target.files[0]);
-          }
-        }}
-      />
-      <input
-        ref={flow.libraryRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          if (e.target.files?.[0]) {
-            track("first_real_scan_started");
-            flow.handleFile(e.target.files[0]);
-          }
-        }}
-      />
-    </>
+    <input
+      ref={flow.libraryRef}
+      type="file"
+      accept="image/*"
+      className="hidden"
+      onChange={(e) => {
+        if (e.target.files?.[0]) {
+          track("first_real_scan_started");
+          flow.handleFile(e.target.files[0]);
+        }
+      }}
+    />
   );
 }
 
