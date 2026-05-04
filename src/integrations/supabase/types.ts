@@ -366,6 +366,7 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           current_period_start: string | null
+          customer_email: string | null
           environment: string
           id: string
           paddle_customer_id: string
@@ -374,13 +375,14 @@ export type Database = {
           product_id: string
           status: string
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           cancel_at_period_end?: boolean | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          customer_email?: string | null
           environment?: string
           id?: string
           paddle_customer_id: string
@@ -389,13 +391,14 @@ export type Database = {
           product_id: string
           status?: string
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           cancel_at_period_end?: boolean | null
           created_at?: string
           current_period_end?: string | null
           current_period_start?: string | null
+          customer_email?: string | null
           environment?: string
           id?: string
           paddle_customer_id?: string
@@ -404,7 +407,7 @@ export type Database = {
           product_id?: string
           status?: string
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -413,6 +416,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      claim_subscriptions_for_current_user: { Args: never; Returns: number }
       has_active_subscription: {
         Args: { check_env?: string; user_uuid: string }
         Returns: boolean
