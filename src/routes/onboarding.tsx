@@ -11,6 +11,7 @@ import {
   Flame,
   Crown,
   ShieldCheck,
+  AlertTriangle,
   Bell,
   FlaskConical,
   Search,
