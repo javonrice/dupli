@@ -182,6 +182,90 @@ export const getTrendingDupes = createServerFn({ method: "GET" })
     return { dupes: out };
   });
 
+// ============================================================
+// Trending originals — group dupes by their original product
+// ============================================================
+
+export type ProductLite = CommunityDupe["dupe"];
+
+export type TrendingOriginal = {
+  /** Stable id for React keys — original product id when known, else `slug:brand/product`. */
+  id: string;
+  original: CommunityDupe["original"];
+  /** Up to 4 dupe previews, ranked by overall_match. */
+  dupes: ProductLite[];
+  dupeCount: number;
+  avgDupePriceUsd: number | null;
+  minDupePriceUsd: number | null;
+  bestMatch: number;
+  maxSavingsPct: number | null;
+};
+
+export const getTrendingOriginals = createServerFn({ method: "GET" })
+  .inputValidator((data) => z.object({ limit: z.number().min(1).max(50).optional() }).parse(data))
+  .handler(async ({ data }): Promise<{ originals: TrendingOriginal[] }> => {
+    const limit = data.limit ?? 12;
+    const { data: rows, error } = await supabaseAdmin
+      .from("dupes")
+      .select(DUPE_SELECT)
+      .gte("overall_match", 70)
+      .order("overall_match", { ascending: false })
+      .limit(limit * 24);
+
+    if (error || !rows?.length) {
+      console.warn("getTrendingOriginals query failed", error);
+      return { originals: [] };
+    }
+
+    const grouped = new Map<string, TrendingOriginal>();
+    for (const r of rows as unknown as DupeJoinRow[]) {
+      const m = mapRow(r);
+      if (!m) continue;
+      const key = m.original.id;
+      let bucket = grouped.get(key);
+      if (!bucket) {
+        bucket = {
+          id: m.original.id,
+          original: m.original,
+          dupes: [],
+          dupeCount: 0,
+          avgDupePriceUsd: null,
+          minDupePriceUsd: null,
+          bestMatch: 0,
+          maxSavingsPct: null,
+        };
+        grouped.set(key, bucket);
+      }
+      if (bucket.dupes.length < 4) bucket.dupes.push(m.dupe);
+      bucket.dupeCount += 1;
+      if (m.overallMatch > bucket.bestMatch) bucket.bestMatch = m.overallMatch;
+    }
+
+    const out: TrendingOriginal[] = [];
+    for (const b of grouped.values()) {
+      const prices = b.dupes
+        .map((d) => d.lowestPriceUsd)
+        .filter((p): p is number => p != null && p > 0);
+      if (prices.length > 0) {
+        b.avgDupePriceUsd = prices.reduce((a, c) => a + c, 0) / prices.length;
+        b.minDupePriceUsd = Math.min(...prices);
+        if (b.original.lowestPriceUsd && b.original.lowestPriceUsd > 0) {
+          const op = b.original.lowestPriceUsd;
+          const savings = prices.map((p) => Math.round(((op - p) / op) * 100));
+          b.maxSavingsPct = Math.max(...savings);
+        }
+      }
+      out.push(b);
+    }
+
+    out.sort(
+      (a, b) =>
+        b.bestMatch * Math.log(1 + b.dupeCount) -
+        a.bestMatch * Math.log(1 + a.dupeCount),
+    );
+    return { originals: out.slice(0, limit) };
+  });
+
 /** Last N scans for the current user — powers "Pick up where you left off". */
 export const getRecentScans = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

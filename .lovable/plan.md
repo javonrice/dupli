@@ -1,44 +1,75 @@
-## Trending dupe card — side-by-side comparison
+## Trending: switch from "pairings" to "originals with N dupes"
 
-Rewrite `src/components/home/community-dupe-card.tsx` so original and dupe sit at equal weight, with the match% and savings dividing them. No hero, no footer reference — pure compare.
+The hub's trending section should be **one card per original product**. The original is the hero photo + name; below it, "N dupes from $X avg". Tap → product detail page (already exists at `/p/$productId`) which shows the dupes for that original.
 
-### Layout
+### What changes
 
-```text
-┌─────────────────────────────┐
-│  [STEAL · 38% off]          │  optional badge, top-right
-│ ┌──────────┐  ┌──────────┐  │
-│ │ original │  │   dupe   │  │  two equal squares, side by side
-│ │  image   │vs│  image   │  │  thin "vs" pill straddles the gap
-│ └──────────┘  └──────────┘  │
-│ DRUNK ELEPHANT   THE ORDINARY│  brand row (uppercase, 2 cols)
-│ Protini Polypep…  Buffet     │  name row (display, 2-line clamp)
-│ $68              $14         │  price row (tabular, equal cols)
-├─────────────────────────────┤
-│       ◆ 92% match           │  full-width divider, accent color
-└─────────────────────────────┘
+**1. New server function `getTrendingOriginals`** (in `src/server/discover.functions.ts`)
+
+Pulls the `dupes` table (overall_match ≥ 70, top ~limit×24 rows), groups by `original.id`, and returns:
+
+```ts
+type TrendingOriginal = {
+  id: string;                          // original product id
+  original: { id, brand, productName, imageUrl, lowestPriceUsd, ... };
+  dupes: ProductLite[];                // up to 4 dupe previews
+  dupeCount: number;                   // total available
+  avgDupePriceUsd: number | null;      // mean of priced dupes
+  minDupePriceUsd: number | null;      // cheapest dupe
+  bestMatch: number;                   // top overall_match in group
+  maxSavingsPct: number | null;        // best % savings vs original
+};
 ```
 
-- Two equal-width columns inside each row so the eye reads top-to-bottom AND left-to-right unambiguously: the left column is always the original, the right is always the dupe. A faint vertical divider line runs through the card to reinforce the split.
-- Small `vs` pill centered on the image divider line.
-- Dupe price gets `font-bold`; original price gets `text-muted-foreground` (not strike-through — both are real prices, the dupe is just the highlighted side).
-- Steal badge (existing `detectSteal` 25% buffer rule) sits top-right of the dupe column instead of overlaying the original.
-- Match% pill becomes the bottom band of the card (full width, secondary background) — same place hierarchy as before, just relocated.
+Ranked by `bestMatch * log(1 + dupeCount)` so an original with many strong dupes outranks a one-off.
 
-### Variant widths
+**2. New `getTrendingOriginalsBlended`** in `src/server/trending.functions.ts`
 
-- `variant="card"` (rail, 200px): images shrink to ~84×84 each, name clamps to 2 lines, price 13px. Tight but legible.
-- `variant="tile"` (grid, full width): images 120×120+, name 14px, price 16px.
+Mirrors `getTrendingDupesBlended`: prefer save-driven (group `trending_saved_dupes` rows by their original brand/product), fall back to `getTrendingOriginals`. Same `MIN_SAVES` / `SAVE_PATH_COVERAGE` tunables.
 
-Same component handles both via the existing `widthClass` switch; only the inner image/text sizes scale with a `compact` boolean derived from `variant === "card"`.
+**3. New `CommunityOriginalCard`** (new file `src/components/home/community-original-card.tsx`)
 
-### Other touches
+```text
+┌──────────────────────────┐
+│                          │
+│      [original image]    │   square hero, full card width
+│                          │
+├──────────────────────────┤
+│ DRUNK ELEPHANT      $68  │   brand · price (original price)
+│ Protini Polypeptide      │   product name, 2-line clamp
+│                          │
+│ ◆ 7 dupes from $14 avg   │   summary line: count · avg price
+│   ▢ ▢ ▢ ▢                │   tiny dupe thumbnail strip (up to 4)
+└──────────────────────────┘
+   [SAVE 79%] badge top-right of hero when maxSavingsPct ≥ 25
+```
 
-- Keep `dupeLinkProps` routing (`saved:` → scan view, else product page) untouched.
-- Keep `detectSteal` and `fmtPrice` as-is.
-- Drop the "dupe for" footer entirely.
-- No schema or server changes. Pure component rewrite.
+- `variant="card"` (rail, 220px wide) and `variant="tile"` (grid, full width) — same component, only image/text scale.
+- Tap → `/p/$productId` using `original.id`. (No need for the `saved:` scan-link branch since this card always represents a catalog product. The save-driven path still emits `original.brandSlug/productSlug` so we route to `/community/$brand/$product` for the saved-only case where original.id is empty.)
+- Tiny dupe strip is decorative — 4 small avatars with `ShoppingBag` fallback. Reinforces "real dupes exist, here's a peek."
 
-### File touched
+**4. Rewrite `community-feeds.tsx`**
 
-- `src/components/home/community-dupe-card.tsx` — rewrite layout; props/exports unchanged so `community-feeds.tsx` and `p.$productId.tsx` keep working without edits.
+- Replace `TrendingRail` and `ForYouGrid` so they accept `TrendingOriginal[]` and render `CommunityOriginalCard`.
+- Same section headers, same layout shells.
+
+**5. Update `src/routes/_app/app.tsx`**
+
+- Swap `getTrendingDupesBlended` → `getTrendingOriginalsBlended` for the `trending` and `popular` state.
+- Type updates: `TrendingOriginal[]` instead of `CommunityDupe[]`.
+- Dedup `popular` against `trending` by `original.id`.
+- `DupeOfTheDay` and `RecentScansSection` stay untouched (they're pairing-based and that's correct for those moments).
+
+**6. Leave alone**
+
+- `CommunityDupeCard` (still used by `p.$productId.tsx` for "Dupes for this" / "Also a dupe for" — those sections ARE about pairings, by design).
+- `dupe-of-the-day.tsx` — single editorial pairing, keep as-is.
+- `community.$brand.$product.tsx` route — still useful for save-path links.
+
+### Files touched
+
+- **edit** `src/server/discover.functions.ts` — add `TrendingOriginal` type + `getTrendingOriginals`
+- **edit** `src/server/trending.functions.ts` — add `getTrendingOriginalsBlended`
+- **new** `src/components/home/community-original-card.tsx`
+- **edit** `src/components/home/community-feeds.tsx` — rewrite props/usage
+- **edit** `src/routes/_app/app.tsx` — swap server fn + state types
