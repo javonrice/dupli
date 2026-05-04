@@ -48,6 +48,13 @@ import { LiveCamera } from "@/components/camera/live-camera";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
+  beforeLoad: async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      throw redirect({ to: "/app" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Welcome to Dupli" },
