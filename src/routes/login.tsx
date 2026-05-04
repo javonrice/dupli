@@ -164,17 +164,24 @@ function LoginPage() {
             e.preventDefault();
             setError(null);
             setSigningIn(true);
-            const { error } =
-              mode === "signin"
-                ? await supabase.auth.signInWithPassword({ email, password })
-                : await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: {
-                      emailRedirectTo: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
-                    },
-                  });
-            if (error) setError(error.message);
+            if (mode === "signin") {
+              const { error } = await supabase.auth.signInWithPassword({ email, password });
+              if (error) setError(error.message);
+            } else {
+              const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                  emailRedirectTo: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
+                },
+              });
+              if (error) {
+                setError(error.message);
+              } else if (!data.session) {
+                // Email confirmation required — show the "check your inbox" panel.
+                setPendingConfirmEmail(email);
+              }
+            }
             setSigningIn(false);
           }}
           className="space-y-2"
