@@ -170,7 +170,10 @@ function DiscoveryHub({ error }: { error: string | null }) {
         ) : (
           <>
             <DupeOfTheDay dupe={hero} />
-            <TrendingRail dupes={trending} />
+            <TrendingRail
+              dupes={trending}
+              title={trendingSource === "saved" ? "Loved by the community" : "Trending dupes"}
+            />
             <RecentScansSection scans={recent} />
             <ForYouGrid dupes={popular} />
           </>
