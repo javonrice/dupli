@@ -1,6 +1,5 @@
 import { X } from "lucide-react";
 import { useCameraStream } from "@/lib/use-camera-stream";
-import wordmark from "@/assets/dupli-wordmark-light.png";
 
 /** Full-screen in-app camera. Renders a live <video> with dupli chrome on top. */
 export function LiveCamera({
@@ -41,7 +40,9 @@ export function LiveCamera({
           >
             <X className="h-5 w-5" strokeWidth={2.25} />
           </button>
-          <img src={wordmark} alt="Dupli" className="h-5 w-auto opacity-95" />
+          <span className="font-display text-[20px] font-bold tracking-tight text-background">
+            dupli<span className="text-[hsl(var(--destructive,11_85%_60%))]" style={{ color: "#FF5A4E" }}>.</span>
+          </span>
           <div className="h-9 w-9" />
         </div>
       </div>
