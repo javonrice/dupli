@@ -18,6 +18,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as CheckoutAccountRouteImport } from './routes/checkout.account'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
@@ -74,6 +75,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutAccountRoute = CheckoutAccountRouteImport.update({
+  id: '/checkout/account',
+  path: '/checkout/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppSavedRoute = AppSavedRouteImport.update({
@@ -160,6 +166,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
+  '/checkout/account': typeof CheckoutAccountRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -183,6 +190,7 @@ export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
+  '/checkout/account': typeof CheckoutAccountRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   '/_app/history': typeof AppHistoryRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
+  '/checkout/account': typeof CheckoutAccountRoute
   '/_app/p/$productId': typeof AppPProductIdRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -232,6 +241,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
+    | '/checkout/account'
     | '/p/$productId'
     | '/scan/$id'
     | '/community/$brand/$product'
@@ -255,6 +265,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
+    | '/checkout/account'
     | '/p/$productId'
     | '/community/$brand/$product'
     | '/scan/$id/share'
@@ -278,6 +289,7 @@ export interface FileRouteTypes {
     | '/_app/history'
     | '/_app/profile'
     | '/_app/saved'
+    | '/checkout/account'
     | '/_app/p/$productId'
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
@@ -299,6 +311,7 @@ export interface RootRouteChildren {
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   TermsRoute: typeof TermsRoute
+  CheckoutAccountRoute: typeof CheckoutAccountRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
   ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
@@ -368,6 +381,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout/account': {
+      id: '/checkout/account'
+      path: '/checkout/account'
+      fullPath: '/checkout/account'
+      preLoaderRoute: typeof CheckoutAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/saved': {
@@ -510,6 +530,7 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   TermsRoute: TermsRoute,
+  CheckoutAccountRoute: CheckoutAccountRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:
     ApiPublicHooksEnqueueVendorBackfillRoute,
   ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
