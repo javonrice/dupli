@@ -160,8 +160,7 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       {dupe &&
         ((sharedIngredients?.length ?? 0) +
           (uniqueToOriginal?.length ?? 0) +
-          (uniqueToDupe?.length ?? 0) > 0 ||
-          !!contextMatch) && (
+          (uniqueToDupe?.length ?? 0) > 0) && (
           <div className="space-y-4 border-t border-border bg-secondary/30 px-5 py-4">
             <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
               Formula breakdown
