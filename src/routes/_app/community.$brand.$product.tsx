@@ -1,11 +1,10 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
-import { Loader2, ShoppingBag, ExternalLink, ArrowRight, TrendingDown } from "lucide-react";
+import { Loader2, ShoppingBag, ArrowRight, TrendingDown } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getCommunityDupe, type CommunityDupe } from "@/server/discover.functions";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
-import { googleShoppingLink } from "@/lib/retailer-links";
 
 export const Route = createFileRoute("/_app/community/$brand/$product")({
   component: CommunityDupePage,
@@ -14,13 +13,17 @@ export const Route = createFileRoute("/_app/community/$brand/$product")({
   }),
 });
 
+function fmtPrice(p: number | null | undefined): string {
+  if (p == null || p <= 0) return "—";
+  return p < 10 ? `$${p.toFixed(2)}` : `$${Math.round(p)}`;
+}
+
 function CommunityDupePage() {
   const { brand, product } = Route.useParams();
   const navigate = useNavigate();
   const fetchDupe = useServerFn(getCommunityDupe);
   const [dupes, setDupes] = useState<CommunityDupe[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedIdx, setSelectedIdx] = useState(0);
 
   useHideTabBar();
 
@@ -79,175 +82,127 @@ function CommunityDupePage() {
     );
   }
 
-  const safeIdx = Math.min(selectedIdx, dupes.length - 1);
-  const current = dupes[safeIdx];
-  const alternates = dupes.slice(1);
-  const buyLink = googleShoppingLink(current.dupe.brand, current.dupe.productName);
+  // All entries share the same `original` (the queried product).
+  const original = dupes[0].original;
 
   return (
     <IOSScreen
-      title="Community dupe"
+      title="Original"
       back={{ onClick: goBack }}
       fullHeight
       bottomBar={
-        <a
-          href={buyLink.url}
-          target="_blank"
-          rel="noopener noreferrer"
+        <Link
+          to="/app"
           className="tap flex h-[50px] w-full items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
         >
-          <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={2} />
-          Shop at {buyLink.label}
-          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
-        </a>
+          Scan a product
+          <ArrowRight className="h-4 w-4" strokeWidth={2.5} />
+        </Link>
       }
     >
       <div className="space-y-4 px-4 pb-6 pt-3">
-        {/* Pair card */}
+        {/* Original product hero — image + brand + name + price */}
         <article className="overflow-hidden rounded-[20px] border border-border bg-card shadow-soft">
-          <div className="flex items-center justify-between border-b border-border bg-secondary/60 px-5 py-3">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground">
-              Community match
-            </span>
-            <div className="flex items-center gap-1 text-[12px] font-semibold text-foreground">
-              <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.5} />
-              {current.overallMatch}% match
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 divide-x divide-border">
-            <PairSide
-              label="Original"
-              brand={current.original.brand}
-              name={current.original.productName}
-              imageUrl={current.original.imageUrl}
-              muted
-            />
-            <PairSide
-              label="The dupe"
-              brand={current.dupe.brand}
-              name={current.dupe.productName}
-              imageUrl={current.dupe.imageUrl}
-            />
-          </div>
-
-          {/* Match meter */}
-          <div className="space-y-2 border-t border-border px-5 py-4">
-            <div className="flex items-baseline justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                Ingredient match
-              </span>
-              <span className="font-display text-2xl font-bold tabular-nums">
-                {current.ingredientMatch ?? current.overallMatch}%
-              </span>
-            </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-              <div
-                className="h-full rounded-full bg-foreground transition-all"
-                style={{ width: `${current.ingredientMatch ?? current.overallMatch}%` }}
+          <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-secondary/40">
+            {original.imageUrl ? (
+              <img
+                src={original.imageUrl}
+                alt={`${original.brand} ${original.productName}`}
+                loading="lazy"
+                className="h-full w-full object-contain p-6"
+                onError={(e) => {
+                  (e.currentTarget as HTMLImageElement).style.display = "none";
+                }}
               />
-            </div>
-            {typeof current.sharedIngredientsCount === "number" &&
-              current.sharedIngredientsCount > 0 && (
-                <p className="text-[12px] text-muted-foreground">
-                  {current.sharedIngredientsCount} shared ingredients
-                </p>
-              )}
+            ) : (
+              <ShoppingBag className="h-10 w-10 text-muted-foreground/60" strokeWidth={1.5} />
+            )}
           </div>
-
-          {current.rationale && (
-            <div className="border-t border-border bg-secondary/30 px-5 py-4">
-              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                Why it matches
-              </div>
-              <p className="text-[13px] leading-relaxed text-foreground">
-                {current.rationale}
-              </p>
+          <div className="space-y-1 px-5 py-4">
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+              {original.brand}
             </div>
-          )}
+            <h1 className="font-display text-[20px] font-semibold leading-tight text-foreground">
+              {original.productName}
+            </h1>
+            {original.lowestPriceUsd != null && original.lowestPriceUsd > 0 && (
+              <div className="pt-1 font-display text-[16px] font-bold tabular-nums text-foreground">
+                {fmtPrice(original.lowestPriceUsd)}
+              </div>
+            )}
+          </div>
         </article>
 
-        {/* Other dupes for the same original — image + price tiles */}
-        {alternates.length > 0 && (
-          <section className="space-y-2 pt-1">
-            <div className="flex items-center justify-between px-1">
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-                More dupes for this
-              </div>
-              <div className="text-[10px] font-medium text-muted-foreground">
-                {alternates.length} more
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3 pt-1">
-              {dupes.map((d, i) => {
-                if (i === 0) return null;
-                const isActive = i === safeIdx;
-                const price = d.dupe.lowestPriceUsd;
-                return (
-                  <button
-                    key={d.id}
-                    type="button"
-                    onClick={() => setSelectedIdx(i)}
-                    className={`tap group flex flex-col overflow-hidden rounded-[16px] border bg-card text-left shadow-soft transition ${
-                      isActive ? "border-foreground" : "border-border"
-                    }`}
-                    aria-pressed={isActive}
-                  >
-                    <div className="relative">
-                      <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-secondary/40">
-                        {d.dupe.imageUrl ? (
-                          <img
-                            src={d.dupe.imageUrl}
-                            alt={`${d.dupe.brand} ${d.dupe.productName}`}
-                            loading="lazy"
-                            className="h-full w-full object-contain p-3"
-                            onError={(e) => {
-                              (e.currentTarget as HTMLImageElement).style.display = "none";
-                            }}
-                          />
-                        ) : (
-                          <ShoppingBag
-                            className="h-7 w-7 text-muted-foreground/60"
-                            strokeWidth={1.5}
-                          />
-                        )}
+        {/* Dupes for this product — image + price tiles, ranked by match */}
+        <section className="space-y-2">
+          <h2 className="flex items-center gap-1.5 px-1 text-[11px] font-semibold uppercase tracking-widest text-muted-foreground">
+            <TrendingDown className="h-3.5 w-3.5" strokeWidth={2.5} />
+            Dupes for this
+          </h2>
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            {dupes.map((d) => {
+              const price = d.dupe.lowestPriceUsd;
+              const Inner = (
+                <>
+                  <div className="relative">
+                    <div className="flex aspect-square w-full items-center justify-center overflow-hidden bg-secondary/40">
+                      {d.dupe.imageUrl ? (
+                        <img
+                          src={d.dupe.imageUrl}
+                          alt={`${d.dupe.brand} ${d.dupe.productName}`}
+                          loading="lazy"
+                          className="h-full w-full object-contain p-3"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <ShoppingBag
+                          className="h-7 w-7 text-muted-foreground/60"
+                          strokeWidth={1.5}
+                        />
+                      )}
+                    </div>
+                    <div className="absolute right-2 top-2 rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background shadow-soft">
+                      {d.overallMatch}%
+                    </div>
+                  </div>
+                  <div className="flex items-baseline justify-between gap-2 px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        {d.dupe.brand}
                       </div>
-                      <div className="absolute right-2 top-2 rounded-full bg-foreground px-2 py-0.5 text-[10px] font-bold tabular-nums text-background shadow-soft">
-                        {d.overallMatch}%
+                      <div className="line-clamp-1 font-display text-[13px] font-semibold leading-tight text-foreground">
+                        {d.dupe.productName}
                       </div>
                     </div>
-                    <div className="flex items-baseline justify-between gap-2 px-3 py-2.5">
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          {d.dupe.brand}
-                        </div>
-                        <div className="line-clamp-1 font-display text-[13px] font-semibold leading-tight text-foreground">
-                          {d.dupe.productName}
-                        </div>
-                      </div>
-                      <div className="shrink-0 font-display text-[15px] font-bold tabular-nums text-foreground">
-                        {price != null && price > 0
-                          ? price < 10
-                            ? `$${price.toFixed(2)}`
-                            : `$${Math.round(price)}`
-                          : "—"}
-                      </div>
+                    <div className="shrink-0 font-display text-[15px] font-bold tabular-nums text-foreground">
+                      {fmtPrice(price)}
                     </div>
-                  </button>
-                );
-              })}
-            </div>
-            {safeIdx > 0 && (
-              <button
-                type="button"
-                onClick={() => setSelectedIdx(0)}
-                className="tap mx-auto block pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground underline-offset-4 hover:underline"
-              >
-                Back to top pick
-              </button>
-            )}
-          </section>
-        )}
+                  </div>
+                </>
+              );
+              // Save-driven entries have empty product ids; render as static tiles in that case.
+              return d.dupe.id ? (
+                <Link
+                  key={d.id}
+                  to="/p/$productId"
+                  params={{ productId: d.dupe.id }}
+                  className="tap group flex flex-col overflow-hidden rounded-[16px] border border-border bg-card text-left shadow-soft"
+                >
+                  {Inner}
+                </Link>
+              ) : (
+                <div
+                  key={d.id}
+                  className="flex flex-col overflow-hidden rounded-[16px] border border-border bg-card text-left shadow-soft"
+                >
+                  {Inner}
+                </div>
+              );
+            })}
+          </div>
+        </section>
 
         <div className="rounded-[14px] border border-border bg-card px-4 py-3 text-center">
           <p className="text-[12px] text-muted-foreground">
@@ -263,46 +218,5 @@ function CommunityDupePage() {
         </div>
       </div>
     </IOSScreen>
-  );
-}
-
-function PairSide({
-  label,
-  brand,
-  name,
-  imageUrl,
-  muted = false,
-}: {
-  label: string;
-  brand: string;
-  name: string;
-  imageUrl: string | null;
-  muted?: boolean;
-}) {
-  return (
-    <div className={`p-5 ${muted ? "bg-background" : "bg-card"}`}>
-      <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-        {label}
-      </div>
-      <div className="mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary/40">
-        {imageUrl ? (
-          <img
-            src={imageUrl}
-            alt={`${brand} ${name}`}
-            loading="lazy"
-            className="h-full w-full object-contain"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
-          />
-        ) : (
-          <ShoppingBag className="h-6 w-6 text-muted-foreground/60" strokeWidth={1.5} />
-        )}
-      </div>
-      <div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-        {brand}
-      </div>
-      <h3 className="mt-1 font-display text-base font-semibold leading-tight">{name}</h3>
-    </div>
   );
 }
