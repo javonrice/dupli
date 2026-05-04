@@ -11,35 +11,10 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) {
-      throw redirect({ to: "/login", search: { next: "/paywall" } });
-    }
-    // Skip paywall if user already has an active subscription in this env.
-    try {
-      const { getPaddleEnvironment } = await import("@/lib/paddle");
-      const env = getPaddleEnvironment();
-      const { data: sub } = await (supabase as any)
-        .from("subscriptions")
-        .select("status,current_period_end")
-        .eq("user_id", data.session.user.id)
-        .eq("environment", env)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (sub) {
-        const end = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
-        const future = end === null || end > Date.now();
-        const active =
-          (["active", "trialing", "past_due"].includes(sub.status) && future) ||
-          (sub.status === "canceled" && end !== null && end > Date.now());
-        if (active) throw redirect({ to: "/app" });
-      }
-    } catch (e) {
-      if (e && typeof e === "object" && "isRedirect" in (e as object)) throw e;
-    }
-  },
+  // NOTE: auth + subscription checks happen client-side in the component.
+  // Running them in beforeLoad executes on the server (no localStorage/session
+  // cookies in this setup), which always redirects fresh visitors to /login —
+  // not native-app behavior.
   head: () => ({
     meta: [
       { title: "Go Premium — Dupli" },
@@ -67,10 +42,54 @@ type Plan = "yearly" | "monthly";
 
 function PaywallPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { openCheckout, loading: checkoutLoading } = usePaddleCheckout();
   const [introLoading, setIntroLoading] = useState(false);
   const [plan, setPlan] = useState<Plan>("yearly");
+  const [gateChecking, setGateChecking] = useState(true);
+
+  // Client-side gate: require auth, and skip the paywall if the user already
+  // has an active subscription. (Done here, not in beforeLoad, so SSR doesn't
+  // bounce fresh visitors to /login.)
+  useEffect(() => {
+    if (authLoading) return;
+    let cancelled = false;
+    (async () => {
+      if (!user) {
+        navigate({ to: "/login", search: { next: "/paywall" }, replace: true });
+        return;
+      }
+      try {
+        const { getPaddleEnvironment } = await import("@/lib/paddle");
+        const env = getPaddleEnvironment();
+        const { data: sub } = await (supabase as any)
+          .from("subscriptions")
+          .select("status,current_period_end")
+          .eq("user_id", user.id)
+          .eq("environment", env)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (sub) {
+          const end = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
+          const future = end === null || end > Date.now();
+          const active =
+            (["active", "trialing", "past_due"].includes(sub.status) && future) ||
+            (sub.status === "canceled" && end !== null && end > Date.now());
+          if (active && !cancelled) {
+            navigate({ to: "/app", replace: true });
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("[paywall] subscription check failed", e);
+      }
+      if (!cancelled) setGateChecking(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, navigate]);
 
   useEffect(() => {
     track("paywall_viewed_after_result");
@@ -131,6 +150,14 @@ function PaywallPage() {
   };
 
   const busy = checkoutLoading || introLoading;
+
+  if (authLoading || gateChecking) {
+    return (
+      <div className="flex h-screen-safe items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen-safe flex-col bg-background">
