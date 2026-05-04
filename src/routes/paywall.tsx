@@ -151,6 +151,14 @@ function PaywallPage() {
 
   const busy = checkoutLoading || introLoading;
 
+  if (authLoading || gateChecking) {
+    return (
+      <div className="flex h-screen-safe items-center justify-center bg-background">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen-safe flex-col bg-background">
       <div className="pt-safe" />
