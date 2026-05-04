@@ -156,6 +156,14 @@ export const scanProduct = createServerFn({ method: "POST" })
                 parameters: {
                   type: "object",
                   properties: {
+                    isBeautyProduct: {
+                      type: "boolean",
+                      description: "True if the image shows a beauty or personal-care product. False for food, drinks, electronics, clothing, etc.",
+                    },
+                    rejectionReason: {
+                      type: "string",
+                      description: "If isBeautyProduct is false, one short sentence explaining what you see and that it's out of scope. Empty string otherwise.",
+                    },
                     original: {
                       type: "object",
                       properties: {
