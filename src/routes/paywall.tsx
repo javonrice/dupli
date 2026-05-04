@@ -55,6 +55,7 @@ function PaywallPage() {
     }
   });
   const [gateChecking, setGateChecking] = useState(true);
+  const resumedRef = useRef(false);
 
   useEffect(() => {
     try {
