@@ -128,6 +128,7 @@ export const scanProduct = createServerFn({ method: "POST" })
                 "  - 'Risky dupe' = clearly cheaper / lookalike but the formula tradeoff is bad enough we should warn the user",
                 "  - 'Skip' = not a real dupe, or actively worse in ways that matter",
                 "  - 'No dupe found' = no credible counterpart exists (return empty dupes array in this case)",
+                "STEAL-FIND CASE: If the scanned product is meaningfully cheaper than every credible counterpart (drugstore, dollar store, off-brand), the user has FOUND A STEAL. Verdict still reflects formula honesty (Worth the hype if it genuinely matches; Mixed if it cuts corners; Risky dupe if it adds irritants), but the `notes` copy should celebrate the find ('You scored — this $X buy holds its own against the $Y name brand') rather than warn about a swap.",
                 "If you genuinely cannot find ANY credible dupe, set dupes to [], verdict 'No dupe found', and leave comparison/risk lists empty.",
                 "Always call analyze_dupe exactly once.",
               ].join(" "),
