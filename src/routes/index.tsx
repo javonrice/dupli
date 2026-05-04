@@ -51,15 +51,21 @@ async function waitForOAuthSession(timeoutMs = 4000) {
 }
 
 export const Route = createFileRoute("/")({
-  beforeLoad: async () => {
-    // First-time visitors (no completed onboarding) always start in onboarding,
-    // regardless of whether they're signed in. Onboarding ends with either a
-    // sample result, a real first scan, or the paywall — and from there the
-    // user lands on /app or /login as appropriate.
-    if (typeof window !== "undefined" && !isOnboarded()) {
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
+  beforeLoad: async ({ search }) => {
+    const allowed = ["/app", "/paywall", "/onboarding"];
+    const next =
+      search.next && allowed.includes(search.next) ? search.next : null;
+
+    if (typeof window !== "undefined" && !isOnboarded() && !next) {
       throw redirect({ to: "/onboarding" });
     }
     const session = await waitForOAuthSession();
-    throw redirect({ to: session ? "/app" : "/login" });
+    if (session) {
+      throw redirect({ to: next ?? "/app" });
+    }
+    throw redirect({ to: "/login" });
   },
 });

@@ -6,8 +6,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
 import wordmark from "@/assets/dupli-wordmark.png";
 
+const ALLOWED_NEXT = ["/app", "/paywall", "/onboarding"] as const;
+function safeNext(n: unknown): string {
+  if (typeof n !== "string") return "/app";
+  return (ALLOWED_NEXT as readonly string[]).includes(n) ? n : "/app";
+}
+
 export const Route = createFileRoute("/login")({
   component: LoginPage,
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" ? s.next : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — Dupli" },
@@ -18,6 +27,8 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const { user, loading } = useAuth();
+  const search = Route.useSearch();
+  const next = safeNext(search.next);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"signin" | "signup">("signin");
@@ -33,7 +44,7 @@ function LoginPage() {
   }
 
   if (user) {
-    return <Navigate to="/app" />;
+    return <Navigate to={next} />;
   }
 
   const handleGoogle = async () => {
@@ -41,14 +52,13 @@ function LoginPage() {
     setSigningIn(true);
     try {
       const result = await lovable.auth.signInWithOAuth("google", {
-        redirect_uri: window.location.origin,
+        redirect_uri: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
       });
       if (result.error) {
         setError(result.error.message ?? "Sign-in failed.");
         setSigningIn(false);
         return;
       }
-      // result.redirected => browser will navigate; we just wait.
     } catch (e) {
       setError(e instanceof Error ? e.message : "Sign-in failed.");
       setSigningIn(false);
@@ -92,7 +102,9 @@ function LoginPage() {
                 : await supabase.auth.signUp({
                     email,
                     password,
-                    options: { emailRedirectTo: window.location.origin },
+                    options: {
+                      emailRedirectTo: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
+                    },
                   });
             if (error) setError(error.message);
             setSigningIn(false);
