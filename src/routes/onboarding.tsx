@@ -182,6 +182,10 @@ function OnboardingPage() {
         total={TOTAL}
         hideProgress
         primary={{ label: "Get Started", onClick: goNext("gender") }}
+        textLink={{
+          label: "I already have an account · Sign in",
+          onClick: () => navigate({ to: "/login", search: { next: "/app" } }),
+        }}
       >
         <div className="relative -mx-5 -mt-2 flex h-full flex-col">
           {/* Immersive hero — camera POV scanning a real product */}
