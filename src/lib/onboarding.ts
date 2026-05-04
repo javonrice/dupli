@@ -1,7 +1,6 @@
 // Local-first onboarding state + lightweight analytics shim.
 // We persist completion + the user's onboarding answers in localStorage so
-// we don't have to add a new DB table for v1. If/when a `user_preferences`
-// table exists, swap the read/write helpers.
+// we don't have to add a new DB table for v1.
 
 const KEY = "dupli.onboarding.v1";
 
@@ -20,12 +19,18 @@ export type Category =
   | "viral"
   | "luxury";
 
+export type Gender = "female" | "male" | "other";
+export type AgeRange = "under_18" | "18_24" | "25_34" | "35_44" | "45_plus";
+export type Goal = "save_money" | "clean_ingredients" | "viral_dupes" | "all";
+
 export type OnboardingState = {
   completed: boolean;
   completedAt?: string;
+  gender?: Gender;
+  ageRange?: AgeRange;
   frequency?: Frequency;
   categories?: Category[];
-  // Whether the user has already used their one "free first real result".
+  goal?: Goal;
   firstRealResultUsed?: boolean;
 };
 
@@ -58,16 +63,38 @@ export function isOnboarded(): boolean {
   return readOnboarding().completed === true;
 }
 
+/* --------------------- Personalized savings estimate --------------------- */
+
+const FREQ_MULTIPLIER: Record<Frequency, number> = {
+  few_per_year: 60,
+  monthly: 180,
+  few_per_month: 320,
+  weekly: 520,
+  always: 760,
+};
+
+/** Plausible (not-promised) yearly savings estimate used for the plan reveal. */
+export function estimatedYearlySavings(state: OnboardingState): number {
+  const base = state.frequency ? FREQ_MULTIPLIER[state.frequency] : 220;
+  const cats = state.categories?.length ?? 1;
+  const catBoost = 1 + Math.min(cats - 1, 4) * 0.18; // up to ~+72%
+  const goalBoost = state.goal === "save_money" || state.goal === "all" ? 1.15 : 1;
+  const raw = base * catBoost * goalBoost;
+  // Round to nearest $10 for a clean number.
+  return Math.max(80, Math.round(raw / 10) * 10);
+}
+
 /* ------------------------------ Analytics ------------------------------ */
 
-// Placeholder — wired later if/when an analytics provider is added.
-// Kept side-effect free (just a console.debug) so it never breaks builds.
 export type OnboardingEvent =
   | "onboarding_started"
   | "onboarding_screen_viewed"
-  | "onboarding_pain_continue"
+  | "onboarding_gender_selected"
+  | "onboarding_age_selected"
   | "onboarding_frequency_selected"
   | "onboarding_categories_selected"
+  | "onboarding_goal_selected"
+  | "onboarding_notifications_response"
   | "onboarding_sample_selected"
   | "onboarding_scan_selected"
   | "onboarding_upload_selected"
@@ -77,6 +104,7 @@ export type OnboardingEvent =
   | "first_real_scan_completed"
   | "first_real_scan_failed"
   | "paywall_viewed_after_result"
+  | "paywall_plan_toggled"
   | "trial_started"
   | "paywall_dismissed";
 

@@ -11,8 +11,8 @@ import { prefersReducedMotion } from "@/lib/onboarding";
 export function GuidedLineReveal({
   headline,
   lines = [],
-  delay = 80,
-  stagger = 380,
+  delay = 40,
+  stagger = 140,
   className = "",
   align = "left",
   children,
