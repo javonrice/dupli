@@ -37,6 +37,27 @@ function LoginPage() {
   const [password, setPassword] = useState("");
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  const [logoTaps, setLogoTaps] = useState(0);
+
+  const handleLogoTap = async () => {
+    const next = logoTaps + 1;
+    setLogoTaps(next);
+    if (next >= 10) {
+      setLogoTaps(0);
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        /* ignore */
+      }
+      try {
+        window.localStorage.clear();
+        window.sessionStorage.clear();
+      } catch {
+        /* ignore */
+      }
+      window.location.href = "/onboarding";
+    }
+  };
 
   if (loading) {
     return (
