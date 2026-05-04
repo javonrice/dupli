@@ -211,20 +211,6 @@ function LoginPage() {
             : "Already have an account? Sign in"}
         </button>
 
-        <div className="flex items-center gap-3 py-1">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">or</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        <button
-          onClick={() => handleOAuth("apple")}
-          disabled={signingIn}
-          className="tap flex h-[52px] w-full items-center justify-center gap-2.5 rounded-[14px] bg-foreground text-[15px] font-semibold text-background disabled:opacity-60"
-        >
-          <AppleGlyph />
-          Continue with Apple
-        </button>
         <p className="mt-2 text-center text-[11px] leading-relaxed text-muted-foreground">
           By continuing you agree to our Terms and acknowledge our Privacy Policy.
         </p>
