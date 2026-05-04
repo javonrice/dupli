@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsRouteImport } from './routes/terms'
+import { Route as SigninRouteImport } from './routes/signin'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PaywallRouteImport } from './routes/paywall'
@@ -36,6 +37,11 @@ import { Route as AppCommunityBrandProductRouteImport } from './routes/_app/comm
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SigninRoute = SigninRouteImport.update({
+  id: '/signin',
+  path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
   '/history': typeof AppHistoryRoute
@@ -185,6 +192,7 @@ export interface FileRoutesByTo {
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
   '/history': typeof AppHistoryRoute
@@ -210,6 +218,7 @@ export interface FileRoutesById {
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/_app/app': typeof AppAppRoute
   '/_app/history': typeof AppHistoryRoute
@@ -236,6 +245,7 @@ export interface FileRouteTypes {
     | '/paywall'
     | '/privacy'
     | '/reset-password'
+    | '/signin'
     | '/terms'
     | '/app'
     | '/history'
@@ -260,6 +270,7 @@ export interface FileRouteTypes {
     | '/paywall'
     | '/privacy'
     | '/reset-password'
+    | '/signin'
     | '/terms'
     | '/app'
     | '/history'
@@ -284,6 +295,7 @@ export interface FileRouteTypes {
     | '/paywall'
     | '/privacy'
     | '/reset-password'
+    | '/signin'
     | '/terms'
     | '/_app/app'
     | '/_app/history'
@@ -310,6 +322,7 @@ export interface RootRouteChildren {
   PaywallRoute: typeof PaywallRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SigninRoute: typeof SigninRoute
   TermsRoute: typeof TermsRoute
   CheckoutAccountRoute: typeof CheckoutAccountRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
@@ -325,6 +338,13 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -529,6 +549,7 @@ const rootRouteChildren: RootRouteChildren = {
   PaywallRoute: PaywallRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SigninRoute: SigninRoute,
   TermsRoute: TermsRoute,
   CheckoutAccountRoute: CheckoutAccountRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:

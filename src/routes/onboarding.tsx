@@ -191,7 +191,7 @@ function OnboardingPage() {
         primary={{ label: "Get Started", onClick: goNext("gender") }}
         textLink={{
           label: "I already have an account · Sign in",
-          onClick: () => navigate({ to: "/login", search: { next: "/app" } }),
+          onClick: () => navigate({ to: "/signin" }),
         }}
       >
         <div className="relative -mx-6 -mt-2 flex h-full flex-col">
