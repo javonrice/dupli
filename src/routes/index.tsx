@@ -51,9 +51,10 @@ async function waitForOAuthSession(timeoutMs = 4000) {
 }
 
 export const Route = createFileRoute("/")({
-  validateSearch: (s: Record<string, unknown>) => ({
-    next: typeof s.next === "string" ? s.next : undefined,
-  }),
+  validateSearch: (s: Record<string, unknown>): { next?: string } => {
+    const next = typeof s.next === "string" ? s.next : undefined;
+    return next ? { next } : {};
+  },
   beforeLoad: async ({ search }) => {
     const allowed = ["/app", "/paywall"];
     const next =
