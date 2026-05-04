@@ -23,16 +23,21 @@ async function waitForOAuthSession(timeoutMs = 4000) {
   }
   return new Promise<import("@supabase/supabase-js").Session | null>((resolve) => {
     let settled = false;
-    const finish = (s: import("@supabase/supabase-js").Session | null) => {
+    const sub = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session && !settled) {
+        settled = true;
+        sub.data.subscription.unsubscribe();
+        clearTimeout(timer);
+        resolve(session);
+      }
+    });
+    const timer = setTimeout(async () => {
       if (settled) return;
       settled = true;
-      sub.subscription.unsubscribe();
-      clearTimeout(timer);
-      resolve(s);
-    };
-    const sub = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) finish(session);
-    });
+      sub.data.subscription.unsubscribe();
+      const { data } = await supabase.auth.getSession();
+      resolve(data.session);
+    }, timeoutMs);
     const timer = setTimeout(async () => {
       const { data } = await supabase.auth.getSession();
       finish(data.session);
