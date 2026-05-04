@@ -252,6 +252,15 @@ function PaywallPage() {
         >
           {introLoading ? "Opening checkout…" : "Or try for $0.99 your first month"}
         </button>
+        {!user && (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/login", search: { next: "/app" } })}
+            className="tap w-full text-center text-[12px] text-muted-foreground"
+          >
+            Already a member? <span className="font-semibold text-foreground">Sign in</span>
+          </button>
+        )}
       </div>
     </div>
   );
