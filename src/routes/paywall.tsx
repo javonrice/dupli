@@ -45,8 +45,24 @@ function PaywallPage() {
   const { user, loading: authLoading } = useAuth();
   const { openCheckout, loading: checkoutLoading } = usePaddleCheckout();
   const [introLoading, setIntroLoading] = useState(false);
-  const [plan, setPlan] = useState<Plan>("yearly");
+  const [plan, setPlan] = useState<Plan>(() => {
+    if (typeof window === "undefined") return "yearly";
+    try {
+      const saved = window.sessionStorage.getItem("dupli.paywall.plan");
+      return saved === "monthly" || saved === "yearly" ? saved : "yearly";
+    } catch {
+      return "yearly";
+    }
+  });
   const [gateChecking, setGateChecking] = useState(true);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem("dupli.paywall.plan", plan);
+    } catch {
+      /* ignore */
+    }
+  }, [plan]);
 
   // Client-side gate: skip the paywall ONLY if the user is already signed in
   // and has an active subscription. We intentionally do NOT redirect anonymous
