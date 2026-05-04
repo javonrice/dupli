@@ -98,8 +98,8 @@ function PaywallPage() {
 
   const requireUser = (): string | null => {
     if (!user) {
-      toast.error("Please sign in to start a trial.");
-      navigate({ to: "/login" });
+      toast.message("Create your account to start your trial.");
+      navigate({ to: "/login", search: { next: "/paywall" } });
       return null;
     }
     return user.id;
