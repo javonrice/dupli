@@ -103,13 +103,13 @@ function FileInputs({ flow }: { flow: ReturnType<typeof useScanFlow> }) {
 
 function DiscoveryHub({ error }: { error: string | null }) {
   const fetchHero = useServerFn(getDupeOfTheDayBlended);
-  const fetchTrending = useServerFn(getTrendingDupesBlended);
+  const fetchTrending = useServerFn(getTrendingOriginalsBlended);
   const fetchRecent = useServerFn(getRecentScans);
 
   const [hero, setHero] = useState<CommunityDupe | null>(null);
-  const [trending, setTrending] = useState<CommunityDupe[]>([]);
+  const [trending, setTrending] = useState<TrendingOriginal[]>([]);
   const [trendingSource, setTrendingSource] = useState<TrendingSource>("catalog");
-  const [popular, setPopular] = useState<CommunityDupe[]>([]);
+  const [popular, setPopular] = useState<TrendingOriginal[]>([]);
   const [recent, setRecent] = useState<ScanRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -125,12 +125,13 @@ function DiscoveryHub({ error }: { error: string | null }) {
       .then(([heroRes, trendRes, popRes, recentRes]) => {
         if (cancelled) return;
         setHero(heroRes.dupe);
-        setTrending(trendRes.dupes);
+        setTrending(trendRes.originals);
         setTrendingSource(trendRes.source);
         const seen = new Set<string>();
-        if (heroRes.dupe) seen.add(heroRes.dupe.id);
-        for (const d of trendRes.dupes) seen.add(d.id);
-        setPopular(popRes.dupes.filter((d: CommunityDupe) => !seen.has(d.id)).slice(0, 12));
+        for (const o of trendRes.originals) seen.add(o.id);
+        setPopular(
+          popRes.originals.filter((o: TrendingOriginal) => !seen.has(o.id)).slice(0, 12),
+        );
         setRecent(recentRes.scans);
       })
       .catch((e) => console.warn("Discovery hub load failed", e))
