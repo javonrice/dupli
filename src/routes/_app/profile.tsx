@@ -50,22 +50,6 @@ function ProfilePage() {
     navigate({ to: "/login" });
   };
 
-  const handleResetApp = async () => {
-    if (!confirm("Reset app state? This clears local data and signs you out.")) return;
-    try {
-      await supabase.auth.signOut();
-    } catch {
-      /* ignore */
-    }
-    try {
-      window.localStorage.clear();
-      window.sessionStorage.clear();
-    } catch {
-      /* ignore */
-    }
-    window.location.href = "/onboarding";
-  };
-
   const displayName =
     profile?.display_name ??
     user?.user_metadata?.full_name ??
