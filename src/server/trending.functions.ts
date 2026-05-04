@@ -78,7 +78,6 @@ async function fetchSavedTrending(limit: number): Promise<CommunityDupe[]> {
   const { data, error } = await supabaseAdmin.rpc("trending_saved_dupes", {
     p_limit: limit,
     p_min_saves: MIN_SAVES,
-    p_window_days: null,
   });
   if (error) {
     console.warn("trending_saved_dupes rpc failed", error);
