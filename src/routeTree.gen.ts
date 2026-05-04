@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as PrivacyRouteImport } from './routes/privacy'
+import { Route as PaywallRouteImport } from './routes/paywall'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as AppRouteImport } from './routes/_app'
@@ -36,6 +38,16 @@ const TermsRoute = TermsRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PaywallRoute = PaywallRouteImport.update({
+  id: '/paywall',
+  path: '/paywall',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -126,6 +138,8 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
+  '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
@@ -145,6 +159,8 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
+  '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
@@ -165,6 +181,8 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/onboarding': typeof OnboardingRoute
+  '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/_app/app': typeof AppAppRoute
@@ -186,6 +204,8 @@ export interface FileRouteTypes {
     | '/'
     | '/landing'
     | '/login'
+    | '/onboarding'
+    | '/paywall'
     | '/privacy'
     | '/terms'
     | '/app'
@@ -205,6 +225,8 @@ export interface FileRouteTypes {
     | '/'
     | '/landing'
     | '/login'
+    | '/onboarding'
+    | '/paywall'
     | '/privacy'
     | '/terms'
     | '/app'
@@ -224,6 +246,8 @@ export interface FileRouteTypes {
     | '/_app'
     | '/landing'
     | '/login'
+    | '/onboarding'
+    | '/paywall'
     | '/privacy'
     | '/terms'
     | '/_app/app'
@@ -245,6 +269,8 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
+  OnboardingRoute: typeof OnboardingRoute
+  PaywallRoute: typeof PaywallRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
@@ -266,6 +292,20 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/paywall': {
+      id: '/paywall'
+      path: '/paywall'
+      fullPath: '/paywall'
+      preLoaderRoute: typeof PaywallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -424,6 +464,8 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
+  OnboardingRoute: OnboardingRoute,
+  PaywallRoute: PaywallRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:
