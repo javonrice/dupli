@@ -175,7 +175,7 @@ export function ResultsScreen({
                   )}
                 </span>
               ) : (
-                <>Shop on Google</>
+                <>Shop at {link.label}</>
               )}
               <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
             </a>
