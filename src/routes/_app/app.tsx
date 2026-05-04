@@ -10,12 +10,12 @@ import { TrendingRail, ForYouGrid } from "@/components/home/community-feeds";
 import { RecentScansSection } from "@/components/home/recent-scans";
 import { ScanFab } from "@/components/home/scan-fab";
 import { useScanFlow } from "@/lib/use-scan-flow";
+import { getRecentScans, type CommunityDupe } from "@/server/discover.functions";
 import {
-  getDupeOfTheDay,
-  getTrendingDupes,
-  getRecentScans,
-  type CommunityDupe,
-} from "@/server/discover.functions";
+  getDupeOfTheDayBlended,
+  getTrendingDupesBlended,
+  type TrendingSource,
+} from "@/server/trending.functions";
 import type { ScanRow } from "@/server/scans.functions";
 import wordmark from "@/assets/dupli-wordmark.png";
 
