@@ -5,16 +5,24 @@
 // subscription is found so the client can route the user to /paywall.
 
 import { createMiddleware } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 function getServerPaddleEnv(): "sandbox" | "live" {
-  // Mirror the client-side getPaddleEnvironment(): live only when a published
-  // production hostname is in play. On the server we don't have window, so we
-  // fall back to an explicit env var or default to sandbox for safety.
   const explicit = process.env.PADDLE_ENVIRONMENT;
   if (explicit === "live" || explicit === "sandbox") return explicit;
-  return "sandbox";
+  // Infer from request host: dev/preview hosts -> sandbox, anything else -> live.
+  try {
+    const req = getRequest();
+    const host = req?.headers.get("host") ?? "";
+    if (/-dev\.lovable\.app|lovableproject\.com|localhost|127\.0\.0\.1/i.test(host)) {
+      return "sandbox";
+    }
+    return "live";
+  } catch {
+    return "sandbox";
+  }
 }
 
 export const requireActiveSubscription = createMiddleware({ type: "function" })

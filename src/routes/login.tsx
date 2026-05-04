@@ -32,7 +32,9 @@ function LoginPage() {
   const next = safeNext(search.next);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">(
+    safeNext(search.next) === "/paywall" ? "signup" : "signin",
+  );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
@@ -153,16 +155,18 @@ function LoginPage() {
           onClick={handleLogoTap}
         />
         <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          AI Dupe Finder
+          {next === "/paywall" ? "One last step" : "AI Dupe Finder"}
         </p>
         <h1 className="mt-3 font-display text-[34px] font-bold leading-[1.05] tracking-tight">
-          Snap any product.
+          {next === "/paywall" ? "Create your account" : "Snap any product."}
         </h1>
         <p className="font-display text-[34px] font-bold italic leading-[1.05] tracking-tight text-muted-foreground">
-          Find the dupe.
+          {next === "/paywall" ? "to start your trial." : "Find the dupe."}
         </p>
         <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-muted-foreground">
-          Sign in to save your dupes and keep your scan history across devices.
+          {next === "/paywall"
+            ? "We'll bring you right back to checkout."
+            : "Sign in to save your dupes and keep your scan history across devices."}
         </p>
       </div>
 

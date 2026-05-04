@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
@@ -55,6 +55,7 @@ function PaywallPage() {
     }
   });
   const [gateChecking, setGateChecking] = useState(true);
+  const resumedRef = useRef(false);
 
   useEffect(() => {
     try {
@@ -112,53 +113,109 @@ function PaywallPage() {
     track("paywall_viewed_after_result");
   }, []);
 
-  const requireUser = (): string | null => {
-    if (!user) {
-      toast.message("Create your account to start your trial.");
-      navigate({ to: "/login", search: { next: "/paywall" } });
+  const INTENT_KEY = "dupli.paywall.intent";
+  const INTENT_TTL_MS = 15 * 60 * 1000;
+
+  const saveIntent = (kind: "trial" | "intro") => {
+    try {
+      window.sessionStorage.setItem(
+        INTENT_KEY,
+        JSON.stringify({ kind, plan, at: Date.now() }),
+      );
+    } catch {
+      /* ignore */
+    }
+  };
+  const consumeIntent = (): { kind: "trial" | "intro"; plan: Plan } | null => {
+    try {
+      const raw = window.sessionStorage.getItem(INTENT_KEY);
+      if (!raw) return null;
+      window.sessionStorage.removeItem(INTENT_KEY);
+      const parsed = JSON.parse(raw) as { kind: string; plan: string; at: number };
+      if (!parsed?.at || Date.now() - parsed.at > INTENT_TTL_MS) return null;
+      const k = parsed.kind === "intro" ? "intro" : "trial";
+      const p: Plan = parsed.plan === "monthly" ? "monthly" : "yearly";
+      return { kind: k, plan: p };
+    } catch {
       return null;
     }
-    return user.id;
   };
 
-  const startTrial = async () => {
-    const userId = requireUser();
-    if (!userId) return;
-    track("trial_started", { plan });
+  const startTrial = async (planOverride?: Plan) => {
+    const chosen = planOverride ?? plan;
+    if (!user) {
+      saveIntent("trial");
+      toast.message("Create your account to start your trial.");
+      navigate({ to: "/login", search: { next: "/paywall" } });
+      return;
+    }
+    track("trial_started", { plan: chosen });
     try {
       await openCheckout({
-        priceId: PRICE_IDS[plan],
-        customerEmail: user?.email,
-        customData: { userId },
+        priceId: PRICE_IDS[chosen],
+        customerEmail: user.email,
+        customData: { userId: user.id },
         successUrl: `${window.location.origin}/app?checkout=success`,
       });
     } catch (e) {
-      console.error(e);
-      toast.error("Couldn't start checkout. Please try again.");
+      console.error("[paywall] trial checkout failed", e);
+      const msg = e instanceof Error ? e.message : "";
+      if (/Price not found/i.test(msg)) {
+        toast.error("Plan not available right now. Please try another plan.");
+      } else if (/Paddle\.js failed to load|VITE_PAYMENTS_CLIENT_TOKEN/i.test(msg)) {
+        toast.error("Payment system unavailable. Check your connection and retry.");
+      } else {
+        toast.error("Couldn't open checkout. Please try again.");
+      }
     }
   };
 
   const startCheap = async () => {
-    const userId = requireUser();
-    if (!userId) return;
+    if (!user) {
+      saveIntent("intro");
+      toast.message("Create your account to claim the $0.99 offer.");
+      navigate({ to: "/login", search: { next: "/paywall" } });
+      return;
+    }
     track("trial_started", { plan: "intro_99c" });
     setIntroLoading(true);
     try {
       const discountId = await getPaddleDiscountId(INTRO_DISCOUNT_DESCRIPTION);
+      if (!discountId) {
+        toast.error("Intro offer unavailable. Try the free trial instead.");
+        return;
+      }
       await openCheckout({
         priceId: PRICE_IDS.intro,
         discountId,
-        customerEmail: user?.email,
-        customData: { userId },
+        customerEmail: user.email,
+        customData: { userId: user.id },
         successUrl: `${window.location.origin}/app?checkout=success`,
       });
     } catch (e) {
-      console.error(e);
-      toast.error("Couldn't start checkout. Please try again.");
+      console.error("[paywall] intro checkout failed", e);
+      toast.error("Couldn't open checkout. Please try again.");
     } finally {
       setIntroLoading(false);
     }
   };
+
+  // Auto-resume checkout after sign-in if a recent intent exists.
+  useEffect(() => {
+    if (authLoading || gateChecking) return;
+    if (!user) return;
+    if (resumedRef.current) return;
+    const intent = consumeIntent();
+    if (!intent) return;
+    resumedRef.current = true;
+    setPlan(intent.plan);
+    if (intent.kind === "intro") {
+      void startCheap();
+    } else {
+      void startTrial(intent.plan);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, gateChecking, user]);
 
   const busy = checkoutLoading || introLoading;
 
@@ -229,7 +286,7 @@ function PaywallPage() {
       <div className="pb-safe space-y-2 px-6 pt-3">
         <button
           type="button"
-          onClick={startTrial}
+          onClick={() => startTrial()}
           disabled={busy}
           className="tap flex h-[58px] w-full flex-col items-center justify-center rounded-[16px] bg-foreground text-background shadow-lift disabled:opacity-60"
         >
