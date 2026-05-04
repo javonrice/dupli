@@ -69,18 +69,27 @@ export function DupeCard({ analysis }: { analysis: DupeAnalysis }) {
       {/* Hero header — mirrors share card */}
       <header className="bg-gradient-to-br from-secondary/50 to-card px-5 pt-4 pb-6">
         <div className="flex items-center justify-between gap-2">
+          <img src={wordmark} alt="Dupli" className="h-6 w-auto" width={887} height={414} />
           <div className="flex items-center gap-1.5">
-            <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full ${v.bg} ${v.fg}`}>
-              <Icon className="h-2.5 w-2.5" strokeWidth={3} />
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-foreground">{verdict}</span>
-          </div>
-          {riskLevel && (
-            <div className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${riskTone.chipBg} ${riskTone.chipFg}`}>
-              <riskTone.Icon className="h-3 w-3" strokeWidth={2.5} />
-              {riskLevel}
+            {riskLevel && (
+              <div className={`inline-flex shrink-0 items-center gap-1 rounded-full border-2 bg-background px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider ${
+                riskLevel === "Higher risk" ? "border-warning text-warning" :
+                riskLevel === "Lower risk" ? "border-success text-success" :
+                "border-foreground text-foreground"
+              }`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${
+                  riskLevel === "Higher risk" ? "bg-warning" :
+                  riskLevel === "Lower risk" ? "bg-success" :
+                  "bg-foreground"
+                }`} />
+                Risk: {riskLevel.replace(" risk", "")}
+              </div>
+            )}
+            <div className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider ${v.bg} ${v.fg}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-current opacity-90" />
+              {verdict}
             </div>
-          )}
+          </div>
         </div>
 
         {dupe && savings > 0 && (
