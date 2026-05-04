@@ -1,6 +1,7 @@
 // Lovable AI vision: identify a beauty product AND suggest a dupe in one call.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { resolveProductLinks, type ProductLink } from "@/server/product-links.server";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
