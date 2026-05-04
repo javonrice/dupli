@@ -160,17 +160,14 @@ function OnboardingPage() {
           canSave={flow.canSave}
           onToggleSave={() => {
             writeOnboarding({ firstRealResultUsed: true });
-            markOnboardingComplete();
             navigate({ to: "/paywall" });
           }}
           onReset={() => {
             writeOnboarding({ firstRealResultUsed: true });
-            markOnboardingComplete();
             navigate({ to: "/paywall" });
           }}
           onShare={() => {
             writeOnboarding({ firstRealResultUsed: true });
-            markOnboardingComplete();
             navigate({ to: "/paywall" });
           }}
           preparingShare={false}
@@ -604,11 +601,9 @@ function OnboardingPage() {
         progress={progress}
         onScanOwn={() => {
           track("onboarding_scan_selected");
-          markOnboardingComplete();
           flow.openCamera();
         }}
         onSeeFull={() => {
-          markOnboardingComplete();
           navigate({ to: "/paywall" });
         }}
       />
