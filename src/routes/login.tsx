@@ -32,17 +32,20 @@ function LoginPage() {
   const next = safeNext(search.next);
   const [signingIn, setSigningIn] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
   const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
+  const [forgotSent, setForgotSent] = useState(false);
   const [logoTaps, setLogoTaps] = useState(0);
 
   const handleLogoTap = async () => {
-    const next = logoTaps + 1;
-    setLogoTaps(next);
-    if (next >= 10) {
+    // Dev-only QA escape hatch — never expose in production builds.
+    if (!import.meta.env.DEV) return;
+    const tapCount = logoTaps + 1;
+    setLogoTaps(tapCount);
+    if (tapCount >= 10) {
       setLogoTaps(0);
       try {
         await supabase.auth.signOut();
@@ -178,7 +181,7 @@ function LoginPage() {
             if (mode === "signin") {
               const { error } = await supabase.auth.signInWithPassword({ email, password });
               if (error) setError(error.message);
-            } else {
+            } else if (mode === "signup") {
               const { data, error } = await supabase.auth.signUp({
                 email,
                 password,
@@ -189,9 +192,14 @@ function LoginPage() {
               if (error) {
                 setError(error.message);
               } else if (!data.session) {
-                // Email confirmation required — show the "check your inbox" panel.
                 setPendingConfirmEmail(email);
               }
+            } else {
+              const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                redirectTo: `${window.location.origin}/reset-password`,
+              });
+              if (error) setError(error.message);
+              else setForgotSent(true);
             }
             setSigningIn(false);
           }}
@@ -206,37 +214,61 @@ function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             className="h-[48px] w-full rounded-[14px] border border-border bg-card px-4 text-[15px] outline-none focus:border-foreground/40"
           />
-          <input
-            type="password"
-            required
-            minLength={6}
-            autoComplete={mode === "signin" ? "current-password" : "new-password"}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="h-[48px] w-full rounded-[14px] border border-border bg-card px-4 text-[15px] outline-none focus:border-foreground/40"
-          />
+          {mode !== "forgot" && (
+            <input
+              type="password"
+              required
+              minLength={6}
+              autoComplete={mode === "signin" ? "current-password" : "new-password"}
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-[48px] w-full rounded-[14px] border border-border bg-card px-4 text-[15px] outline-none focus:border-foreground/40"
+            />
+          )}
+          {mode === "forgot" && forgotSent && (
+            <div className="rounded-[14px] border border-border bg-card px-4 py-2.5 text-center text-[13px] text-muted-foreground">
+              If an account exists for {email}, we sent a reset link.
+            </div>
+          )}
           <button
             type="submit"
             disabled={signingIn}
             className="tap flex h-[52px] w-full items-center justify-center gap-2.5 rounded-[14px] bg-foreground text-[15px] font-semibold text-background disabled:opacity-60"
           >
             {signingIn && <Loader2 className="h-[18px] w-[18px] animate-spin" />}
-            {mode === "signin" ? "Sign in" : "Create account"}
+            {mode === "signin" ? "Sign in" : mode === "signup" ? "Create account" : "Send reset link"}
           </button>
         </form>
+
+        {mode === "signin" && (
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setForgotSent(false);
+              setMode("forgot");
+            }}
+            className="tap w-full text-center text-[13px] text-muted-foreground"
+          >
+            Forgot password?
+          </button>
+        )}
 
         <button
           type="button"
           onClick={() => {
             setError(null);
+            setForgotSent(false);
             setMode(mode === "signin" ? "signup" : "signin");
           }}
           className="tap w-full text-center text-[13px] text-muted-foreground"
         >
-          {mode === "signin"
-            ? "Don't have an account? Sign up"
-            : "Already have an account? Sign in"}
+          {mode === "signup"
+            ? "Already have an account? Sign in"
+            : mode === "forgot"
+              ? "Back to sign in"
+              : "Don't have an account? Sign up"}
         </button>
 
         <p className="mt-2 text-center text-[11px] leading-relaxed text-muted-foreground">

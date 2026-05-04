@@ -50,11 +50,18 @@ function Index() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (search.checkout === "success") {
-      markOnboardingComplete();
+    if (search.checkout !== "success") return;
+    markOnboardingComplete();
+    const FLAG = "dupli.checkout.toast_shown";
+    try {
+      if (!window.sessionStorage.getItem(FLAG)) {
+        toast.success("Welcome to Dupli Pro 🎉");
+        window.sessionStorage.setItem(FLAG, "1");
+      }
+    } catch {
       toast.success("Welcome to Dupli Pro 🎉");
-      navigate({ to: "/app", search: {}, replace: true });
     }
+    navigate({ to: "/app", search: {}, replace: true });
   }, [search.checkout, navigate]);
 
   // While scanning or showing results, take over the screen exactly like before.

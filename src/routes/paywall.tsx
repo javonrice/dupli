@@ -1,8 +1,8 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { Check, Loader2, X } from "lucide-react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-import { markOnboardingComplete, track } from "@/lib/onboarding";
+import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
 import { useAuth } from "@/hooks/use-auth";
 import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
@@ -45,8 +45,24 @@ function PaywallPage() {
   const { user, loading: authLoading } = useAuth();
   const { openCheckout, loading: checkoutLoading } = usePaddleCheckout();
   const [introLoading, setIntroLoading] = useState(false);
-  const [plan, setPlan] = useState<Plan>("yearly");
+  const [plan, setPlan] = useState<Plan>(() => {
+    if (typeof window === "undefined") return "yearly";
+    try {
+      const saved = window.sessionStorage.getItem("dupli.paywall.plan");
+      return saved === "monthly" || saved === "yearly" ? saved : "yearly";
+    } catch {
+      return "yearly";
+    }
+  });
   const [gateChecking, setGateChecking] = useState(true);
+
+  useEffect(() => {
+    try {
+      window.sessionStorage.setItem("dupli.paywall.plan", plan);
+    } catch {
+      /* ignore */
+    }
+  }, [plan]);
 
   // Client-side gate: skip the paywall ONLY if the user is already signed in
   // and has an active subscription. We intentionally do NOT redirect anonymous
@@ -144,12 +160,6 @@ function PaywallPage() {
     }
   };
 
-  const dismiss = () => {
-    track("paywall_dismissed");
-    markOnboardingComplete();
-    navigate({ to: "/app" });
-  };
-
   const busy = checkoutLoading || introLoading;
 
   if (authLoading || gateChecking) {
@@ -163,16 +173,7 @@ function PaywallPage() {
   return (
     <div className="flex h-screen-safe flex-col bg-background">
       <div className="pt-safe" />
-      <div className="flex h-12 items-center justify-end px-3">
-        <button
-          type="button"
-          onClick={dismiss}
-          aria-label="Close"
-          className="tap flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground"
-        >
-          <X className="h-5 w-5" />
-        </button>
-      </div>
+      <div className="h-3" />
 
       <div className="flex-1 overflow-y-auto px-6 pb-4">
         <p className="text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -251,6 +252,15 @@ function PaywallPage() {
         >
           {introLoading ? "Opening checkout…" : "Or try for $0.99 your first month"}
         </button>
+        {!user && (
+          <button
+            type="button"
+            onClick={() => navigate({ to: "/login", search: { next: "/app" } })}
+            className="tap w-full text-center text-[12px] text-muted-foreground"
+          >
+            Already a member? <span className="font-semibold text-foreground">Sign in</span>
+          </button>
+        )}
       </div>
     </div>
   );

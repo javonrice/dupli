@@ -4,16 +4,17 @@ import { useServerFn } from "@tanstack/react-start";
 import {
   Loader2,
   ChevronRight,
-  Bell,
-  Palette,
-  Shield,
+  CreditCard,
   HelpCircle,
   LogOut,
 } from "lucide-react";
+import { toast } from "sonner";
 import { getMyProfile, type ProfileRow } from "@/server/profile.functions";
+import { createCustomerPortalSession } from "@/server/billing.functions";
 import { TabBarSpacer } from "@/components/tab-bar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { getPaddleEnvironment } from "@/lib/paddle";
 
 export const Route = createFileRoute("/_app/profile")({
   component: ProfilePage,
@@ -45,9 +46,30 @@ function ProfilePage() {
       .finally(() => setLoading(false));
   }, [getProfile]);
 
+  const openPortal = useServerFn(createCustomerPortalSession);
+  const [portalLoading, setPortalLoading] = useState(false);
+
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate({ to: "/login" });
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ignore */
+    }
+    window.location.assign("/login");
+  };
+
+  const handleManageSubscription = async () => {
+    if (portalLoading) return;
+    setPortalLoading(true);
+    try {
+      const res = await openPortal({ data: { environment: getPaddleEnvironment() } });
+      if (res.url) window.open(res.url, "_blank", "noopener,noreferrer");
+      else toast.error(res.error ?? "Couldn't open subscription portal.");
+    } catch {
+      toast.error("Couldn't open subscription portal.");
+    } finally {
+      setPortalLoading(false);
+    }
   };
 
   const displayName =
@@ -101,20 +123,38 @@ function ProfilePage() {
               <StatCard label="Saved" value={counts.saved} />
             </div>
 
-            {/* Settings group */}
-            <SectionLabel>Settings</SectionLabel>
+            {/* Subscription */}
+            <SectionLabel>Subscription</SectionLabel>
             <SettingsGroup>
-              <Row icon={Bell} label="Notifications" />
-              <Row icon={Palette} label="Appearance" />
-              <Row icon={Shield} label="Privacy & data" />
-              <Row icon={HelpCircle} label="Help & support" last />
+              <button
+                type="button"
+                onClick={handleManageSubscription}
+                disabled={portalLoading}
+                className="tap flex h-12 w-full items-center gap-3 px-4 text-left disabled:opacity-60"
+              >
+                <CreditCard className="h-[18px] w-[18px] text-muted-foreground" strokeWidth={1.75} />
+                <span className="flex-1 text-[15px] text-foreground">Manage subscription</span>
+                {portalLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground/60" strokeWidth={2} />
+                )}
+              </button>
             </SettingsGroup>
 
+            {/* Support / Legal */}
             <SectionLabel>About</SectionLabel>
             <SettingsGroup>
               <Row label="Version" trailing={<span className="text-muted-foreground">1.0.0</span>} />
-              <Row label="Terms of Service" />
-              <Row label="Privacy Policy" last />
+              <a href="/terms" className="block">
+                <Row label="Terms of Service" />
+              </a>
+              <a href="/privacy" className="block">
+                <Row label="Privacy Policy" />
+              </a>
+              <a href="mailto:support@trydupli.com" className="block">
+                <Row icon={HelpCircle} label="Contact support" last />
+              </a>
             </SettingsGroup>
 
             <button
