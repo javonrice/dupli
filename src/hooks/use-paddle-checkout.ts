@@ -18,33 +18,9 @@ export function usePaddleCheckout() {
       await initializePaddle();
       const paddlePriceId = await getPaddlePriceId(options.priceId);
 
-      // Capture the Paddle customer id once checkout completes so anonymous
-      // users can claim their subscription after creating an account, even
-      // when Paddle returns an anonymized email (Apple Hide My Email, etc).
-      try {
-        window.Paddle.Update?.({
-          eventCallback: (evt: any) => {
-            if (evt?.name === "checkout.completed") {
-              const cid = evt?.data?.customer?.id;
-              const cemail = evt?.data?.customer?.email;
-              if (cid) {
-                try {
-                  localStorage.setItem("dupli.paddle.customer_id", cid);
-                } catch {}
-              }
-              if (cemail) {
-                try {
-                  localStorage.setItem("dupli.paddle.customer_email", cemail);
-                } catch {}
-              }
-            }
-          },
-        });
-      } catch {
-        /* ignore — eventCallback is best-effort */
-      }
+      // (eventCallback for checkout.completed is registered in initializePaddle.)
 
-      window.Paddle.Checkout.open({
+
         items: [{ priceId: paddlePriceId, quantity: 1 }],
         customer: options.customerEmail ? { email: options.customerEmail } : undefined,
         customData: options.customData,
