@@ -1,6 +1,6 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { lovable } from "@/integrations/lovable";
+
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2 } from "lucide-react";
@@ -49,25 +49,6 @@ function LoginPage() {
   if (user) {
     return <Navigate to={next} />;
   }
-
-  const handleOAuth = async (provider: "apple") => {
-    setError(null);
-    setSigningIn(true);
-    try {
-      const result = await lovable.auth.signInWithOAuth(provider, {
-        redirect_uri: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
-      });
-      if (result.error) {
-        setError(result.error.message ?? "Sign-in failed.");
-        setSigningIn(false);
-        return;
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Sign-in failed.");
-      setSigningIn(false);
-    }
-  };
-
 
   const handleResend = async () => {
     if (!pendingConfirmEmail) return;
@@ -230,20 +211,6 @@ function LoginPage() {
             : "Already have an account? Sign in"}
         </button>
 
-        <div className="flex items-center gap-3 py-1">
-          <div className="h-px flex-1 bg-border" />
-          <span className="text-[11px] uppercase tracking-wider text-muted-foreground">or</span>
-          <div className="h-px flex-1 bg-border" />
-        </div>
-
-        <button
-          onClick={() => handleOAuth("apple")}
-          disabled={signingIn}
-          className="tap flex h-[52px] w-full items-center justify-center gap-2.5 rounded-[14px] bg-foreground text-[15px] font-semibold text-background disabled:opacity-60"
-        >
-          <AppleGlyph />
-          Continue with Apple
-        </button>
         <p className="mt-2 text-center text-[11px] leading-relaxed text-muted-foreground">
           By continuing you agree to our Terms and acknowledge our Privacy Policy.
         </p>
@@ -253,10 +220,3 @@ function LoginPage() {
   );
 }
 
-function AppleGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[20px] w-[20px]" aria-hidden fill="currentColor">
-      <path d="M17.05 12.04c-.03-2.93 2.39-4.34 2.5-4.41-1.36-1.99-3.49-2.26-4.25-2.29-1.81-.18-3.53 1.07-4.45 1.07-.93 0-2.34-1.05-3.86-1.02-1.98.03-3.81 1.15-4.83 2.93-2.06 3.57-.53 8.86 1.48 11.77.99 1.42 2.16 3.02 3.69 2.96 1.49-.06 2.05-.96 3.85-.96 1.79 0 2.31.96 3.87.93 1.6-.03 2.61-1.45 3.59-2.88 1.13-1.65 1.6-3.25 1.62-3.33-.04-.02-3.11-1.19-3.21-4.77zM14.43 3.55c.82-.99 1.37-2.37 1.22-3.74-1.18.05-2.6.78-3.45 1.77-.76.88-1.43 2.28-1.25 3.62 1.31.1 2.66-.66 3.48-1.65z"/>
-    </svg>
-  );
-}
