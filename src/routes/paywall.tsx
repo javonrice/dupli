@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
@@ -55,7 +55,6 @@ function PaywallPage() {
     }
   });
   const [gateChecking, setGateChecking] = useState(true);
-  const resumedRef = useRef(false);
 
   useEffect(() => {
     try {
