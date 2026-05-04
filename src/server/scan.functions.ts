@@ -27,6 +27,8 @@ export type DupeSuggestion = {
   buyUrl: string;
   keyIngredients: string[];
   imageUrl?: string;
+  /** Verified retailer links resolved server-side after the AI call. */
+  links?: ProductLink[];
   // Per-candidate comparison fields (mirrors top-level for the #1 pick).
   matchScore?: number;
   dupeType?: "Lookalike packaging" | "Formula dupe" | "Both" | "Neither";
