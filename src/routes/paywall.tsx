@@ -143,19 +143,19 @@ function PaywallPage() {
 
   const startTrial = async (planOverride?: Plan) => {
     const chosen = planOverride ?? plan;
-    if (!user) {
-      saveIntent("trial");
-      toast.message("Create your account to start your trial.");
-      navigate({ to: "/login", search: { next: "/paywall" } });
-      return;
-    }
     track("trial_started", { plan: chosen });
+    // Signed-in users: webhook attaches sub via customData.userId, send to /app.
+    // Anonymous users: no userId yet; success URL routes to a claim screen
+    // where they create/sign in to an account that gets linked by email.
+    const successUrl = user
+      ? `${window.location.origin}/app?checkout=success`
+      : `${window.location.origin}/checkout/account`;
     try {
       await openCheckout({
         priceId: PRICE_IDS[chosen],
-        customerEmail: user.email,
-        customData: { userId: user.id },
-        successUrl: `${window.location.origin}/app?checkout=success`,
+        customerEmail: user?.email,
+        customData: user ? { userId: user.id } : undefined,
+        successUrl,
       });
     } catch (e) {
       console.error("[paywall] trial checkout failed", e);
@@ -171,14 +171,11 @@ function PaywallPage() {
   };
 
   const startCheap = async () => {
-    if (!user) {
-      saveIntent("intro");
-      toast.message("Create your account to claim the $0.99 offer.");
-      navigate({ to: "/login", search: { next: "/paywall" } });
-      return;
-    }
     track("trial_started", { plan: "intro_99c" });
     setIntroLoading(true);
+    const successUrl = user
+      ? `${window.location.origin}/app?checkout=success`
+      : `${window.location.origin}/checkout/account`;
     try {
       const discountId = await getPaddleDiscountId(INTRO_DISCOUNT_DESCRIPTION);
       if (!discountId) {
@@ -188,9 +185,9 @@ function PaywallPage() {
       await openCheckout({
         priceId: PRICE_IDS.intro,
         discountId,
-        customerEmail: user.email,
-        customData: { userId: user.id },
-        successUrl: `${window.location.origin}/app?checkout=success`,
+        customerEmail: user?.email,
+        customData: user ? { userId: user.id } : undefined,
+        successUrl,
       });
     } catch (e) {
       console.error("[paywall] intro checkout failed", e);
