@@ -20,7 +20,9 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
   ref,
 ) {
   const { original, dupe, matchScore, verdict, riskLevel } = analysis;
-  const savings =
+  const framing = analysis.framing ?? "classic-dupe";
+  const isSteal = framing === "steal-find";
+  const fallbackSavings =
     dupe && original.estimatedPriceUsd > 0
       ? Math.max(
           0,
@@ -31,6 +33,7 @@ export const ShareCard = forwardRef<HTMLDivElement, Props>(function ShareCard(
           ),
         )
       : null;
+  const savings = dupe ? (analysis.savingsPct ?? fallbackSavings ?? 0) : null;
 
   const verdictColor =
     verdict === "Worth the hype"
