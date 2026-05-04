@@ -102,7 +102,9 @@ function LoginPage() {
                 : await supabase.auth.signUp({
                     email,
                     password,
-                    options: { emailRedirectTo: window.location.origin },
+                    options: {
+                      emailRedirectTo: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
+                    },
                   });
             if (error) setError(error.message);
             setSigningIn(false);
