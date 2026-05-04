@@ -261,6 +261,7 @@ function ProductSide({
   label,
   item,
   muted = false,
+  highlight = false,
 }: {
   label: string;
   item: {
@@ -272,10 +273,11 @@ function ProductSide({
     links?: { merchant: string; url: string; priceUsd: number | null }[];
   };
   muted?: boolean;
+  highlight?: boolean;
 }) {
   return (
-    <div className={`p-5 ${muted ? "bg-background" : "bg-card"}`}>
-      <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{label}</div>
+    <div className={`p-5 ${muted ? "bg-background" : "bg-card"} ${highlight ? "ring-2 ring-inset ring-success" : ""}`}>
+      <div className={`mb-3 text-[10px] font-semibold uppercase tracking-widest ${highlight ? "text-success" : "text-muted-foreground"}`}>{label}</div>
       {item.imageUrl && (
         <div className="mb-3 flex aspect-square items-center justify-center overflow-hidden rounded-xl border border-border bg-secondary/40">
           <img
