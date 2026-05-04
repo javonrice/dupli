@@ -22,7 +22,21 @@ export async function initializePaddle(): Promise<void> {
     const finish = () => {
       const env = getPaddleEnvironment() === "sandbox" ? "sandbox" : "production";
       window.Paddle.Environment.set(env);
-      window.Paddle.Initialize({ token: clientToken });
+      window.Paddle.Initialize({
+        token: clientToken,
+        eventCallback: (evt: any) => {
+          if (evt?.name === "checkout.completed") {
+            const cid = evt?.data?.customer?.id;
+            const cemail = evt?.data?.customer?.email;
+            try {
+              if (cid) localStorage.setItem("dupli.paddle.customer_id", cid);
+              if (cemail) localStorage.setItem("dupli.paddle.customer_email", cemail);
+            } catch {
+              /* ignore */
+            }
+          }
+        },
+      });
       paddleInitialized = true;
       resolve();
     };
