@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getScan, setSaved } from "@/server/scans.functions";
+import { getScan, getPublicScan, setSaved } from "@/server/scans.functions";
 import { ResultsScreen } from "@/components/scanner";
 import type { DupeAnalysis } from "@/server/scan.functions";
 
@@ -17,26 +17,39 @@ function ScanDetailPage() {
   const { id } = Route.useParams();
   const navigate = useNavigate();
   const fetchScan = useServerFn(getScan);
+  const fetchPublicScan = useServerFn(getPublicScan);
   const toggleSaved = useServerFn(setSaved);
 
   const [analysis, setAnalysis] = useState<DupeAnalysis | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isSaved, setIsSaved] = useState(false);
+  const [isOwner, setIsOwner] = useState(false);
   const [savingBookmark, setSavingBookmark] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetchScan({ data: { id } })
-      .then((r) => {
+      .then(async (r) => {
         if (cancelled) return;
-        if (r.error || !r.scan) {
-          setError(r.error ?? "Scan not found");
+        if (r.scan) {
+          setAnalysis(r.scan.analysis);
+          setPreview(r.scan.thumbnail_data_url ?? r.scan.original_image_url ?? null);
+          setIsSaved(r.isSaved);
+          setIsOwner(true);
           return;
         }
-        setAnalysis(r.scan.analysis);
-        setPreview(r.scan.thumbnail_data_url ?? r.scan.original_image_url ?? null);
-        setIsSaved(r.isSaved);
+        // Not the owner (or not signed in) — fall back to the public read so
+        // save-sourced trending taps can still view the scan detail.
+        const p = await fetchPublicScan({ data: { id } });
+        if (cancelled) return;
+        if (p.error || !p.scan) {
+          setError(p.error ?? "Scan not found");
+          return;
+        }
+        setAnalysis(p.scan.analysis);
+        setPreview(p.scan.thumbnail_data_url ?? p.scan.original_image_url ?? null);
+        setIsOwner(false);
       })
       .catch((e) => {
         if (cancelled) return;
@@ -45,7 +58,7 @@ function ScanDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, fetchScan]);
+  }, [id, fetchScan, fetchPublicScan]);
 
   const handleToggleSave = useCallback(async () => {
     if (savingBookmark) return;
@@ -94,7 +107,7 @@ function ScanDetailPage() {
       preview={preview}
       scanId={id}
       isSaved={isSaved}
-      canSave
+      canSave={isOwner}
       onToggleSave={handleToggleSave}
       onReset={goBack}
     />

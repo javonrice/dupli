@@ -370,6 +370,23 @@ export type Database = {
         Returns: string
       }
       set_ingestion_token_secret: { Args: { p_token: string }; Returns: string }
+      trending_saved_dupes: {
+        Args: { p_limit?: number; p_min_saves?: number; p_window_days?: number }
+        Returns: {
+          dupe_brand: string
+          dupe_image_url: string
+          dupe_product_name: string
+          last_saved_at: string
+          latest_scan_id: string
+          match_score: number
+          original_brand: string
+          original_image_url: string
+          original_product_name: string
+          pair_key: string
+          save_count: number
+          verdict: string
+        }[]
+      }
       verify_ingestion_token: { Args: { p_token: string }; Returns: boolean }
     }
     Enums: {

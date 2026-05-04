@@ -10,12 +10,12 @@ import { TrendingRail, ForYouGrid } from "@/components/home/community-feeds";
 import { RecentScansSection } from "@/components/home/recent-scans";
 import { ScanFab } from "@/components/home/scan-fab";
 import { useScanFlow } from "@/lib/use-scan-flow";
+import { getRecentScans, type CommunityDupe } from "@/server/discover.functions";
 import {
-  getDupeOfTheDay,
-  getTrendingDupes,
-  getRecentScans,
-  type CommunityDupe,
-} from "@/server/discover.functions";
+  getDupeOfTheDayBlended,
+  getTrendingDupesBlended,
+  type TrendingSource,
+} from "@/server/trending.functions";
 import type { ScanRow } from "@/server/scans.functions";
 import wordmark from "@/assets/dupli-wordmark.png";
 
@@ -98,12 +98,13 @@ function FileInputs({ flow }: { flow: ReturnType<typeof useScanFlow> }) {
 }
 
 function DiscoveryHub({ error }: { error: string | null }) {
-  const fetchHero = useServerFn(getDupeOfTheDay);
-  const fetchTrending = useServerFn(getTrendingDupes);
+  const fetchHero = useServerFn(getDupeOfTheDayBlended);
+  const fetchTrending = useServerFn(getTrendingDupesBlended);
   const fetchRecent = useServerFn(getRecentScans);
 
   const [hero, setHero] = useState<CommunityDupe | null>(null);
   const [trending, setTrending] = useState<CommunityDupe[]>([]);
+  const [trendingSource, setTrendingSource] = useState<TrendingSource>("catalog");
   const [popular, setPopular] = useState<CommunityDupe[]>([]);
   const [recent, setRecent] = useState<ScanRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,8 +115,6 @@ function DiscoveryHub({ error }: { error: string | null }) {
     Promise.all([
       fetchHero({}),
       fetchTrending({ data: { limit: 10 } }),
-      // "Popular" is a second slice with a wider limit; for v1 it's the same
-      // ranking with offset-equivalent behavior (more items, drawn from the same pool).
       fetchTrending({ data: { limit: 24 } }),
       fetchRecent({ data: { limit: 3 } }).catch(() => ({ scans: [] as ScanRow[] })),
     ])
@@ -123,12 +122,11 @@ function DiscoveryHub({ error }: { error: string | null }) {
         if (cancelled) return;
         setHero(heroRes.dupe);
         setTrending(trendRes.dupes);
-        // De-dupe the popular grid against trending + the hero so the screen
-        // doesn't show the same pairing in three places.
+        setTrendingSource(trendRes.source);
         const seen = new Set<string>();
         if (heroRes.dupe) seen.add(heroRes.dupe.id);
         for (const d of trendRes.dupes) seen.add(d.id);
-        setPopular(popRes.dupes.filter((d) => !seen.has(d.id)).slice(0, 12));
+        setPopular(popRes.dupes.filter((d: CommunityDupe) => !seen.has(d.id)).slice(0, 12));
         setRecent(recentRes.scans);
       })
       .catch((e) => console.warn("Discovery hub load failed", e))
@@ -172,7 +170,10 @@ function DiscoveryHub({ error }: { error: string | null }) {
         ) : (
           <>
             <DupeOfTheDay dupe={hero} />
-            <TrendingRail dupes={trending} />
+            <TrendingRail
+              dupes={trending}
+              title={trendingSource === "saved" ? "Loved by the community" : "Trending dupes"}
+            />
             <RecentScansSection scans={recent} />
             <ForYouGrid dupes={popular} />
           </>

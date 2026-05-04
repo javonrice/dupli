@@ -2,13 +2,20 @@ import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles, ShoppingBag } from "lucide-react";
 import type { CommunityDupe } from "@/server/discover.functions";
 
+function heroLinkProps(dupe: CommunityDupe) {
+  if (dupe.id.startsWith("saved:")) {
+    const scanId = dupe.id.split(":")[2] ?? "";
+    return { to: "/scan/$id" as const, params: { id: scanId } };
+  }
+  return { to: "/p/$productId" as const, params: { productId: dupe.dupe.id } };
+}
+
 /** The "Dupe of the Day" hero card — prominent editorial moment at the top of the hub. */
 export function DupeOfTheDay({ dupe }: { dupe: CommunityDupe | null }) {
   if (!dupe) return null;
   return (
     <Link
-      to="/p/$productId"
-      params={{ productId: dupe.dupe.id }}
+      {...heroLinkProps(dupe)}
       className="tap group block overflow-hidden rounded-[20px] border border-border bg-card shadow-lift"
     >
       <div className="flex items-center justify-between border-b border-border bg-secondary/60 px-4 py-2.5">
