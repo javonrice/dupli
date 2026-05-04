@@ -7,6 +7,7 @@ export function OnboardingShell({
   step,
   total,
   onBack,
+  hideProgress = false,
   primary,
   secondary,
   tertiary,
@@ -16,6 +17,7 @@ export function OnboardingShell({
   step: number;
   total: number;
   onBack?: () => void;
+  hideProgress?: boolean;
   primary?: { label: string; onClick: () => void; disabled?: boolean };
   secondary?: { label: string; onClick: () => void };
   tertiary?: { label: string; onClick: () => void };
