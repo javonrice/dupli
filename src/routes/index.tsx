@@ -76,21 +76,26 @@ function IndexSplash() {
       const next =
         search.next && ALLOWED_NEXT.includes(search.next) ? search.next : null;
 
-      // 1. New install / not yet onboarded → onboarding (unless an explicit
-      //    `next=` was passed, e.g. from an OAuth callback).
-      if (!isOnboarded() && !next) {
-        if (!cancelled) navigate({ to: "/onboarding", replace: true });
-        return;
-      }
-
-      // 2. Onboarded — wait for any in-flight OAuth and then route.
+      // 1. Signed-in users always go straight to the app, regardless of
+      //    whether the local onboarding flag is set on this device. Otherwise
+      //    a signed-in user on a fresh browser would be sent to /onboarding,
+      //    which redirects back to / → infinite spinner loop.
       const session = await waitForOAuthSession();
       if (cancelled) return;
       if (session) {
         navigate({ to: next ?? "/app", replace: true });
-      } else {
-        navigate({ to: "/login", search: next ? { next } : undefined, replace: true });
+        return;
       }
+
+      // 2. Signed out + not onboarded → onboarding (unless an explicit
+      //    `next=` was passed, e.g. from an OAuth callback).
+      if (!isOnboarded() && !next) {
+        navigate({ to: "/onboarding", replace: true });
+        return;
+      }
+
+      // 3. Signed out + onboarded → login.
+      navigate({ to: "/login", search: next ? { next } : undefined, replace: true });
     })();
     return () => {
       cancelled = true;
