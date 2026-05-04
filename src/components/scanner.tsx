@@ -88,7 +88,13 @@ export function ResultsScreen({
   const displayedAnalysis: DupeAnalysis = selectDupe(analysis, safeIdx);
 
   const dupe = displayedAnalysis.dupe;
-  const link = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  // Prefer a verified retailer link (cheapest first) over a generic Google search.
+  const verifiedVendor = dupe?.links && dupe.links.length > 0 ? dupe.links[0] : null;
+  const fallbackLink = dupe ? googleShoppingLink(dupe.brand, dupe.productName) : null;
+  const link = verifiedVendor
+    ? { label: verifiedVendor.merchant, url: verifiedVendor.url }
+    : fallbackLink;
+  const linkPrice = verifiedVendor?.priceUsd ?? null;
   const alternates = candidates.slice(1);
   return (
     <IOSScreen
