@@ -1,64 +1,38 @@
-# Wire paywall to Paddle
 
-Paddle is enabled. Three test products + discount already created:
-- `dupli_pro_yearly` — $39.99/yr, 7-day trial
-- `dupli_pro_monthly` — $9.99/mo, 7-day trial
-- `dupli_pro_intro_monthly` — $9.99/mo, with `Dupli Intro - $0.99 first month` flat $9 discount restricted to it (charges $0.99 first month, $9.99 after)
+## Edge cases found
 
-## 1. Database migration — `subscriptions` table
-- `subscriptions` (id, user_id→auth.users, paddle_subscription_id unique, paddle_customer_id, product_id, price_id, status, current_period_start/end, cancel_at_period_end, environment, timestamps)
-- Indexes on user_id and paddle_subscription_id
-- RLS: users SELECT own; service_role ALL
-- `set_updated_at` trigger
-- `has_active_subscription(uuid, env)` helper, defaults env='live'
+Auditing the current flow surfaced 5 gaps. None are visible on the happy path, but each one strands a real user.
 
-## 2. Server utilities (Paddle SDK already installed)
-- `src/lib/paddle.server.ts` — `getPaddleClient`, `gatewayFetch`, `verifyWebhook`, `EventName`, `PaddleEnv` (canonical shape from knowledge)
-- `src/server/payments.functions.ts` — `resolvePaddlePrice` + `resolvePaddleDiscount` server functions
-- `src/lib/paddle.ts` — client: `getPaddleEnvironment`, `initializePaddle`, `getPaddlePriceId`, `getPaddleDiscountId`
+### 1. Email signup has no "verify your email" state
+`supabase.auth.signUp` returns success but no session until the user clicks the confirmation link. Today the form just clears its spinner and the user sits on the login screen with no feedback. They'll either re-submit (getting silent rate-limit errors) or assume it's broken.
 
-## 3. Webhook handler
-- `src/routes/api/public/payments/webhook.ts` (exact path required) — handles `subscription.created/updated/canceled`, upserts on `paddle_subscription_id`, filters by `environment` on updates
+**Fix:** when signup returns no session, swap the form for a "Check your inbox" panel showing the email and a "Resend email" action.
 
-## 4. Subscription hook + test-mode banner
-- `src/hooks/use-subscription.ts` — reads current user's row filtered by env, derives `isActive`, listens for realtime updates
-- `src/components/payment-test-mode-banner.tsx` — orange strip when client token is `test_`
-- Mount banner at top of `__root.tsx` shell
+### 2. Already-signed-in users can re-enter onboarding
+`/onboarding` has no auth check. A returning user who visits the root after clearing localStorage (or who taps the wordmark) re-does the whole onboarding flow and is then sent to `/paywall` even though they're already a customer.
 
-## 5. Wire paywall buttons (`src/routes/paywall.tsx`)
-Replace `startTrial` and `startCheap`:
-```ts
-const { openCheckout } = usePaddleCheckout(); // new hook
-// Yearly/Monthly trial button:
-openCheckout({
-  priceId: plan === "yearly" ? "dupli_pro_yearly" : "dupli_pro_monthly",
-  customerEmail: user?.email,
-  customData: { userId: user!.id },
-  successUrl: `${origin}/app?checkout=success`,
-});
-// Intro $0.99:
-const discountId = await getPaddleDiscountId("Dupli Intro - $0.99 first month");
-openCheckout({
-  priceId: "dupli_pro_intro_monthly",
-  discountId,
-  customerEmail: user?.email,
-  customData: { userId: user!.id },
-  successUrl: `${origin}/app?checkout=success`,
-});
-```
-- Add `src/hooks/use-paddle-checkout.ts` wrapping `Paddle.Checkout.open` (overlay mode)
-- Require auth: if `!user`, route to `/login?next=/paywall` first (so we always have userId for `customData`)
-- Remove `markOnboardingComplete()` from click handlers — now driven by `?checkout=success`
+**Fix:** in `/onboarding` `beforeLoad`, if a session exists redirect to `/app` (which itself now handles paywall logic — see #3).
 
-## 6. Post-checkout return
-- In `src/routes/_app/app.tsx`: on mount, if `?checkout=success`, call `markOnboardingComplete()`, toast "Welcome to Pro 🎉", strip the query param
+### 3. Paywall shows for users who already paid
+After signup→paywall flow, if the user happens to already have an active subscription on this account (e.g. signed in mid-flow on a new device), `/paywall` still renders and prompts them to subscribe again.
 
-## 7. Paywall dismiss
-- "X" close still calls `markOnboardingComplete()` + routes to `/app` (free tier; gated by `useSubscription` later)
+**Fix:** in `/paywall` `beforeLoad`, query `subscriptions` for the current user + env. If active, redirect to `/app`.
 
-## Files
-**New**: migration, `src/lib/paddle.server.ts`, `src/lib/paddle.ts`, `src/server/payments.functions.ts`, `src/components/payment-test-mode-banner.tsx`, `src/routes/api/public/payments/webhook.ts`, `src/hooks/use-subscription.ts`, `src/hooks/use-paddle-checkout.ts`
+### 4. Index `next` allowlist includes `/onboarding`
+`/?next=/onboarding` is currently honored, which can route a freshly-authenticated user *back* into onboarding. That's never the intent — onboarding is for unauthenticated/new users only.
 
-**Edited**: `src/routes/paywall.tsx`, `src/routes/_app/app.tsx`, `src/routes/__root.tsx`
+**Fix:** drop `/onboarding` from the allowlist; only `/app` and `/paywall` are valid post-auth destinations.
 
-After approval I'll implement all of this in one pass and you can test with a Paddle test card in the preview.
+### 5. Sample-result path marks onboarding complete *before* auth
+In `onboarding.tsx` the "Unlock full comparison" button calls `markOnboardingComplete()` then navigates to `/paywall`. If the user bounces at the login wall and returns later, they skip onboarding and land on `/login` → `/app` as a free user. That's actually acceptable, but we should NOT mark complete until after they reach the paywall — otherwise the sample-result CTA is the only thing they ever see of the onboarding "first match" experience if they abandon.
+
+**Fix:** move `markOnboardingComplete()` to fire on successful arrival at `/app` (already happens via `?checkout=success`) and on paywall dismiss (already happens). Remove the premature calls in onboarding's sample-result handlers — `/paywall` itself ensures they don't land back in onboarding because the welcome screen's "Sign in" link covers the returning-user case.
+
+## Files to change
+
+- `src/routes/login.tsx` — add post-signup "check your email" state with resend
+- `src/routes/onboarding.tsx` — `beforeLoad` redirect for signed-in users; remove premature `markOnboardingComplete()` in sample-result handlers
+- `src/routes/paywall.tsx` — `beforeLoad` skip when active subscription exists
+- `src/routes/index.tsx` — tighten `next` allowlist to `["/app", "/paywall"]`
+
+No DB changes, no new dependencies.

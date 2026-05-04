@@ -34,6 +34,8 @@ function LoginPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [pendingConfirmEmail, setPendingConfirmEmail] = useState<string | null>(null);
+  const [resendState, setResendState] = useState<"idle" | "sending" | "sent">("idle");
 
   if (loading) {
     return (
@@ -64,6 +66,72 @@ function LoginPage() {
       setSigningIn(false);
     }
   };
+
+  const handleResend = async () => {
+    if (!pendingConfirmEmail) return;
+    setResendState("sending");
+    const { error } = await supabase.auth.resend({
+      type: "signup",
+      email: pendingConfirmEmail,
+      options: {
+        emailRedirectTo: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
+      },
+    });
+    if (error) {
+      setError(error.message);
+      setResendState("idle");
+    } else {
+      setResendState("sent");
+    }
+  };
+
+  if (pendingConfirmEmail) {
+    return (
+      <div className="flex h-screen-safe flex-col bg-background">
+        <div className="pt-safe" />
+        <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
+          <img src={wordmark} alt="Dupli" className="mb-10 h-14 w-auto" width={887} height={414} />
+          <h1 className="font-display text-[28px] font-bold leading-tight tracking-tight">
+            Check your inbox.
+          </h1>
+          <p className="mt-3 max-w-xs text-[14px] leading-relaxed text-muted-foreground">
+            We sent a confirmation link to{" "}
+            <span className="font-semibold text-foreground">{pendingConfirmEmail}</span>. Tap it to
+            finish creating your account.
+          </p>
+        </div>
+        <div className="space-y-3 px-6 pb-10 pt-4">
+          {error && (
+            <div className="rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
+              {error}
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={resendState !== "idle"}
+            className="tap flex h-[52px] w-full items-center justify-center gap-2.5 rounded-[14px] bg-foreground text-[15px] font-semibold text-background disabled:opacity-60"
+          >
+            {resendState === "sending" && <Loader2 className="h-[18px] w-[18px] animate-spin" />}
+            {resendState === "sent" ? "Email sent" : "Resend confirmation email"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setPendingConfirmEmail(null);
+              setResendState("idle");
+              setError(null);
+              setMode("signin");
+            }}
+            className="tap w-full text-center text-[13px] text-muted-foreground"
+          >
+            Use a different email
+          </button>
+        </div>
+        <div className="pb-safe" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen-safe flex-col bg-background">
@@ -96,17 +164,24 @@ function LoginPage() {
             e.preventDefault();
             setError(null);
             setSigningIn(true);
-            const { error } =
-              mode === "signin"
-                ? await supabase.auth.signInWithPassword({ email, password })
-                : await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: {
-                      emailRedirectTo: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
-                    },
-                  });
-            if (error) setError(error.message);
+            if (mode === "signin") {
+              const { error } = await supabase.auth.signInWithPassword({ email, password });
+              if (error) setError(error.message);
+            } else {
+              const { data, error } = await supabase.auth.signUp({
+                email,
+                password,
+                options: {
+                  emailRedirectTo: `${window.location.origin}/?next=${encodeURIComponent(next)}`,
+                },
+              });
+              if (error) {
+                setError(error.message);
+              } else if (!data.session) {
+                // Email confirmation required — show the "check your inbox" panel.
+                setPendingConfirmEmail(email);
+              }
+            }
             setSigningIn(false);
           }}
           className="space-y-2"

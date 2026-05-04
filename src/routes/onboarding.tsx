@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   Sparkles,
@@ -48,6 +48,13 @@ import { LiveCamera } from "@/components/camera/live-camera";
 
 export const Route = createFileRoute("/onboarding")({
   component: OnboardingPage,
+  beforeLoad: async () => {
+    const { supabase } = await import("@/integrations/supabase/client");
+    const { data } = await supabase.auth.getSession();
+    if (data.session) {
+      throw redirect({ to: "/app" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Welcome to Dupli" },
@@ -153,17 +160,14 @@ function OnboardingPage() {
           canSave={flow.canSave}
           onToggleSave={() => {
             writeOnboarding({ firstRealResultUsed: true });
-            markOnboardingComplete();
             navigate({ to: "/paywall" });
           }}
           onReset={() => {
             writeOnboarding({ firstRealResultUsed: true });
-            markOnboardingComplete();
             navigate({ to: "/paywall" });
           }}
           onShare={() => {
             writeOnboarding({ firstRealResultUsed: true });
-            markOnboardingComplete();
             navigate({ to: "/paywall" });
           }}
           preparingShare={false}
@@ -597,11 +601,9 @@ function OnboardingPage() {
         progress={progress}
         onScanOwn={() => {
           track("onboarding_scan_selected");
-          markOnboardingComplete();
           flow.openCamera();
         }}
         onSeeFull={() => {
-          markOnboardingComplete();
           navigate({ to: "/paywall" });
         }}
       />

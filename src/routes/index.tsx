@@ -55,7 +55,7 @@ export const Route = createFileRoute("/")({
     next: typeof s.next === "string" ? s.next : undefined,
   }),
   beforeLoad: async ({ search }) => {
-    const allowed = ["/app", "/paywall", "/onboarding"];
+    const allowed = ["/app", "/paywall"];
     const next =
       search.next && allowed.includes(search.next) ? search.next : null;
 

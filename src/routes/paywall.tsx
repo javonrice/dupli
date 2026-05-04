@@ -16,6 +16,29 @@ export const Route = createFileRoute("/paywall")({
     if (!data.session) {
       throw redirect({ to: "/login", search: { next: "/paywall" } });
     }
+    // Skip paywall if user already has an active subscription in this env.
+    try {
+      const { getPaddleEnvironment } = await import("@/lib/paddle");
+      const env = getPaddleEnvironment();
+      const { data: sub } = await (supabase as any)
+        .from("subscriptions")
+        .select("status,current_period_end")
+        .eq("user_id", data.session.user.id)
+        .eq("environment", env)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (sub) {
+        const end = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
+        const future = end === null || end > Date.now();
+        const active =
+          (["active", "trialing", "past_due"].includes(sub.status) && future) ||
+          (sub.status === "canceled" && end !== null && end > Date.now());
+        if (active) throw redirect({ to: "/app" });
+      }
+    } catch (e) {
+      if (e && typeof e === "object" && "isRedirect" in (e as object)) throw e;
+    }
   },
   head: () => ({
     meta: [
