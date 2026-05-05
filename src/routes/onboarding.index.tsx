@@ -45,13 +45,21 @@ import {
 import { useScanFlow } from "@/lib/use-scan-flow";
 import { ScanningScreen, ResultsScreen } from "@/components/scanner";
 import { LiveCamera } from "@/components/camera/live-camera";
+import {
+  completeOnboarding,
+  saveOnboardingAnswers,
+} from "@/server/onboarding.functions";
 
 export const Route = createFileRoute("/onboarding/")({
   component: OnboardingPage,
-  // Signed-in users go through the splash router (/) which decides between
-  // /app (active sub) and /paywall (no sub). Don't shortcut to /app here —
-  // that bypasses the paywall for signed-in users without a subscription.
-  beforeLoad: async () => {
+  validateSearch: (s: Record<string, unknown>): { start?: "quiz" } => {
+    return s.start === "quiz" ? { start: "quiz" } : {};
+  },
+  // Signed-in users normally route via the splash. Exception: when arriving
+  // from signup with `?start=quiz`, we want them to actually run the quiz
+  // before hitting the paywall.
+  beforeLoad: async ({ search }) => {
+    if (search.start === "quiz") return;
     const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await supabase.auth.getSession();
     if (data.session) {
@@ -107,7 +115,10 @@ const TOTAL = ORDER.length - 1; // welcome doesn't show progress
 
 function OnboardingPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>("welcome");
+  const search = Route.useSearch();
+  const [step, setStep] = useState<Step>(
+    search.start === "quiz" ? "gender" : "welcome",
+  );
   const [gender, setGender] = useState<Gender | undefined>();
   const [ageRange, setAgeRange] = useState<AgeRange | undefined>();
   const [frequency, setFrequency] = useState<Frequency | undefined>();
@@ -122,9 +133,12 @@ function OnboardingPage() {
     track("onboarding_screen_viewed", { step });
   }, [step]);
 
-  // Quiz steps require auth. If unauthenticated and past welcome, send to email step.
+  // Quiz steps require auth. If we're past welcome and not signed in,
+  // redirect to email step. Skip this check when arriving from signup
+  // (?start=quiz) — the session may still be hydrating.
   useEffect(() => {
     if (step === "welcome") return;
+    if (search.start === "quiz") return;
     let cancelled = false;
     (async () => {
       const { supabase } = await import("@/integrations/supabase/client");
@@ -136,7 +150,7 @@ function OnboardingPage() {
     return () => {
       cancelled = true;
     };
-  }, [step, navigate]);
+  }, [step, navigate, search.start]);
 
   const progress = useMemo(() => Math.max(1, ORDER.indexOf(step)), [step]);
 
@@ -615,15 +629,29 @@ function OnboardingPage() {
   }
 
   if (step === "sample_result") {
+    const finishToPaywall = async () => {
+      markOnboardingComplete();
+      try {
+        await saveOnboardingAnswers({
+          data: {
+            answers: { gender, ageRange, frequency, categories, goal },
+          },
+        });
+        await completeOnboarding();
+      } catch {
+        /* non-fatal — paywall will still gate access */
+      }
+      navigate({ to: "/paywall" });
+    };
     return (
       <SampleResultScreen
         progress={progress}
         onScanOwn={() => {
           track("onboarding_scan_selected");
-          navigate({ to: "/paywall" });
+          void finishToPaywall();
         }}
         onSeeFull={() => {
-          navigate({ to: "/paywall" });
+          void finishToPaywall();
         }}
       />
     );

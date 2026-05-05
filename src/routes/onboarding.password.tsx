@@ -77,8 +77,8 @@ function PasswordStep() {
             setError(msg);
           }
         } else {
-          // Signed up — Supabase auto-confirm or session; route through resolver.
-          navigate({ to: "/" });
+          // Signed up — drop straight into the personalization quiz.
+          navigate({ to: "/onboarding", search: { start: "quiz" } });
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
