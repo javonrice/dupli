@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubscription } from "@/hooks/use-subscription";
 import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
 import { getPaddleDiscountId } from "@/lib/paddle";
-import { supabase } from "@/integrations/supabase/client";
+
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
