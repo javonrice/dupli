@@ -20,13 +20,13 @@ import {
 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import dupliWordmark from "@/assets/dupli-wordmark.png";
-import heroCameraScan from "@/assets/onboarding/hero-camera-scan.jpg";
-import problemImage from "@/assets/onboarding/problem-overpaying.jpg";
-import painImage from "@/assets/onboarding/pain-regret.jpg";
-import previewScanImage from "@/assets/onboarding/preview-scan.jpg";
-import previewResultsImage from "@/assets/onboarding/preview-results.jpg";
-import previewCompareImage from "@/assets/onboarding/preview-compare.jpg";
-import planReadyImage from "@/assets/onboarding/plan-ready.jpg";
+import heroCameraScan from "@/assets/onboarding/hero-camera-scan.webp";
+import problemImage from "@/assets/onboarding/problem-overpaying.webp";
+import painImage from "@/assets/onboarding/pain-regret.webp";
+import previewScanImage from "@/assets/onboarding/preview-scan.webp";
+import previewResultsImage from "@/assets/onboarding/preview-results.webp";
+import previewCompareImage from "@/assets/onboarding/preview-compare.webp";
+import planReadyImage from "@/assets/onboarding/plan-ready.webp";
 import { GuidedLineReveal } from "@/components/onboarding/guided-line-reveal";
 import { TapCard } from "@/components/onboarding/tap-card";
 import {
