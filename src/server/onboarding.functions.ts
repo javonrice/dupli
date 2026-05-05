@@ -47,54 +47,66 @@ export const checkEmailExists = createServerFn({ method: "POST" })
     }
   });
 
-function getServerStripeEnv(): "sandbox" | "live" {
-  return process.env.NODE_ENV === "production" ? "live" : "sandbox";
-}
+import { getServerStripeEnv } from "@/lib/stripe-env.server";
+import { isSubscriptionActive } from "@/lib/access";
+import { isSuperUser } from "@/lib/superusers";
+
+export type RouteDestination =
+  | { to: "/app" }
+  | { to: "/paywall" }
+  | { to: "/onboarding"; search: { start: "quiz" } };
+
+export type RouteResolution = {
+  destination: RouteDestination;
+  hasActiveSub: boolean;
+  onboardingCompleted: boolean;
+  isSuperUser: boolean;
+};
 
 export const getRouteResolution = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(
-    async ({
-      context,
-    }): Promise<{ hasActiveSub: boolean; onboardingCompleted: boolean }> => {
-      const userId = (context as { userId: string }).userId;
-      const env = getServerStripeEnv();
+  .handler(async ({ context }): Promise<RouteResolution> => {
+    const userId = (context as { userId: string }).userId;
+    const env = getServerStripeEnv();
 
-      const [profileRes, subRes] = await Promise.all([
-        supabaseAdmin
-          .from("profiles")
-          .select("onboarding_completed")
-          .eq("user_id", userId)
-          .maybeSingle(),
-        supabaseAdmin
-          .from("subscriptions")
-          .select("status,current_period_end")
-          .eq("user_id", userId)
-          .eq("environment", env)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+    const [profileRes, subRes] = await Promise.all([
+      supabaseAdmin
+        .from("profiles")
+        .select("onboarding_completed")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("subscriptions")
+        .select("status,current_period_end")
+        .eq("user_id", userId)
+        .eq("environment", env)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
 
-      const sub = subRes.data;
-      const now = Date.now();
-      const periodEnd = sub?.current_period_end
-        ? new Date(sub.current_period_end).getTime()
-        : null;
-      const hasActiveSub =
-        !!sub?.status &&
-        ((["active", "trialing", "past_due"].includes(sub.status) &&
-          (periodEnd === null || periodEnd > now)) ||
-          (sub.status === "canceled" && periodEnd !== null && periodEnd > now));
+    const superUser = isSuperUser(userId);
+    const hasActiveSub = superUser || isSubscriptionActive(subRes.data);
+    const onboardingCompleted =
+      (profileRes.data as { onboarding_completed?: boolean } | null)
+        ?.onboarding_completed === true;
 
-      return {
-        hasActiveSub,
-        onboardingCompleted:
-          (profileRes.data as { onboarding_completed?: boolean } | null)
-            ?.onboarding_completed === true,
-      };
-    },
-  );
+    let destination: RouteDestination;
+    if (hasActiveSub) {
+      destination = { to: "/app" };
+    } else if (!onboardingCompleted) {
+      destination = { to: "/onboarding", search: { start: "quiz" } };
+    } else {
+      destination = { to: "/paywall" };
+    }
+
+    return {
+      destination,
+      hasActiveSub,
+      onboardingCompleted,
+      isSuperUser: superUser,
+    };
+  });
 
 export const saveOnboardingAnswers = createServerFn({ method: "POST" })
   .inputValidator((data: { answers: Record<string, unknown> }) => data)
