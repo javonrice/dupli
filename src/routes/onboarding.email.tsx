@@ -31,7 +31,7 @@ function EmailStep() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     const trimmed = email.trim().toLowerCase();
@@ -41,7 +41,14 @@ function EmailStep() {
     }
     setSubmitting(true);
     setPendingEmail(trimmed);
-    navigate({ to: "/onboarding/password", search: { mode: "signup" } });
+    let mode: "signup" | "login" = "signup";
+    try {
+      const res = await checkEmailExists({ data: { email: trimmed } });
+      if (res?.exists) mode = "login";
+    } catch {
+      // fall through to signup; password screen handles duplicate-user fallback
+    }
+    navigate({ to: "/onboarding/password", search: { mode } });
   };
 
   return (
