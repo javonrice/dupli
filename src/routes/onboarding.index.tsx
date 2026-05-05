@@ -26,6 +26,7 @@ import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import dupliWordmark from "@/assets/dupli-wordmark.png";
 import heroCameraScan from "@/assets/onboarding/hero-camera-scan.jpg";
 import heroResultPhone from "@/assets/onboarding/hero-result-phone.jpg";
+import trustComparisonImage from "@/assets/trust-ingredient-comparison.png";
 import { GuidedLineReveal } from "@/components/onboarding/guided-line-reveal";
 import { LearningCard } from "@/components/onboarding/learning-card";
 import { TapCard } from "@/components/onboarding/tap-card";
@@ -543,6 +544,14 @@ function OnboardingPage() {
           headline="Not every dupe is a real dupe."
           lines={["We compare ingredients, not just packaging."]}
         >
+          <div className="-mx-6 overflow-hidden rounded-2xl border border-border bg-muted/40">
+            <img
+              src={trustComparisonImage}
+              alt="Two serum bottles compared by their ingredient molecules"
+              className="block h-auto w-full"
+              draggable={false}
+            />
+          </div>
           <LearningCard
             tone="success"
             icon={<ShieldCheck className="h-4 w-4" />}
