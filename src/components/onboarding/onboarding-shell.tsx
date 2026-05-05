@@ -60,8 +60,8 @@ export function OnboardingShell({
       </div>
 
       {(primary || secondary || tertiary || textLink) && (
-        <div className="pb-safe sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 px-6 pt-3">
-          <div className="space-y-2 pb-3">
+        <div className="pb-safe sticky bottom-0 bg-gradient-to-t from-background via-background/95 to-background/0 px-6 pt-3">
+          <div className="space-y-2 pb-2">
             {primary && (
               <button
                 type="button"
