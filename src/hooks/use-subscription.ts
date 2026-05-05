@@ -68,6 +68,7 @@ export function useSubscription() {
   }, [user, authLoading]);
 
   const isActive = (() => {
+    if (isSuperUser(user?.id)) return true;
     if (!subscription) return false;
     const end = subscription.current_period_end
       ? new Date(subscription.current_period_end).getTime()
