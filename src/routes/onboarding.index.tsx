@@ -183,6 +183,8 @@ function OnboardingPage() {
   const [categoryChoice, setCategoryChoice] = useState<CategoryChoice | undefined>();
   const [pain, setPain] = useState<Pain | undefined>();
   const [commitment, setCommitment] = useState<Commitment | undefined>();
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
 
   useEffect(() => {
     track("onboarding_started");
