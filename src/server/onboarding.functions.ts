@@ -60,7 +60,7 @@ export const saveOnboardingAnswers = createServerFn({ method: "POST" })
     const userId = (context as { userId: string }).userId;
     await supabaseAdmin
       .from("profiles")
-      .update({ onboarding_answers: data.answers })
+      .update({ onboarding_answers: data.answers as never })
       .eq("user_id", userId);
     return { ok: true };
   });
