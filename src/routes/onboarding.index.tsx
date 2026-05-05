@@ -224,7 +224,13 @@ function OnboardingPage() {
         step={1}
         total={TOTAL}
         hideProgress
-        primary={{ label: "Get Started", onClick: () => navigate({ to: "/onboarding/email" }) }}
+        primary={{
+          label: "Get Started",
+          onClick: () => {
+            if (import.meta.env.DEV) console.debug("[onboarding-flow] Get Started clicked → /onboarding/email");
+            navigate({ to: "/onboarding/email" });
+          },
+        }}
       >
         <div className="relative -mx-6 -mt-2 flex h-full flex-col">
           <div className="relative h-[44vh] min-h-[240px] max-h-[440px] w-full overflow-hidden">
