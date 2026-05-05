@@ -21,6 +21,7 @@ import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingPasswordRouteImport } from './routes/onboarding.password'
 import { Route as OnboardingEmailRouteImport } from './routes/onboarding.email'
+import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as CheckoutAccountRouteImport } from './routes/checkout.account'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
@@ -94,6 +95,11 @@ const OnboardingEmailRoute = OnboardingEmailRouteImport.update({
   id: '/email',
   path: '/email',
   getParentRoute: () => OnboardingRoute,
+} as any)
+const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
+  id: '/checkout/success',
+  path: '/checkout/success',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutAccountRoute = CheckoutAccountRouteImport.update({
   id: '/checkout/account',
@@ -186,6 +192,7 @@ export interface FileRoutesByFullPath {
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
   '/checkout/account': typeof CheckoutAccountRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
   '/p/$productId': typeof AppPProductIdRoute
@@ -213,6 +220,7 @@ export interface FileRoutesByTo {
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
   '/checkout/account': typeof CheckoutAccountRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
   '/p/$productId': typeof AppPProductIdRoute
@@ -241,6 +249,7 @@ export interface FileRoutesById {
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
   '/checkout/account': typeof CheckoutAccountRoute
+  '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
   '/_app/p/$productId': typeof AppPProductIdRoute
@@ -270,6 +279,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/saved'
     | '/checkout/account'
+    | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
     | '/p/$productId'
@@ -297,6 +307,7 @@ export interface FileRouteTypes {
     | '/profile'
     | '/saved'
     | '/checkout/account'
+    | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
     | '/p/$productId'
@@ -324,6 +335,7 @@ export interface FileRouteTypes {
     | '/_app/profile'
     | '/_app/saved'
     | '/checkout/account'
+    | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
     | '/_app/p/$productId'
@@ -349,6 +361,7 @@ export interface RootRouteChildren {
   SigninRoute: typeof SigninRoute
   TermsRoute: typeof TermsRoute
   CheckoutAccountRoute: typeof CheckoutAccountRoute
+  CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
   ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
@@ -440,6 +453,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/onboarding/email'
       preLoaderRoute: typeof OnboardingEmailRouteImport
       parentRoute: typeof OnboardingRoute
+    }
+    '/checkout/success': {
+      id: '/checkout/success'
+      path: '/checkout/success'
+      fullPath: '/checkout/success'
+      preLoaderRoute: typeof CheckoutSuccessRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/checkout/account': {
       id: '/checkout/account'
@@ -604,6 +624,7 @@ const rootRouteChildren: RootRouteChildren = {
   SigninRoute: SigninRoute,
   TermsRoute: TermsRoute,
   CheckoutAccountRoute: CheckoutAccountRoute,
+  CheckoutSuccessRoute: CheckoutSuccessRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:
     ApiPublicHooksEnqueueVendorBackfillRoute,
   ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
