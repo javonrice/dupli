@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboarded } from "@/lib/onboarding";
+import { getRouteResolution } from "@/server/onboarding.functions";
 
 /**
  * Wait briefly for an in-flight OAuth redirect to finish hydrating the
