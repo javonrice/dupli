@@ -1,58 +1,52 @@
-## Goal
+# Mobile polish + remove paywall close button
 
-Replace the current post-auth onboarding (gender → age → frequency → categories → goal → pain → social_proof → trust → building → plan_reveal → notifications → sample_loading → sample_result) with a tighter, more immersive 9-step value-building flow that visually previews the actual Dupli product before paywall.
+The onboarding and paywall structure is solid (safe-area utilities, sticky CTA, device-frame container queries are all already wired up). I'm not going to refactor things that work. The targeted issues actually worth fixing on a phone viewport (390x843) are below.
 
-Out of scope (not touched): `/onboarding/email`, `/onboarding/password`, auth, subscription, paywall, checkout, scan flow, app screens, pricing, routing.
+## 1. Paywall — remove the X close button
 
-## New post-auth onboarding sequence
+In `src/routes/paywall.tsx`:
+- Delete the entire `<div className="flex items-center justify-end ...">` block containing the `<X />` button (lines 176–185).
+- Replace it with a small `<div className="h-3" />` spacer so the headline doesn't slam into the safe-area inset.
+- Remove now-unused imports (`X` from lucide-react) and the unused `handleClose` function.
 
-1. **Problem** — "Stop overpaying for beauty products" + immersive expensive-vs-cheap visual. CTA Continue.
-2. **Category personalization** — "What do you want Dupli to help you save on?" (Skincare / Makeup / Haircare / Body / Everything). Tap-to-advance.
-3. **Pain point** — "What usually makes beauty shopping frustrating?" (5 options listed in spec). Tap-to-advance.
-4. **Product preview: Scan** — "Scan before you buy" + immersive in-store scan composition. CTA "Show me more".
-5. **Product preview: Results** — "See results that actually help" + results-screen mockup composition. CTA Continue.
-6. **Product preview: Comparison/Other dupes** — "Compare smarter alternatives" + comparison composition. CTA "That's useful".
-7. **Commitment / value** — "What would make Dupli worth it for you?" (5 options from spec). Tap-to-advance.
-8. **Building** — animated checklist loader with rotating lines from spec.
-9. **Plan reveal** — "Your Dupli plan is ready" + hero composition + 4 value bullets. CTA Continue → marks onboarding complete server-side and routes to `/paywall`.
+Effect: no escape hatch from the paywall — user must choose Start Trial. Back-gesture/browser back still works (we don't trap navigation), which is the right amount of friction.
 
-Removed: `gender`, `age`, `frequency`, `goal` (collapsed into commitment), `social_proof`, `trust`, `notifications`, `sample_loading`, `sample_result` (the live-scan handoff and sample result screens go away — paywall now shows the real value of unlocking).
+## 2. Onboarding — small mobile fit fixes
 
-## Visual generation (Nano Banana)
+These are the real issues at 390x843, not a redesign.
 
-Generate 6 new images using `google/gemini-3.1-flash-image-preview` via the AI gateway script. Each image uses the existing saved screenshots (`src/assets/onboarding/hero-camera-scan.jpg`, `src/assets/onboarding/hero-result-phone.jpg`, `src/assets/trust-ingredient-comparison.png`, `src/assets/dupli-app-icon-1024.png`) as visual reference / source material to keep the look on-brand.
+**a. `src/routes/onboarding.index.tsx` — welcome screen**
+The hero image uses `h-[58vh] min-h-[360px]`. On a 390x843 phone with the sticky CTA + wordmark + headline + subhead + stars + safe-areas, 58vh (~489px) leaves only ~140px for everything below — the rating row gets pushed close to the CTA. Change to `h-[52vh] min-h-[320px]` and tighten the text block: `pt-2` → `pt-3`, `mt-4` (h1) stays, `mt-2` (p) stays, `mt-4` (stars) → `mt-5`. Result: comfortable breathing room, no clipping on small phones (375x667 iPhone SE).
 
-| File | Used on screen | Prompt direction |
-|---|---|---|
-| `src/assets/onboarding/problem-overpaying.jpg` | 1. Problem | Editorial flat-lay: a luxury serum next to a near-identical cheaper bottle, soft cream/pink gradient, price tags ($72 vs $14), subtle Dupli mark |
-| `src/assets/onboarding/category-grid.jpg` | 2. Category (header art) | Curated grid of beauty product categories — skincare, makeup, hair, body — premium editorial styling |
-| `src/assets/onboarding/pain-regret.jpg` | 3. Pain | Hand holding a viral product in store with a phone showing a Dupli-style "cheaper match found" overlay |
-| `src/assets/onboarding/preview-scan.jpg` | 4. Scan preview | iPhone camera POV scanning a serum on a store shelf; reticle + "Recognizing…" UI; based on hero-camera-scan |
-| `src/assets/onboarding/preview-results.jpg` | 5. Results preview | Phone mockup showing the actual results screen with strong-match badge + 17% savings; based on hero-result-phone |
-| `src/assets/onboarding/preview-compare.jpg` | 6. Comparison preview | Side-by-side product cards (premium vs dupe) with similarity %, prices, ingredient overlap chips |
-| `src/assets/onboarding/plan-ready.jpg` | 9. Plan reveal | Hero composition: phone showing personalized Dupli home with savings stat, surrounded by floating product cards |
+**b. `src/routes/onboarding.index.tsx` — `pain` and `category` steps**
+On `pain`, the screen has: headline + image (`ProductHero`) + 5 `TapCard`s. Each TapCard is ~72px tall (py-4 + 40px icon + text), so 5 cards ≈ 360px, plus 200px image, plus headline, plus shell chrome — overflows 843px. The container already has `overflow-y-auto` so it scrolls, but the scroll isn't obvious because there's no CTA pinning the bottom (auto-advance on tap). Fix: shrink the image on these list-heavy steps. In `ProductHero`, the image uses natural aspect — wrap it with `max-h-[28vh] object-cover` when used inside list-heavy steps. Cleanest: pass an optional `compact` prop to `ProductHero` that adds `max-h-[26vh]` and `object-cover` to the `<img>`. Apply `compact` only on `pain` (the `category` step has no image).
 
-Generation happens via the ai-gateway skill script (`/tmp/lovable_ai.py … --image --model google/gemini-3.1-flash-image-preview`). Files written to `src/assets/onboarding/`.
+**c. `src/components/onboarding/onboarding-shell.tsx` — sticky CTA gradient**
+The sticky bottom container uses `bg-gradient-to-t from-background via-background to-background/0` but the `via-background` makes the gradient solid for ~⅔ of its height — the fade is barely visible. Change to `from-background via-background/95 to-background/0`. Minor visual fix, helps content-behind-CTA feel native.
 
-## Code changes
+**d. `src/components/onboarding/onboarding-shell.tsx` — bottom padding**
+`pb-3` inside `space-y-2 pb-3` plus `pb-safe` on outer plus `pt-3` gives ~24px+ of dead space below the CTA on phones with no home-indicator. Reduce inner `pb-3` → `pb-2`. Tiny but noticeable.
 
-**`src/routes/onboarding.index.tsx`** — restructure the `Step` union, `ORDER`, and the screen blocks to match the 9-step sequence. Reuse `OnboardingShell`, `GuidedLineReveal`, `TapCard`, `ChecklistLoading`, `PlanReveal`. Each preview screen wraps its hero image in a rounded device-style frame with a soft gradient fade and one supporting `LearningCard` for context. Tap-to-advance for question screens; CTA-to-advance for preview screens. Final CTA on plan reveal calls `markOnboardingComplete()` + `saveOnboardingAnswers` + `completeOnboarding` then `navigate({ to: "/paywall" })` — same server contract as today.
+**e. `src/routes/onboarding.index.tsx` — `plan_ready` step**
+Has: success chip + headline + 1 line of body + `ProductHero` image + 4-item checklist + sticky CTA. This overflows on every phone. Two fixes:
+- Drop the `ProductHero` on this step (the checklist already communicates the payoff visually). Or keep it `compact`. Recommend: keep image, mark `compact`, and tighten checklist `space-y-2` → `space-y-1.5`, `py-3` → `py-2.5`.
 
-**Onboarding state** — keep using existing `OnboardingState` shape. Map new answers:
-- categories → existing `categories` field (single-select "Everything" stored as all 6 categories)
-- pain → stored under existing `goal` field (closest semantic) OR added to `onboarding_answers` blob via `saveOnboardingAnswers`
-- commitment → stored in `onboarding_answers` blob
+**f. `src/routes/onboarding.index.tsx` — checklist "building" screen**
+`pt-8` on the wrapper plus centered layout means on short phones the headline can sit close to the back-arrow row. Change `pt-8` → `pt-4` and rely on `justify-center` for vertical balance.
 
-No DB schema change. `onboarding_completed` only flipped at the very end (unchanged behavior).
+## 3. What I'm explicitly NOT changing
 
-**Removed UI** — the `cameraOpen` / `scanning` / `results` branches inside this route (lines 189–234) are removed because the real-scan handoff is no longer part of onboarding. `useScanFlow` import drops. `SampleResultScreen`, `ReceiptCard`, `MiniProduct`, `FileInputs`, `freqLabel`, and unused icons are deleted.
+- The device-frame wrapper / `h-screen-safe` system — already correct.
+- Safe-area utilities — correct.
+- Tap targets — all already ≥44px.
+- Typography scale — already mobile-tuned (28px display headlines, 14–15px body).
+- Color tokens — semantic, no hardcoded colors to fix.
+- Email/password/login routes — these were not flagged and are simple forms; touching them risks regressions.
 
-**No changes** to: `onboarding.email.tsx`, `onboarding.password.tsx`, `_app.tsx`, `paywall.tsx`, `use-scan-flow.ts`, `scan-fab.tsx`, server middleware, scan functions, billing.
+## Files changed
 
-## Acceptance check
+- `src/routes/paywall.tsx` — remove X button + handleClose + X import
+- `src/routes/onboarding.index.tsx` — welcome hero height, `compact` prop on `ProductHero` for `pain`/`plan_ready`, building screen padding, plan_ready checklist density
+- `src/components/onboarding/onboarding-shell.tsx` — gradient stop + bottom padding
 
-- Email/password screens untouched (verified by not editing those files).
-- Flow has exactly 9 post-auth screens, each with a strong product-led visual.
-- Three explicit preview screens (scan, results, comparison) showing the app in action.
-- `onboarding_completed` is set only on the final "Your plan is ready" CTA, which routes to `/paywall`.
-- No changes to auth, subscription, scan, or pricing logic.
+No new dependencies. No DB or backend changes. No design-token changes.

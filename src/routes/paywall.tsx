@@ -1,5 +1,5 @@
 import { createFileRoute, isRedirect, redirect, useNavigate } from "@tanstack/react-router";
-import { Check, Loader2, X } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
@@ -135,10 +135,6 @@ function PaywallPage() {
     });
   };
 
-  const handleClose = () => {
-    if (user) navigate({ to: "/app" });
-    else navigate({ to: "/onboarding" });
-  };
 
   if (authLoading || subLoading || !verified) {
     return (
@@ -173,16 +169,7 @@ function PaywallPage() {
   return (
     <div className="flex h-screen-safe flex-col bg-background">
       <div className="pt-safe" />
-      <div className="flex items-center justify-end px-4 pt-2 pb-1">
-        <button
-          type="button"
-          onClick={handleClose}
-          className="tap -mr-2 flex h-9 w-9 items-center justify-center rounded-full text-foreground"
-          aria-label="Close"
-        >
-          <X className="h-6 w-6" strokeWidth={2.25} />
-        </button>
-      </div>
+      <div className="h-3" />
 
       <div className="flex-1 overflow-y-auto px-6 pb-4">
         <p className="text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
