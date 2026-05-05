@@ -10,7 +10,7 @@ import { getRouteResolution } from "@/server/onboarding.functions";
  * session. Lovable's OAuth broker returns the user to `redirect_uri` (root)
  * with tokens in the URL hash; supabase-js processes that hash asynchronously
  * via `detectSessionInUrl`. Without this wait, `getSession()` runs before the
- * hash is parsed and we wrongly redirect to /login.
+ * hash is parsed and we wrongly redirect to /onboarding/email.
  */
 async function waitForOAuthSession(timeoutMs = 4000) {
   if (typeof window === "undefined") return null;
@@ -61,7 +61,7 @@ export const Route = createFileRoute("/")({
   },
   // IMPORTANT: do not redirect on the server. Onboarding state lives in
   // localStorage, which only exists on the client. Resolving the destination
-  // server-side would always send fresh visitors to /login (no localStorage =
+  // server-side would always send fresh visitors to /onboarding/email (no localStorage =
   // looks "onboarded but signed out"), which is not native-app behavior.
   // We render a tiny client-side splash and route from there.
   component: IndexSplash,
@@ -110,8 +110,8 @@ function IndexSplash() {
         return;
       }
 
-      // 3. Signed out + onboarded → login.
-      navigate({ to: "/login", search: next ? { next } : undefined, replace: true });
+      // 3. Signed out + onboarded → onboarding email entry point.
+      navigate({ to: "/onboarding/email", replace: true });
     })();
     return () => {
       cancelled = true;
