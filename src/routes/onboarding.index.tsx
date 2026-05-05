@@ -45,6 +45,10 @@ import {
 import { useScanFlow } from "@/lib/use-scan-flow";
 import { ScanningScreen, ResultsScreen } from "@/components/scanner";
 import { LiveCamera } from "@/components/camera/live-camera";
+import {
+  completeOnboarding,
+  saveOnboardingAnswers,
+} from "@/server/onboarding.functions";
 
 export const Route = createFileRoute("/onboarding/")({
   component: OnboardingPage,
