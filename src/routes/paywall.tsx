@@ -155,7 +155,7 @@ function PaywallPage() {
     else navigate({ to: "/onboarding" });
   };
 
-  if (authLoading || subLoading) {
+  if (authLoading || subLoading || !verified) {
     return (
       <div className="flex h-screen-safe items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
