@@ -48,10 +48,14 @@ import { LiveCamera } from "@/components/camera/live-camera";
 
 export const Route = createFileRoute("/onboarding/")({
   component: OnboardingPage,
-  // Signed-in users go through the splash router (/) which decides between
-  // /app (active sub) and /paywall (no sub). Don't shortcut to /app here —
-  // that bypasses the paywall for signed-in users without a subscription.
-  beforeLoad: async () => {
+  validateSearch: (s: Record<string, unknown>): { start?: "quiz" } => {
+    return s.start === "quiz" ? { start: "quiz" } : {};
+  },
+  // Signed-in users normally route via the splash. Exception: when arriving
+  // from signup with `?start=quiz`, we want them to actually run the quiz
+  // before hitting the paywall.
+  beforeLoad: async ({ search }) => {
+    if (search.start === "quiz") return;
     const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await supabase.auth.getSession();
     if (data.session) {
