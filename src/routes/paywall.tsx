@@ -8,6 +8,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubscription } from "@/hooks/use-subscription";
 import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
 import { getPaddleDiscountId } from "@/lib/paddle";
+import {
+  readPaywallReason,
+  readScanBlock,
+  formatResetCountdown,
+  clearPaywallReason,
+} from "@/lib/scan-quota";
 
 
 export const Route = createFileRoute("/paywall")({
@@ -43,6 +49,7 @@ function PaywallPage() {
   const { isActive, loading: subLoading } = useSubscription();
   const { openCheckout, loading: checkoutLoading } = usePaddleCheckout();
   const [introLoading, setIntroLoading] = useState(false);
+  const [quotaReason, setQuotaReason] = useState<{ resetAt: string } | null>(null);
   const [plan, setPlan] = useState<Plan>(() => {
     if (typeof window === "undefined") return "yearly";
     try {
@@ -52,6 +59,15 @@ function PaywallPage() {
       return "yearly";
     }
   });
+
+  // On mount, check whether the user landed here because they ran out of free
+  // scans (vs. an organic upgrade tap from the discovery hub).
+  useEffect(() => {
+    if (readPaywallReason() === "quota") {
+      const block = readScanBlock();
+      if (block.resetAt) setQuotaReason({ resetAt: block.resetAt });
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -127,7 +143,14 @@ function PaywallPage() {
   };
 
   const handleClose = () => {
-    navigate({ to: "/onboarding" });
+    // The "reason" flag is one-shot; the blockedUntil timestamp persists so
+    // the FAB stays locked until reset.
+    clearPaywallReason();
+    if (user) {
+      navigate({ to: "/app" });
+    } else {
+      navigate({ to: "/onboarding" });
+    }
   };
 
   const busy = checkoutLoading || introLoading;
