@@ -111,7 +111,10 @@ const TOTAL = ORDER.length - 1; // welcome doesn't show progress
 
 function OnboardingPage() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<Step>("welcome");
+  const search = Route.useSearch();
+  const [step, setStep] = useState<Step>(
+    search.start === "quiz" ? "gender" : "welcome",
+  );
   const [gender, setGender] = useState<Gender | undefined>();
   const [ageRange, setAgeRange] = useState<AgeRange | undefined>();
   const [frequency, setFrequency] = useState<Frequency | undefined>();
@@ -126,9 +129,12 @@ function OnboardingPage() {
     track("onboarding_screen_viewed", { step });
   }, [step]);
 
-  // Quiz steps require auth. If unauthenticated and past welcome, send to email step.
+  // Quiz steps require auth. If we're past welcome and not signed in,
+  // redirect to email step. Skip this check when arriving from signup
+  // (?start=quiz) — the session may still be hydrating.
   useEffect(() => {
     if (step === "welcome") return;
+    if (search.start === "quiz") return;
     let cancelled = false;
     (async () => {
       const { supabase } = await import("@/integrations/supabase/client");
@@ -140,7 +146,7 @@ function OnboardingPage() {
     return () => {
       cancelled = true;
     };
-  }, [step, navigate]);
+  }, [step, navigate, search.start]);
 
   const progress = useMemo(() => Math.max(1, ORDER.indexOf(step)), [step]);
 
