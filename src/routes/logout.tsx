@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { clearStaleClientState } from "@/lib/auth-reset";
 
 export const Route = createFileRoute("/logout")({
   component: LogoutPage,
@@ -14,12 +15,7 @@ function LogoutPage() {
       } catch {
         /* ignore */
       }
-      try {
-        window.localStorage.clear();
-        window.sessionStorage.clear();
-      } catch {
-        /* ignore */
-      }
+      clearStaleClientState();
       window.location.replace("/onboarding");
     })();
   }, []);

@@ -7,6 +7,11 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubscription } from "@/hooks/use-subscription";
 import { useStripeCheckout } from "@/hooks/use-stripe-checkout";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  clearStaleClientState,
+  isAuthError,
+  resetToOnboarding,
+} from "@/lib/auth-reset";
 import { getRouteResolution } from "@/server/onboarding.functions";
 
 export const Route = createFileRoute("/paywall")({
@@ -31,7 +36,19 @@ export const Route = createFileRoute("/paywall")({
       }
     } catch (e) {
       if (isRedirect(e)) throw e;
-      // Resolver failure: render paywall as the safe fallback.
+      // Auth error (deleted user / bad JWT) → clean reset, never trap in paywall.
+      if (isAuthError(e)) {
+        try {
+          await supabase.auth.signOut();
+        } catch {
+          /* ignore */
+        }
+        clearStaleClientState();
+        throw redirect({ to: "/onboarding" });
+      }
+      // Transient error → don't silently render paywall. Send to onboarding
+      // (safe public entry); component effect will retry the resolver.
+      throw redirect({ to: "/onboarding" });
     }
   },
   head: () => ({
@@ -71,6 +88,7 @@ function PaywallPage() {
     (async () => {
       try {
         const { data } = await supabase.auth.getSession();
+        if (cancelled) return;
         if (!data.session) {
           navigate({ to: "/onboarding", replace: true });
           return;
@@ -85,8 +103,16 @@ function PaywallPage() {
         } else {
           navigate({ to: dest.to, replace: true });
         }
-      } catch {
-        if (!cancelled) setVerified(true); // safe fallback: render paywall
+      } catch (err) {
+        if (cancelled) return;
+        // Auth error → clean reset (never trap deleted/expired user here).
+        if (isAuthError(err)) {
+          await resetToOnboarding(navigate);
+          return;
+        }
+        // Transient error → bounce to onboarding splash rather than render
+        // paywall to a user we couldn't verify.
+        navigate({ to: "/onboarding", replace: true });
       }
     })();
     return () => {

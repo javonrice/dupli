@@ -1,8 +1,9 @@
-import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router";
+import { createFileRoute, Navigate, Outlet, useNavigate } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { TabBar } from "@/components/tab-bar";
+import { isAuthError, resetToOnboarding } from "@/lib/auth-reset";
 import {
   getRouteResolution,
   type RouteResolution,
@@ -14,13 +15,18 @@ export const Route = createFileRoute("/_app")({
 
 function AppLayout() {
   const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
   const [resolution, setResolution] = useState<RouteResolution | null>(null);
   const [resolving, setResolving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   // Hard-paywall gate: only paid (or superuser) sessions render /app.
   // Unpaid users with onboarding incomplete go to the quiz; unpaid onboarded
   // users go to /paywall. Onboarding state is read server-side — localStorage
   // is never authoritative for authenticated routing.
+  //
+  // Auth/resolver failures NEVER fall through to /paywall — that traps deleted
+  // or expired users. We sign out + clear stale state + send to /onboarding.
   useEffect(() => {
     if (authLoading || !user) return;
     let cancelled = false;
@@ -29,15 +35,17 @@ function AppLayout() {
       try {
         const res = await getRouteResolution();
         if (!cancelled) setResolution(res);
-      } catch {
-        // Fail-closed to paywall — never grant /app access on resolver error.
-        if (!cancelled)
-          setResolution({
-            destination: { to: "/paywall" },
-            hasActiveSub: false,
-            onboardingCompleted: true,
-            isSuperUser: false,
-          });
+      } catch (err) {
+        if (cancelled) return;
+        if (isAuthError(err)) {
+          setResetting(true);
+          await resetToOnboarding(navigate);
+          return;
+        }
+        // Transient/network error — surface as redirect to onboarding rather
+        // than render paywall. Onboarding splash is always a safe public
+        // landing point.
+        navigate({ to: "/onboarding", replace: true });
       } finally {
         if (!cancelled) setResolving(false);
       }
@@ -45,11 +53,11 @@ function AppLayout() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user]);
+  }, [authLoading, user, navigate]);
 
   if (authLoading) return <SplashSpinner />;
   if (!user) return <Navigate to="/onboarding" replace />;
-  if (resolving || !resolution) return <SplashSpinner />;
+  if (resetting || resolving || !resolution) return <SplashSpinner />;
 
   if (resolution.destination.to !== "/app") {
     const dest = resolution.destination;

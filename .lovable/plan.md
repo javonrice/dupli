@@ -1,58 +1,95 @@
-# Fix: Stuck loading loop after successful live payment
+## Goal
 
-## What's happening
-
-After a successful payment in **live**, the user gets bounced between `/app` and `/paywall`, each showing a spinner briefly — looks like an infinite loading loop.
+Eliminate the "deleted/stale-user paywall trap." A user must only land on `/paywall` when they have a valid session, completed onboarding, and no active subscription. Any auth/resolver failure should sign out, clear stale state, and route to `/onboarding` — never to `/paywall`.
 
 ## Root cause
 
-There are two sources of truth for "which Stripe environment am I in":
+Multiple guards currently treat resolver failures as "render paywall as safe fallback":
 
-- **Client** (`getClientStripeEnv`) reads `VITE_STRIPE_ENVIRONMENT` — Vite bakes this in at build time. In production it correctly resolves to `"live"`.
-- **Server** (`getServerStripeEnv`) reads `process.env.STRIPE_ENVIRONMENT` at runtime in the Cloudflare Worker.
+- `src/routes/_app.tsx` — catch block sets destination to `/paywall`
+- `src/routes/paywall.tsx` — `beforeLoad` and the in-component effect both fall through to rendering paywall on resolver error
+- `src/routes/checkout.success.tsx` — when resolver returns `/paywall`, falls back to `/app`, but never handles "auth invalid" (deleted user); polling loop just stalls
+- `src/routes/index.tsx` — on resolver failure redirects to `/paywall`
+- `src/routes/onboarding.index.tsx` — `welcome` step's `beforeLoad` sends any session-bearing visitor to `/` even if that session belongs to a deleted user (which then loops via index → paywall)
+- `src/lib/onboarding.ts` `isOnboarded()` is read on the public path, so leftover localStorage can still influence routing
 
-`STRIPE_ENVIRONMENT="live"` is currently only declared in `.env.production`. Vite does NOT inject non-`VITE_*` vars into the Worker bundle, and `wrangler.jsonc` only declares `PADDLE_ENVIRONMENT`. So in the live Worker, `process.env.STRIPE_ENVIRONMENT` is `undefined`.
+The server resolver (`requireSupabaseAuth`) throws a `Response(401)` for invalid/expired/deleted-user tokens. Today none of the callers distinguish "401 → auth dead" from "500 → transient" — both fall through to paywall.
 
-Per `getServerStripeEnv`, when missing it should throw in production — but `NODE_ENV` isn't reliably `"production"` in the Worker either, so it silently falls back to `"sandbox"`.
+## Plan
 
-### The loop
+### 1. New helper: `src/lib/auth-reset.ts`
 
-1. User completes live payment → webhook writes a `live` subscription row (webhook reads env from `?env=` query param, so this works correctly — confirmed: row exists for the affected user with `status=trialing, environment=live`).
-2. `/checkout/success` polls via the client (env=live) → finds the active sub → calls `getRouteResolution()` server-fn.
-3. Server resolver runs with effective env `"sandbox"` → queries `subscriptions WHERE environment='sandbox'` → finds nothing → returns `destination: "/paywall"`.
-4. Client navigates to `/paywall`. Paywall's `useSubscription` hook (client, env=live) sees `isActive=true` → `useEffect` redirects to `/app`.
-5. `/app` (`_app.tsx`) calls the same server resolver → again returns `/paywall` → back to step 4.
+Single source of truth for "this session is dead, restart cleanly."
 
-Each hop renders the splash spinner, producing the visible loop.
+```ts
+clearStaleClientState()    // remove dupli.onboarding.v1, dupli.onboarding.pending_email,
+                           // dupli.paywall.plan, dupli.checkout.*, dupli.paywall.reason,
+                           // dupli.scan.* keys. Leave unrelated keys alone.
 
-## Fix
+isAuthError(err): boolean  // true for fetch Response status 401/403, supabase
+                           // AuthApiError codes (user_not_found, invalid_jwt,
+                           // bad_jwt, session_not_found), and "Unauthorized"
+                           // text from our middleware.
 
-Add `STRIPE_ENVIRONMENT` to the Worker runtime so server and client agree on the environment.
-
-### Change: `wrangler.jsonc`
-
-Add `STRIPE_ENVIRONMENT` alongside `PADDLE_ENVIRONMENT`:
-
-```jsonc
-"vars": {
-  "PADDLE_ENVIRONMENT": "live",
-  "STRIPE_ENVIRONMENT": "live"
-}
+async resetToOnboarding(navigate?)  // signOut() best-effort → clearStaleClientState()
+                                    // → navigate/redirect to "/onboarding"
 ```
 
-This makes `process.env.STRIPE_ENVIRONMENT` resolve to `"live"` in the deployed Worker, so:
-- `getServerStripeEnv()` returns `"live"`
-- `getRouteResolution()` queries the `live` subscription row, finds it active, returns `destination: "/app"`
-- The loop stops immediately on the next deploy
+### 2. Update each route guard to use the helper
 
-### Verification after deploy
+**`src/routes/_app.tsx`**
+- Wrap `getRouteResolution()` in try/catch.
+- On `isAuthError` → `await resetToOnboarding(navigate)` then return `<Navigate to="/onboarding" />`.
+- On non-auth error → keep showing splash with a small retry; do NOT default to `/paywall`.
 
-1. Sign in as the affected user (`844e8682-…`) on `trydupli.com` → should land on `/app` directly, no loop.
-2. New live checkout → `/checkout/success` → `/app` cleanly.
-3. Sandbox checkout in preview unaffected (preview uses dev env vars where `STRIPE_ENVIRONMENT="sandbox"`).
+**`src/routes/paywall.tsx`**
+- `beforeLoad`: if no session → redirect `/onboarding` (already does). If `getRouteResolution` throws and `isAuthError` → call cleanup synchronously (signOut + clear) then `throw redirect({ to: "/onboarding" })`. Remove "render paywall as safe fallback" comment + behavior. On non-auth error, still throw the error so the route's errorComponent can show retry instead of silently rendering paywall.
+- In-component `useEffect`: same — on auth error, `resetToOnboarding`; on transient error, set an error state with retry button instead of `setVerified(true)`.
 
-## Notes
+**`src/routes/checkout.success.tsx`**
+- In `checkOnce`: if `supabase.auth.getSession()` returns no session → `resetToOnboarding`.
+- Wrap the subscriptions query and resolver calls; if 401/auth error → `resetToOnboarding`.
+- Keep current "stalled → Retry/support" UI for the no-subscription-yet case (already correct, no auto-bounce to paywall).
 
-- The webhook itself is fine — it reads env from the URL `?env=` param, which is why the live sub row was correctly tagged.
-- No DB changes, no code changes beyond the one wrangler var.
-- The orphaned `_app` ↔ `/paywall` ping-pong is also worth a small follow-up guard (e.g. trust client `isActive` as a tiebreaker), but the env fix removes the actual cause.
+**`src/routes/index.tsx`**
+- Replace the `catch { navigate("/paywall") }` fallback with `isAuthError ? resetToOnboarding : navigate("/onboarding")`. Never default to paywall.
+
+**`src/routes/onboarding.index.tsx`**
+- `beforeLoad` welcome path: when `data.session` exists, call `getRouteResolution()` first. If it throws auth error → `resetToOnboarding` (no redirect to `/`). Only if resolver succeeds do we redirect to `/`.
+- Welcome step (anonymous) must always render the splash regardless of `isOnboarded()` localStorage. Confirmed already (no `isOnboarded()` read here) — just make sure the `beforeLoad` doesn't trust a dead session.
+
+**`src/hooks/use-auth.ts`**
+- In `onAuthStateChange`, if event is `SIGNED_OUT` or session becomes null, optionally call `clearStaleClientState()` (keeps localStorage from re-poisoning a fresh anon visit). Do NOT await Supabase calls inside the callback.
+
+**`src/routes/logout.tsx`**
+- Replace ad-hoc `localStorage.clear()` with `clearStaleClientState()` so we don't nuke unrelated keys, then `signOut` + redirect (existing behavior).
+
+### 3. Server-side: surface auth errors clearly
+
+`src/integrations/supabase/auth-middleware.ts` already throws `Response(401, "Unauthorized: …")`. Confirm callers can detect this via `err instanceof Response && err.status === 401` — that's what `isAuthError` will check first. No server changes needed beyond confirming the contract.
+
+### 4. Acceptance test mapping
+
+| Test | Covered by |
+|---|---|
+| A. Deleted user visits `/app` | `_app.tsx` catch → `resetToOnboarding` |
+| B. Deleted user visits `/paywall` | `paywall.tsx` `beforeLoad` + effect |
+| C. Deleted user visits `/checkout/success` | `checkout.success.tsx` `checkOnce` auth-error branch |
+| D. Anon w/ stale localStorage on `/onboarding` | welcome step renders unconditionally; `beforeLoad` no longer trusts dead session |
+| E/F/G. Normal valid users | Unchanged resolver outcomes |
+
+### Out of scope (per request)
+
+- No pricing, checkout, UI redesign, or auth-provider changes.
+- No new visible "close paywall" button.
+
+## Files touched
+
+- `src/lib/auth-reset.ts` *(new)*
+- `src/routes/_app.tsx`
+- `src/routes/paywall.tsx`
+- `src/routes/checkout.success.tsx`
+- `src/routes/index.tsx`
+- `src/routes/onboarding.index.tsx`
+- `src/routes/logout.tsx`
+- `src/hooks/use-auth.ts` *(small)*

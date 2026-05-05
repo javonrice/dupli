@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { getClientStripeEnv } from "@/lib/stripe-env";
 import { isSubscriptionActive } from "@/lib/access";
 import { markOnboardingComplete } from "@/lib/onboarding";
+import { isAuthError, resetToOnboarding } from "@/lib/auth-reset";
 import { completeOnboarding, getRouteResolution } from "@/server/onboarding.functions";
 
 export const Route = createFileRoute("/checkout/success")({
@@ -49,33 +50,53 @@ function CheckoutSuccessPage() {
         } else {
           navigate({ to: dest.to, replace: true });
         }
-      } catch {
+      } catch (err) {
+        if (isAuthError(err)) {
+          await resetToOnboarding(navigate);
+          return;
+        }
         navigate({ to: "/app", replace: true });
       }
       void userId;
     };
 
     const checkOnce = async (): Promise<boolean> => {
-      const { data: session } = await supabase.auth.getSession();
-      const userId = session.session?.user.id;
-      if (!userId) {
-        navigate({ to: "/onboarding" });
-        return true;
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        const userId = session.session?.user.id;
+        if (!userId) {
+          // No session at all (signed out / never signed in) → onboarding,
+          // not paywall. Don't trap.
+          await resetToOnboarding(navigate);
+          return true;
+        }
+        const { data: sub, error: subErr } = await (supabase as any)
+          .from("subscriptions")
+          .select("status,current_period_end")
+          .eq("user_id", userId)
+          .eq("environment", env)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (cancelledRef.current) return true;
+        if (subErr && isAuthError(subErr)) {
+          await resetToOnboarding(navigate);
+          return true;
+        }
+        if (isSubscriptionActive(sub)) {
+          await finalize(userId);
+          return true;
+        }
+        return false;
+      } catch (err) {
+        if (cancelledRef.current) return true;
+        if (isAuthError(err)) {
+          await resetToOnboarding(navigate);
+          return true;
+        }
+        // Transient — let the polling loop retry until timeout.
+        return false;
       }
-      const { data: sub } = await (supabase as any)
-        .from("subscriptions")
-        .select("status,current_period_end")
-        .eq("user_id", userId)
-        .eq("environment", env)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (cancelledRef.current) return true;
-      if (isSubscriptionActive(sub)) {
-        await finalize(userId);
-        return true;
-      }
-      return false;
     };
 
     const tick = async () => {

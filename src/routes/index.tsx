@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboarded } from "@/lib/onboarding";
+import { isAuthError, resetToOnboarding } from "@/lib/auth-reset";
 import { getRouteResolution } from "@/server/onboarding.functions";
 
 /**
@@ -96,9 +97,16 @@ function IndexSplash() {
           } else {
             navigate({ to: dest.to, replace: true });
           }
-        } catch {
-          // Resolver failure: fall through to safe default.
-          if (!cancelled) navigate({ to: "/paywall", replace: true });
+        } catch (err) {
+          if (cancelled) return;
+          // Auth/invalid session/deleted user → clean reset, never paywall.
+          if (isAuthError(err)) {
+            await resetToOnboarding(navigate);
+            return;
+          }
+          // Transient error → send to onboarding (safe public entry), never
+          // trap the user behind paywall.
+          navigate({ to: "/onboarding", replace: true });
         }
         return;
       }
