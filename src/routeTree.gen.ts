@@ -14,6 +14,7 @@ import { Route as SigninRouteImport } from './routes/signin'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PaywallRouteImport } from './routes/paywall'
+import { Route as LogoutRouteImport } from './routes/logout'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as AppRouteImport } from './routes/_app'
@@ -59,6 +60,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const PaywallRoute = PaywallRouteImport.update({
   id: '/paywall',
   path: '/paywall',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LogoutRoute = LogoutRouteImport.update({
+  id: '/logout',
+  path: '/logout',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -175,6 +181,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -202,6 +209,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -230,6 +238,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
+  '/logout': typeof LogoutRoute
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -259,6 +268,7 @@ export interface FileRouteTypes {
     | '/'
     | '/landing'
     | '/login'
+    | '/logout'
     | '/paywall'
     | '/privacy'
     | '/reset-password'
@@ -286,6 +296,7 @@ export interface FileRouteTypes {
     | '/'
     | '/landing'
     | '/login'
+    | '/logout'
     | '/paywall'
     | '/privacy'
     | '/reset-password'
@@ -313,6 +324,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/landing'
     | '/login'
+    | '/logout'
     | '/paywall'
     | '/privacy'
     | '/reset-password'
@@ -342,6 +354,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
+  LogoutRoute: typeof LogoutRoute
   PaywallRoute: typeof PaywallRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
@@ -392,6 +405,13 @@ declare module '@tanstack/react-router' {
       path: '/paywall'
       fullPath: '/paywall'
       preLoaderRoute: typeof PaywallRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/logout': {
+      id: '/logout'
+      path: '/logout'
+      fullPath: '/logout'
+      preLoaderRoute: typeof LogoutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -585,6 +605,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
+  LogoutRoute: LogoutRoute,
   PaywallRoute: PaywallRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
