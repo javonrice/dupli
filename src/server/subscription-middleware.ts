@@ -16,7 +16,7 @@ function getServerPaddleEnv(): "sandbox" | "live" {
   try {
     const req = getRequest();
     const host = req?.headers.get("host") ?? "";
-    if (/-dev\.lovable\.app|lovableproject\.com|localhost|127\.0\.0\.1/i.test(host)) {
+    if (/-dev\.lovable\.app|id-preview--.*\.lovable\.app|lovableproject\.com|localhost|127\.0\.0\.1/i.test(host)) {
       return "sandbox";
     }
     return "live";
