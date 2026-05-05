@@ -102,12 +102,24 @@ export function isAuthError(err: unknown): boolean {
 export async function resetToOnboarding(
   navigate?: (opts: { to: "/onboarding"; replace?: boolean }) => void,
 ) {
+  // Anonymous no-op guard: if there is no session at all, skip signOut +
+  // clearStaleClientState side-effects (which can wipe in-progress onboarding
+  // state for a clean visitor) and just route to the splash.
+  let hasSession = false;
   try {
-    await supabase.auth.signOut();
+    const { data } = await supabase.auth.getSession();
+    hasSession = !!data.session;
   } catch {
-    /* ignore — we want the redirect either way */
+    /* assume no session */
   }
-  clearStaleClientState();
+  if (hasSession) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      /* ignore — we want the redirect either way */
+    }
+    clearStaleClientState();
+  }
   if (navigate) {
     navigate({ to: "/onboarding", replace: true });
     return;
