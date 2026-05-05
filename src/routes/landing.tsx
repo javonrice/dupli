@@ -30,7 +30,7 @@ function LandingPage() {
           <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
           <Link to="/terms" className="hover:text-foreground">Terms</Link>
           <Link
-            to="/login"
+            to="/onboarding/email"
             className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
           >
             Sign in
@@ -54,7 +54,7 @@ function LandingPage() {
 
         <div className="mt-8 flex items-center justify-center gap-3">
           <Link
-            to="/login"
+            to="/onboarding/email"
             className="rounded-full bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
           >
             Get started

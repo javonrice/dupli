@@ -118,7 +118,7 @@ export function useScanFlow() {
         if (status === 401) {
           setStage("idle");
           setPreview(null);
-          navigate({ to: "/login" });
+          navigate({ to: "/onboarding/email" });
           return;
         }
         console.error("Scan failed", e);
