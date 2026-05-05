@@ -188,10 +188,10 @@ function OnboardingPage() {
         step={1}
         total={TOTAL}
         hideProgress
-        primary={{ label: "Get Started", onClick: goNext("gender") }}
+        primary={{ label: "Get Started", onClick: () => navigate({ to: "/onboarding/email" }) }}
         textLink={{
           label: "I already have an account · Sign in",
-          onClick: () => navigate({ to: "/signin" }),
+          onClick: () => navigate({ to: "/onboarding/email" }),
         }}
       >
         <div className="relative -mx-6 -mt-2 flex h-full flex-col">
