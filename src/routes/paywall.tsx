@@ -178,6 +178,16 @@ function PaywallPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-6 pb-4">
+        {quotaReason && (
+          <div className="mb-4 rounded-[14px] border border-border bg-secondary px-4 py-3 text-center">
+            <p className="text-[13px] font-semibold text-foreground">
+              You've used your 3 free scans for today.
+            </p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">
+              They reset in {formatResetCountdown(quotaReason.resetAt)}. Go Premium for unlimited scans.
+            </p>
+          </div>
+        )}
         <p className="text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           7-day free trial
         </p>
@@ -254,6 +264,15 @@ function PaywallPage() {
         >
           {introLoading ? "Opening checkout…" : "Or try for $0.99 your first month"}
         </button>
+        {user && (
+          <button
+            type="button"
+            onClick={handleClose}
+            className="tap w-full pt-1 text-center text-[12px] font-semibold text-muted-foreground underline-offset-4 hover:underline"
+          >
+            Maybe later — keep browsing
+          </button>
+        )}
       </div>
     </div>
   );
