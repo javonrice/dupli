@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, isRedirect, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
@@ -9,8 +9,42 @@ import { checkEmailExists } from "@/server/onboarding.functions";
 export const Route = createFileRoute("/onboarding/email")({
   component: EmailStep,
   beforeLoad: async () => {
+    if (typeof window === "undefined") return;
     const { data } = await supabase.auth.getSession();
-    if (data.session) throw redirect({ to: "/" });
+    if (import.meta.env.DEV) {
+      console.debug("[onboarding-flow] /onboarding/email beforeLoad session=", data.session ? "yes" : "no");
+    }
+    // Anonymous: render the email screen. This is the common path from
+    // the welcome splash — never bounce back to /onboarding.
+    if (!data.session) return;
+
+    // Sessioned: route by canonical destination. Never blanket-redirect to "/".
+    try {
+      const { getRouteResolution } = await import("@/server/onboarding.functions");
+      const res = await getRouteResolution();
+      const dest = res.destination;
+      if (import.meta.env.DEV) {
+        console.debug("[onboarding-flow] /onboarding/email resolver dest=", dest.to);
+      }
+      if (dest.to === "/app" || dest.to === "/paywall") {
+        throw redirect({ to: dest.to });
+      }
+      if (dest.to === "/onboarding" && dest.search?.start === "quiz") {
+        throw redirect({ to: "/onboarding", search: { start: "quiz" } });
+      }
+      // dest is /onboarding (welcome) — render the email screen anyway.
+      return;
+    } catch (e) {
+      if (isRedirect(e)) throw e;
+      const { isAuthError, clearStaleClientState } = await import("@/lib/auth-reset");
+      if (isAuthError(e)) {
+        try { await supabase.auth.signOut(); } catch { /* ignore */ }
+        clearStaleClientState();
+        return;
+      }
+      // Transient — render the email screen rather than trap.
+      return;
+    }
   },
   head: () => ({
     meta: [
