@@ -68,17 +68,7 @@ export function useSubscription() {
     };
   }, [user, authLoading]);
 
-  const isActive = (() => {
-    if (isSuperUser(user?.id)) return true;
-    if (!subscription) return false;
-    const end = subscription.current_period_end
-      ? new Date(subscription.current_period_end).getTime()
-      : null;
-    const future = end === null || end > Date.now();
-    if (["active", "trialing", "past_due"].includes(subscription.status) && future) return true;
-    if (subscription.status === "canceled" && end !== null && end > Date.now()) return true;
-    return false;
-  })();
+  const isActive = isSuperUser(user?.id) || isSubscriptionActive(subscription);
 
   return { subscription, isActive, loading };
 }
