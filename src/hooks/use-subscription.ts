@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getPaddleEnvironment } from "@/lib/paddle";
 import { useAuth } from "@/hooks/use-auth";
+import { isSuperUser } from "@/lib/superusers";
 
 export type Subscription = {
   id: string;
