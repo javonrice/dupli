@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,10 +8,6 @@ import { completeOnboarding } from "@/server/onboarding.functions";
 
 export const Route = createFileRoute("/checkout/success")({
   component: CheckoutSuccessPage,
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/onboarding/email" });
-  },
   head: () => ({
     meta: [{ title: "Finalizing — Dupli" }],
   }),
