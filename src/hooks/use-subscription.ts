@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { getPaddleEnvironment } from "@/lib/paddle";
 import { useAuth } from "@/hooks/use-auth";
+import { isSuperUser } from "@/lib/superusers";
 
 export type Subscription = {
   id: string;
@@ -67,6 +68,7 @@ export function useSubscription() {
   }, [user, authLoading]);
 
   const isActive = (() => {
+    if (isSuperUser(user?.id)) return true;
     if (!subscription) return false;
     const end = subscription.current_period_end
       ? new Date(subscription.current_period_end).getTime()

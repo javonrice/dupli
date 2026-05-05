@@ -8,6 +8,7 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { isSuperUser } from "@/lib/superusers";
 
 const FREE_DAILY_LIMIT = 3;
 
@@ -38,6 +39,9 @@ export const requireScanEntitlement = createMiddleware({ type: "function" })
   .server(async ({ next, context }) => {
     const userId = (context as { userId: string }).userId;
     const env = getServerPaddleEnv();
+
+    // 0. Hardcoded super users always pass.
+    if (isSuperUser(userId)) return next({ context });
 
     // 1. Active subscription always passes.
     const { data: sub } = await supabaseAdmin
