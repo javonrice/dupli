@@ -260,6 +260,8 @@ export type Database = {
           display_name: string | null
           email: string | null
           id: string
+          onboarding_answers: Json
+          onboarding_completed: boolean
           updated_at: string
           user_id: string
         }
@@ -269,6 +271,8 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          onboarding_answers?: Json
+          onboarding_completed?: boolean
           updated_at?: string
           user_id: string
         }
@@ -278,6 +282,8 @@ export type Database = {
           display_name?: string | null
           email?: string | null
           id?: string
+          onboarding_answers?: Json
+          onboarding_completed?: boolean
           updated_at?: string
           user_id?: string
         }
@@ -360,11 +366,66 @@ export type Database = {
         }
         Relationships: []
       }
+      subscriptions: {
+        Row: {
+          cancel_at_period_end: boolean | null
+          created_at: string
+          current_period_end: string | null
+          current_period_start: string | null
+          customer_email: string | null
+          environment: string
+          id: string
+          price_id: string
+          product_id: string
+          status: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          customer_email?: string | null
+          environment?: string
+          id?: string
+          price_id: string
+          product_id: string
+          status?: string
+          stripe_customer_id: string
+          stripe_subscription_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          cancel_at_period_end?: boolean | null
+          created_at?: string
+          current_period_end?: string | null
+          current_period_start?: string | null
+          customer_email?: string | null
+          environment?: string
+          id?: string
+          price_id?: string
+          product_id?: string
+          status?: string
+          stripe_customer_id?: string
+          stripe_subscription_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      has_active_subscription: {
+        Args: { check_env?: string; user_uuid: string }
+        Returns: boolean
+      }
       set_ingestion_token_db_secret: {
         Args: { p_token: string }
         Returns: string
