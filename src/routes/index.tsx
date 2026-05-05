@@ -1,17 +1,13 @@
-import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
-import { Loader2 } from "lucide-react";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboarded } from "@/lib/onboarding";
-import { isAuthError, resetToOnboarding } from "@/lib/auth-reset";
-import { getRouteResolution } from "@/server/onboarding.functions";
 
 /**
  * Wait briefly for an in-flight OAuth redirect to finish hydrating the
  * session. Lovable's OAuth broker returns the user to `redirect_uri` (root)
  * with tokens in the URL hash; supabase-js processes that hash asynchronously
  * via `detectSessionInUrl`. Without this wait, `getSession()` runs before the
- * hash is parsed and we wrongly redirect to /onboarding/email.
+ * hash is parsed and we wrongly redirect to /login.
  */
 async function waitForOAuthSession(timeoutMs = 4000) {
   if (typeof window === "undefined") return null;
@@ -42,6 +38,7 @@ async function waitForOAuthSession(timeoutMs = 4000) {
       const { data } = await supabase.auth.getSession();
       resolve(data.session);
     }, timeoutMs);
+    // Race: maybe the session is already set by the time we subscribed.
     supabase.auth.getSession().then(({ data }) => {
       if (data.session && !settled) {
         settled = true;
@@ -53,82 +50,16 @@ async function waitForOAuthSession(timeoutMs = 4000) {
   });
 }
 
-const ALLOWED_NEXT = ["/app", "/paywall"];
-
 export const Route = createFileRoute("/")({
-  validateSearch: (s: Record<string, unknown>): { next?: string } => {
-    const next = typeof s.next === "string" ? s.next : undefined;
-    return next ? { next } : {};
+  beforeLoad: async () => {
+    // First-time visitors (no completed onboarding) always start in onboarding,
+    // regardless of whether they're signed in. Onboarding ends with either a
+    // sample result, a real first scan, or the paywall — and from there the
+    // user lands on /app or /login as appropriate.
+    if (typeof window !== "undefined" && !isOnboarded()) {
+      throw redirect({ to: "/onboarding" });
+    }
+    const session = await waitForOAuthSession();
+    throw redirect({ to: session ? "/app" : "/login" });
   },
-  // IMPORTANT: do not redirect on the server. Onboarding state lives in
-  // localStorage, which only exists on the client. Resolving the destination
-  // server-side would always send fresh visitors to /onboarding/email (no localStorage =
-  // looks "onboarded but signed out"), which is not native-app behavior.
-  // We render a tiny client-side splash and route from there.
-  component: IndexSplash,
 });
-
-function IndexSplash() {
-  const navigate = useNavigate();
-  const search = Route.useSearch();
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const next =
-        search.next && ALLOWED_NEXT.includes(search.next) ? search.next : null;
-
-      // 1. Signed-in users get routed by the canonical resolver
-      //    (server truth: subscription status + onboarding_completed).
-      //    `next=` is honored only when it matches the resolved destination.
-      const session = await waitForOAuthSession();
-      if (cancelled) return;
-      if (session) {
-        try {
-          const res = await getRouteResolution();
-          if (cancelled) return;
-          if (next && next === res.destination.to) {
-            navigate({ to: next, replace: true });
-            return;
-          }
-          const dest = res.destination;
-          if (dest.to === "/onboarding") {
-            navigate({ to: "/onboarding", search: dest.search, replace: true });
-          } else {
-            navigate({ to: dest.to, replace: true });
-          }
-        } catch (err) {
-          if (cancelled) return;
-          // Auth/invalid session/deleted user → clean reset, never paywall.
-          if (isAuthError(err)) {
-            await resetToOnboarding(navigate);
-            return;
-          }
-          // Transient error → send to onboarding (safe public entry), never
-          // trap the user behind paywall.
-          navigate({ to: "/onboarding", replace: true });
-        }
-        return;
-      }
-
-      // 2. Signed out + not onboarded → onboarding (unless an explicit
-      //    `next=` was passed, e.g. from an OAuth callback).
-      if (!isOnboarded() && !next) {
-        navigate({ to: "/onboarding", replace: true });
-        return;
-      }
-
-      // 3. Signed out → branded onboarding splash (single public entry point).
-      navigate({ to: "/onboarding", replace: true });
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [navigate, search.next]);
-
-  return (
-    <div className="flex h-screen-safe items-center justify-center bg-background">
-      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-    </div>
-  );
-}

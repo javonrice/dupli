@@ -1,173 +1,63 @@
-## Plan to clean up the full user flow
+## Goal
 
-I will fix the flow by making one canonical route decision system drive all entry points, then update the onboarding, paywall, and app gates to use it consistently. I will not change design, pricing, checkout UI, onboarding screens, filters, tracking, or database schema.
+Replace the native iOS/Android camera handoff with an in-app camera screen: dupli wordmark header, live viewfinder, animated corner brackets, custom shutter, and a close button. Captures feed into the existing `scanProduct` pipeline — no backend changes.
 
-### Target behavior
+## What changes for the user
+
+- Tapping the FAB → "Take Photo" no longer launches Apple's camera app. Instead, a full-screen in-app camera opens with our chrome on top of the live preview.
+- "Choose from Library" still uses the hidden file input (unchanged).
+- After tapping the shutter, the existing scanning state and results screen run exactly as today.
+
+## What we're NOT building (deliberate cuts)
+
+- No flash/torch button. Safari doesn't expose `MediaStreamTrack` torch constraints, and we want zero buttons that don't actually work.
+- No library button inside the camera (the FAB sheet already offers "Choose from Library" — no need to duplicate).
+- No live "Product detected" pill while aiming. Real-time Gemini calls per frame are too slow/expensive.
+- No pinch-zoom, tap-to-focus, front/back swap, or barcode fast-path in v1.
+
+## New files
+
+- `src/components/camera/live-camera.tsx` — full-screen camera component. Owns the `<video>`, the overlay chrome, and renders the dupli wordmark header.
+- `src/lib/use-camera-stream.ts` — hook that requests `getUserMedia({ video: { facingMode: 'environment' } })`, manages start/stop, and exposes `videoRef`, `error`, and `capture()` returning a JPEG dataURL via an offscreen canvas.
+
+## Files to modify
+
+- `src/lib/use-scan-flow.ts` — add `cameraOpen` state plus `openLiveCamera()` / `closeLiveCamera()`. `openCamera` (FAB action) now opens the live camera instead of clicking the hidden file input. The hidden camera `<input>` is removed; the library `<input>` stays for the FAB's "Choose from Library" path.
+- Wherever `useScanFlow` is rendered (Discovery Hub, etc.) — render `<LiveCamera />` when `cameraOpen` is true, wired to `handleFile(dataUrl)` on shutter and `closeLiveCamera()` on dismiss.
+
+## UI structure (matches the mockup, trimmed)
 
 ```text
-No valid session
-  → /onboarding
-  → Get Started → /onboarding/email
-
-Valid session + onboarding incomplete
-  → /onboarding?start=quiz
-
-Valid session + onboarding complete + no active subscription
-  → /paywall
-
-Valid session + active subscription
-  → /app
-
-Deleted / expired / broken session
-  → sign out + clear stale routing state + /onboarding
-
-Temporary resolver/network issue
-  → loading/retry state or safe public onboarding reset
-  → never /paywall as a fallback
-  → never /app unless entitlement is confirmed
+┌─────────────────────────────────┐
+│  ✕            dupli             │  top bar (safe-area padded)
+│                                 │
+│      ┌─┐                 ┌─┐    │  corner brackets (subtle pulse)
+│                                 │
+│         [ live <video> ]        │
+│                                 │
+│      └─┘                 └─┘    │
+│                                 │
+│              ( ⚪ )              │  shutter only
+└─────────────────────────────────┘
 ```
 
-## Changes I will make
+- Uses existing tokens (`bg-background`, `text-foreground`, `tap`, safe-area padding).
+- Corner brackets: 4 absolutely-positioned divs with 2px borders, ~10% inset.
+- Shutter: 72px white ring with inner fill, centered above the safe-area inset.
+- Header uses the `dupli` wordmark exactly as the rest of the app renders it.
 
-### 1. Centralize routing helpers
+## Capture flow
 
-Create a small shared client-side routing helper, likely under `src/lib/auth-routing.ts`, with these responsibilities:
+1. User taps shutter → draw current `<video>` frame to an offscreen `<canvas>` at native resolution.
+2. `canvas.toDataURL('image/jpeg', 0.9)` → pass into the existing scan path. Reuse `downscaleImage(dataUrl, 1024)` so payload size matches today.
+3. Stop the `MediaStream` tracks immediately to release the camera.
+4. `useScanFlow` transitions to `scanning` → `results` exactly as today.
 
-- Read the browser session only on the client.
-- Call `getRouteResolution()` only when a real session exists.
-- Translate the canonical destination into safe navigation options.
-- Treat auth failures as stale/deleted users: sign out, clear stale state, return `/onboarding`.
-- Treat transient failures separately from auth failures so they are not mistaken for unpaid users.
+## Permissions and edge cases
 
-This prevents every route from inventing its own slightly different fallback behavior.
+- First open prompts for camera permission. If denied or `getUserMedia` throws, show a centered fallback message with a single "Close" action. The user can still use "Choose from Library" from the FAB sheet.
+- iOS Safari: `<video>` will have `playsInline` and `muted` so it renders inline.
+- On unmount or close, stop all tracks (cleanup in the hook's `useEffect` return).
+- HTTPS only — preview and production are HTTPS, so this is fine.
 
-### 2. Fix `/onboarding` welcome + quiz guard
-
-Update `src/routes/onboarding.index.tsx` so:
-
-- Anonymous users always render the branded splash.
-- The Get Started button always navigates to `/onboarding/email`.
-- `/onboarding?start=quiz` is only for authenticated users whose server state says onboarding is incomplete.
-- A signed-in user on `/onboarding` is routed by canonical state:
-  - paid → `/app`
-  - onboarding complete unpaid → `/paywall`
-  - onboarding incomplete → `/onboarding?start=quiz`
-- Broken/stale sessions are signed out and returned to the splash.
-- Transient failures do not redirect to the paywall.
-
-Important fix: I will remove the current fragile behavior where the `start=quiz` guard checks only `res.onboardingCompleted` and redirects to `/`; it should route by `res.destination` instead.
-
-### 3. Fix `/onboarding/email` and `/onboarding/password`
-
-Update the email and password auth screens so:
-
-- Anonymous users can always see `/onboarding/email`.
-- Signed-in users are routed by canonical state, not blanket-redirected to `/`.
-- Stale/deleted sessions are cleared and allowed to render the public email screen.
-- Password signup/login still sends incomplete users into the quiz.
-- Finished unpaid users can still reach `/paywall` after login.
-- Paid returning users go to `/app` after login.
-
-### 4. Fix the “Your Dupli plan is ready” Continue button
-
-Update the final onboarding step in `src/routes/onboarding.index.tsx` so Continue:
-
-- Marks onboarding complete locally and server-side.
-- Then routes based on canonical state.
-- For a newly completed unpaid user, reliably navigates to `/paywall`.
-- If payment/subscription is already active, routes to `/app`.
-- If the session is stale/deleted, resets to `/onboarding`.
-- If there is a temporary server/network failure after saving, shows a retryable error instead of silently bouncing to the wrong place.
-
-This restores the paywall for valid unpaid completed users without using paywall as an error fallback.
-
-### 5. Fix `/paywall` so it is reachable only for the right users
-
-Update `src/routes/paywall.tsx` so:
-
-- Anonymous users go to `/onboarding`.
-- Incomplete onboarding users go to `/onboarding?start=quiz`.
-- Finished unpaid users can actually see the paywall.
-- Paid users go to `/app`.
-- Deleted/stale sessions are signed out and sent to `/onboarding`.
-- Transient failures show a loading/retry state instead of redirecting to `/onboarding` or incorrectly showing paywall.
-
-I will avoid a permanent spinner by adding a small retry/error path for resolver failures.
-
-### 6. Fix `/app` access gate
-
-Update `src/routes/_app.tsx` so:
-
-- Only paid users render app content.
-- Finished unpaid users go to `/paywall`.
-- Incomplete users go to `/onboarding?start=quiz`.
-- Broken/stale users reset to `/onboarding`.
-- Transient failures do not route to `/paywall`; they show retry/loading instead.
-
-### 7. Fix root `/` resolver behavior
-
-Update `src/routes/index.tsx` so returning users are routed using the same canonical helper:
-
-- No session → `/onboarding`
-- Incomplete → quiz
-- Complete unpaid → paywall
-- Paid → app
-- Broken/stale → reset onboarding
-- Temporary errors → retry/loading, not paywall/app
-
-This matters for OAuth redirects, returning users, and users opening the site root.
-
-### 8. Keep stale-state cleanup safe
-
-Review `src/lib/auth-reset.ts` and adjust only if needed so:
-
-- It clears stale auth/routing state for broken sessions.
-- It does not break a clean anonymous Get Started flow.
-- It does not wipe unrelated storage.
-- It does not leave stale paywall/onboarding state that can cause loops.
-
-### 9. Acceptance checks I will use
-
-I will verify the code paths for each required user type:
-
-1. New/logged-out user
-   - `/onboarding` renders splash
-   - Get Started → `/onboarding/email`
-   - no paywall
-
-2. Started onboarding but not finished
-   - root or onboarding entry resolves to `/onboarding?start=quiz`
-   - no paywall
-   - no app
-
-3. Finished onboarding but unpaid
-   - root resolves to `/paywall`
-   - direct `/paywall` renders
-   - cannot enter `/app`
-
-4. Paid user
-   - root/onboarding/paywall resolves to `/app`
-   - does not see onboarding or paywall
-
-5. Deleted/stale/broken user
-   - auth failures sign out and clear stale routing state
-   - ends at `/onboarding`
-   - not trapped at paywall
-   - not stuck loading
-
-6. Returning user on a new device
-   - after login, canonical resolver sends them to quiz/paywall/app based on server state
-
-7. Temporary connection issue
-   - no fallback to paywall
-   - no fallback into app
-   - user sees loading/retry or safe public reset depending on route
-
-## Out of scope
-
-- No design changes.
-- No pricing changes.
-- No checkout flow changes except preserving existing success behavior.
-- No database schema changes.
-- No changes to tracking event names or analytics intent.
-- No changes to onboarding screen content/layout.
+After approval I'll implement the hook, the `LiveCamera` component, and rewire `useScanFlow` + the FAB.

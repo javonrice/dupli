@@ -8,7 +8,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
 import { saveScan, setSaved } from "@/server/scans.functions";
 
-
 export type ScanStage = "idle" | "scanning" | "results";
 
 async function fileToDataUrl(file: File): Promise<string> {
@@ -79,47 +78,23 @@ export function useScanFlow() {
       setPreview(small);
       setStage("scanning");
 
-      try {
-        const { result, error: err } = await scan({ data: { imageDataUrl: small } });
-        if (err || !result) {
-          setError(err ?? "Couldn't analyze the photo.");
-          setStage("idle");
-          setPreview(null);
-          return;
-        }
-        setAnalysis(result);
-        setStage("results");
-
-        const p = persistScan({ data: { analysis: result, thumbnailDataUrl: small } });
-        persistPromiseRef.current = p;
-        p.then((r) => {
-          if (r.id) setScanId(r.id);
-        }).catch((e) => console.warn("Failed to persist scan", e));
-      } catch (e) {
-        // Server middleware throws Response objects on auth/subscription failures.
-        const status =
-          e && typeof e === "object" && "status" in e
-            ? (e as { status?: number }).status
-            : undefined;
-        if (status === 402) {
-          setStage("idle");
-          setPreview(null);
-          navigate({ to: "/paywall" });
-          return;
-        }
-        if (status === 401) {
-          setStage("idle");
-          setPreview(null);
-          navigate({ to: "/onboarding" });
-          return;
-        }
-        console.error("Scan failed", e);
-        setError("Something went wrong. Please try again.");
+      const { result, error: err } = await scan({ data: { imageDataUrl: small } });
+      if (err || !result) {
+        setError(err ?? "Couldn't analyze the photo.");
         setStage("idle");
         setPreview(null);
+        return;
       }
+      setAnalysis(result);
+      setStage("results");
+
+      const p = persistScan({ data: { analysis: result, thumbnailDataUrl: small } });
+      persistPromiseRef.current = p;
+      p.then((r) => {
+        if (r.id) setScanId(r.id);
+      }).catch((e) => console.warn("Failed to persist scan", e));
     },
-    [scan, persistScan, navigate],
+    [scan, persistScan],
   );
 
   const handleFile = useCallback(

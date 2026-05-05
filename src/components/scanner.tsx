@@ -164,20 +164,20 @@ export function ResultsScreen({
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="tap flex h-[50px] min-w-0 flex-1 items-center justify-center gap-2 rounded-[14px] bg-foreground px-3 text-[15px] font-semibold text-background"
+              className="tap flex h-[50px] flex-1 items-center justify-center gap-2 rounded-[14px] bg-foreground text-[15px] font-semibold text-background"
             >
-              <ShoppingBag className="h-[18px] w-[18px] shrink-0" strokeWidth={2} />
+              <ShoppingBag className="h-[18px] w-[18px]" strokeWidth={2} />
               {verifiedVendor ? (
-                <span className="flex min-w-0 items-center gap-1.5 truncate">
-                  <span className="truncate">Buy at {link.label}</span>
+                <span className="flex items-center gap-1.5">
+                  Buy at {link.label}
                   {linkPrice != null && (
-                    <span className="shrink-0 tabular-nums opacity-80">· ${linkPrice.toFixed(2)}</span>
+                    <span className="tabular-nums opacity-80">· ${linkPrice.toFixed(2)}</span>
                   )}
                 </span>
               ) : (
-                <span className="truncate">Shop at {link.label}</span>
+                <>Shop at {link.label}</>
               )}
-              <ExternalLink className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
+              <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
             </a>
           ) : (
             <button

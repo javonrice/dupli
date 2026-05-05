@@ -1,7 +1,5 @@
-import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import { markOnboardingComplete } from "@/lib/onboarding";
 import { useServerFn } from "@tanstack/react-start";
 import { Loader2 } from "lucide-react";
 import { IOSScreen } from "@/components/ios-screen";
@@ -28,10 +26,6 @@ import wordmark from "@/assets/dupli-wordmark.png";
 
 export const Route = createFileRoute("/_app/app")({
   component: Index,
-  validateSearch: (s: Record<string, unknown>): { checkout?: string } => {
-    const checkout = typeof s.checkout === "string" ? s.checkout : undefined;
-    return checkout ? { checkout } : {};
-  },
   head: () => ({
     meta: [
       { title: "Dupli — Snap a product, find the dupe" },
@@ -46,23 +40,6 @@ export const Route = createFileRoute("/_app/app")({
 
 function Index() {
   const flow = useScanFlow();
-  const search = useSearch({ from: "/_app/app" });
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    if (search.checkout !== "success") return;
-    markOnboardingComplete();
-    const FLAG = "dupli.checkout.toast_shown";
-    try {
-      if (!window.sessionStorage.getItem(FLAG)) {
-        toast.success("Welcome to Dupli Pro 🎉");
-        window.sessionStorage.setItem(FLAG, "1");
-      }
-    } catch {
-      toast.success("Welcome to Dupli Pro 🎉");
-    }
-    navigate({ to: "/app", search: {}, replace: true });
-  }, [search.checkout, navigate]);
 
   // While scanning or showing results, take over the screen exactly like before.
   if (flow.stage === "scanning") {

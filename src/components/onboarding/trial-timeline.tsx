@@ -1,7 +1,7 @@
 import { Bell, Sparkles, Wallet } from "lucide-react";
 
 export function TrialTimeline({
-  price = "$49.99",
+  price = "$39.99",
   cadence = "year",
 }: {
   price?: string;
@@ -15,12 +15,12 @@ export function TrialTimeline({
     },
     {
       icon: <Bell className="h-3.5 w-3.5" />,
-      title: "Day 3",
+      title: "Day 5",
       body: "Reminder before your trial ends — cancel anytime.",
     },
     {
       icon: <Wallet className="h-3.5 w-3.5" />,
-      title: "Day 5",
+      title: "Day 7",
       body: `Trial ends. ${price}/${cadence} unless you cancel.`,
     },
   ];

@@ -25,43 +25,40 @@ export function OnboardingShell({
   children: ReactNode;
 }) {
   const pct = Math.max(0, Math.min(100, (step / total) * 100));
-  const showTopBar = !hideProgress || !!onBack;
   return (
     <div className="flex h-screen-safe flex-col bg-background no-bounce">
       <div className="pt-safe" />
-      {showTopBar && (
-        <div className="px-4 pt-2 pb-3">
-          <div className="flex h-9 items-center gap-3">
-            {onBack ? (
-              <button
-                type="button"
-                onClick={onBack}
-                className="tap -ml-2 flex h-9 w-9 items-center justify-center rounded-full text-foreground"
-                aria-label="Back"
-              >
-                <ChevronLeft className="h-6 w-6" strokeWidth={2.25} />
-              </button>
-            ) : (
-              <div className="h-9 w-9" aria-hidden />
-            )}
-            <div className={`relative h-1.5 flex-1 overflow-hidden rounded-full bg-secondary transition-opacity ${hideProgress ? "opacity-0" : "opacity-100"}`}>
-              <div
-                className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-[width] duration-500 ease-out"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-            <div className="w-9" aria-hidden />
+      <div className="px-4 pt-2 pb-3">
+        <div className="flex h-9 items-center gap-3">
+          {onBack ? (
+            <button
+              type="button"
+              onClick={onBack}
+              className="tap -ml-2 flex h-9 w-9 items-center justify-center rounded-full text-foreground"
+              aria-label="Back"
+            >
+              <ChevronLeft className="h-6 w-6" strokeWidth={2.25} />
+            </button>
+          ) : (
+            <div className="h-9 w-9" aria-hidden />
+          )}
+          <div className={`relative h-1.5 flex-1 overflow-hidden rounded-full bg-secondary transition-opacity ${hideProgress ? "opacity-0" : "opacity-100"}`}>
+            <div
+              className="absolute inset-y-0 left-0 rounded-full bg-foreground transition-[width] duration-500 ease-out"
+              style={{ width: `${pct}%` }}
+            />
           </div>
+          <div className="w-9" aria-hidden />
         </div>
-      )}
+      </div>
 
-      <div className={`flex-1 overflow-y-auto overscroll-contain px-6 pb-6 ${showTopBar ? "pt-2" : "pt-0"}`}>
+      <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-6 pt-2">
         {children}
       </div>
 
       {(primary || secondary || tertiary || textLink) && (
-        <div className="pb-safe sticky bottom-0 bg-gradient-to-t from-background via-background/95 to-background/0 px-6 pt-3">
-          <div className="space-y-2 pb-2">
+        <div className="pb-safe sticky bottom-0 bg-gradient-to-t from-background via-background to-background/0 px-6 pt-3">
+          <div className="space-y-2 pb-3">
             {primary && (
               <button
                 type="button"

@@ -9,9 +9,7 @@ import {
 } from "@/components/ui/sheet";
 
 /** Floating Action Button — primary entry point to the camera flow.
- *  Sits above the bottom tab bar so it's always thumb-reachable.
- *  Access is gated by the /_app paywall + scan entitlement middleware;
- *  this component assumes the user is already a paid subscriber. */
+ *  Sits above the bottom tab bar so it's always thumb-reachable. */
 export function ScanFab({
   onCamera,
   onLibrary,
@@ -23,6 +21,7 @@ export function ScanFab({
 
   const handleCamera = () => {
     setOpen(false);
+    // Defer to next tick so the sheet closes before the file picker opens.
     setTimeout(onCamera, 50);
   };
   const handleLibrary = () => {
@@ -32,19 +31,15 @@ export function ScanFab({
 
   return (
     <>
-      <div
-        className="fixed right-4 z-40 flex flex-col items-end gap-1"
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label="Scan a product"
+        className="tap fixed right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lift"
         style={{ bottom: "calc(var(--tab-bar-h) + 12px)" }}
       >
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label="Scan a product"
-          className="tap flex h-14 w-14 items-center justify-center rounded-full bg-foreground text-background shadow-lift"
-        >
-          <Camera className="h-6 w-6" strokeWidth={2.25} />
-        </button>
-      </div>
+        <Camera className="h-6 w-6" strokeWidth={2.25} />
+      </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent

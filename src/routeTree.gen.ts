@@ -10,19 +10,13 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsRouteImport } from './routes/terms'
-import { Route as SigninRouteImport } from './routes/signin'
-import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PaywallRouteImport } from './routes/paywall'
-import { Route as LogoutRouteImport } from './routes/logout'
+import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as OnboardingIndexRouteImport } from './routes/onboarding.index'
-import { Route as OnboardingPasswordRouteImport } from './routes/onboarding.password'
-import { Route as OnboardingEmailRouteImport } from './routes/onboarding.email'
-import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
@@ -30,7 +24,6 @@ import { Route as AppAppRouteImport } from './routes/_app/app'
 import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
 import { Route as AppPProductIdRouteImport } from './routes/_app/p.$productId'
 import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
-import { Route as ApiPublicPaymentsWebhookRouteImport } from './routes/api/public/payments/webhook'
 import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
 import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
 import { Route as ApiPublicHooksEnqueueVendorBackfillRouteImport } from './routes/api/public/hooks/enqueue-vendor-backfill'
@@ -40,16 +33,6 @@ import { Route as AppCommunityBrandProductRouteImport } from './routes/_app/comm
 const TermsRoute = TermsRouteImport.update({
   id: '/terms',
   path: '/terms',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SigninRoute = SigninRouteImport.update({
-  id: '/signin',
-  path: '/signin',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ResetPasswordRoute = ResetPasswordRouteImport.update({
-  id: '/reset-password',
-  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PrivacyRoute = PrivacyRouteImport.update({
@@ -62,9 +45,9 @@ const PaywallRoute = PaywallRouteImport.update({
   path: '/paywall',
   getParentRoute: () => rootRouteImport,
 } as any)
-const LogoutRoute = LogoutRouteImport.update({
-  id: '/logout',
-  path: '/logout',
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -84,26 +67,6 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
-  id: '/onboarding/',
-  path: '/onboarding/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingPasswordRoute = OnboardingPasswordRouteImport.update({
-  id: '/onboarding/password',
-  path: '/onboarding/password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingEmailRoute = OnboardingEmailRouteImport.update({
-  id: '/onboarding/email',
-  path: '/onboarding/email',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
-  id: '/checkout/success',
-  path: '/checkout/success',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppSavedRoute = AppSavedRouteImport.update({
@@ -141,12 +104,6 @@ const AppScanIdIndexRoute = AppScanIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppScanIdRoute,
 } as any)
-const ApiPublicPaymentsWebhookRoute =
-  ApiPublicPaymentsWebhookRouteImport.update({
-    id: '/api/public/payments/webhook',
-    path: '/api/public/payments/webhook',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const ApiPublicHooksRunIngestionRoute =
   ApiPublicHooksRunIngestionRouteImport.update({
     id: '/api/public/hooks/run-ingestion',
@@ -181,20 +138,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
-  '/logout': typeof LogoutRoute
+  '/onboarding': typeof OnboardingRoute
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
-  '/checkout/success': typeof CheckoutSuccessRoute
-  '/onboarding/email': typeof OnboardingEmailRoute
-  '/onboarding/password': typeof OnboardingPasswordRoute
-  '/onboarding/': typeof OnboardingIndexRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -202,34 +153,26 @@ export interface FileRoutesByFullPath {
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
-  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
-  '/logout': typeof LogoutRoute
+  '/onboarding': typeof OnboardingRoute
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
-  '/checkout/success': typeof CheckoutSuccessRoute
-  '/onboarding/email': typeof OnboardingEmailRoute
-  '/onboarding/password': typeof OnboardingPasswordRoute
-  '/onboarding': typeof OnboardingIndexRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
-  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/scan/$id': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesById {
@@ -238,20 +181,14 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
-  '/logout': typeof LogoutRoute
+  '/onboarding': typeof OnboardingRoute
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
-  '/reset-password': typeof ResetPasswordRoute
-  '/signin': typeof SigninRoute
   '/terms': typeof TermsRoute
   '/_app/app': typeof AppAppRoute
   '/_app/history': typeof AppHistoryRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
-  '/checkout/success': typeof CheckoutSuccessRoute
-  '/onboarding/email': typeof OnboardingEmailRoute
-  '/onboarding/password': typeof OnboardingPasswordRoute
-  '/onboarding/': typeof OnboardingIndexRoute
   '/_app/p/$productId': typeof AppPProductIdRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -259,7 +196,6 @@ export interface FileRoutesById {
   '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
   '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
   '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
-  '/api/public/payments/webhook': typeof ApiPublicPaymentsWebhookRoute
   '/_app/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -268,20 +204,14 @@ export interface FileRouteTypes {
     | '/'
     | '/landing'
     | '/login'
-    | '/logout'
+    | '/onboarding'
     | '/paywall'
     | '/privacy'
-    | '/reset-password'
-    | '/signin'
     | '/terms'
     | '/app'
     | '/history'
     | '/profile'
     | '/saved'
-    | '/checkout/success'
-    | '/onboarding/email'
-    | '/onboarding/password'
-    | '/onboarding/'
     | '/p/$productId'
     | '/scan/$id'
     | '/community/$brand/$product'
@@ -289,34 +219,26 @@ export interface FileRouteTypes {
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
-    | '/api/public/payments/webhook'
     | '/scan/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/landing'
     | '/login'
-    | '/logout'
+    | '/onboarding'
     | '/paywall'
     | '/privacy'
-    | '/reset-password'
-    | '/signin'
     | '/terms'
     | '/app'
     | '/history'
     | '/profile'
     | '/saved'
-    | '/checkout/success'
-    | '/onboarding/email'
-    | '/onboarding/password'
-    | '/onboarding'
     | '/p/$productId'
     | '/community/$brand/$product'
     | '/scan/$id/share'
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
-    | '/api/public/payments/webhook'
     | '/scan/$id'
   id:
     | '__root__'
@@ -324,20 +246,14 @@ export interface FileRouteTypes {
     | '/_app'
     | '/landing'
     | '/login'
-    | '/logout'
+    | '/onboarding'
     | '/paywall'
     | '/privacy'
-    | '/reset-password'
-    | '/signin'
     | '/terms'
     | '/_app/app'
     | '/_app/history'
     | '/_app/profile'
     | '/_app/saved'
-    | '/checkout/success'
-    | '/onboarding/email'
-    | '/onboarding/password'
-    | '/onboarding/'
     | '/_app/p/$productId'
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
@@ -345,7 +261,6 @@ export interface FileRouteTypes {
     | '/api/public/hooks/enqueue-vendor-backfill'
     | '/api/public/hooks/ingest-product'
     | '/api/public/hooks/run-ingestion'
-    | '/api/public/payments/webhook'
     | '/_app/scan/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -354,20 +269,13 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
-  LogoutRoute: typeof LogoutRoute
+  OnboardingRoute: typeof OnboardingRoute
   PaywallRoute: typeof PaywallRoute
   PrivacyRoute: typeof PrivacyRoute
-  ResetPasswordRoute: typeof ResetPasswordRoute
-  SigninRoute: typeof SigninRoute
   TermsRoute: typeof TermsRoute
-  CheckoutSuccessRoute: typeof CheckoutSuccessRoute
-  OnboardingEmailRoute: typeof OnboardingEmailRoute
-  OnboardingPasswordRoute: typeof OnboardingPasswordRoute
-  OnboardingIndexRoute: typeof OnboardingIndexRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
   ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
-  ApiPublicPaymentsWebhookRoute: typeof ApiPublicPaymentsWebhookRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -377,20 +285,6 @@ declare module '@tanstack/react-router' {
       path: '/terms'
       fullPath: '/terms'
       preLoaderRoute: typeof TermsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/signin': {
-      id: '/signin'
-      path: '/signin'
-      fullPath: '/signin'
-      preLoaderRoute: typeof SigninRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/reset-password': {
-      id: '/reset-password'
-      path: '/reset-password'
-      fullPath: '/reset-password'
-      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/privacy': {
@@ -407,11 +301,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PaywallRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/logout': {
-      id: '/logout'
-      path: '/logout'
-      fullPath: '/logout'
-      preLoaderRoute: typeof LogoutRouteImport
+    '/onboarding': {
+      id: '/onboarding'
+      path: '/onboarding'
+      fullPath: '/onboarding'
+      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -440,34 +334,6 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding/': {
-      id: '/onboarding/'
-      path: '/onboarding'
-      fullPath: '/onboarding/'
-      preLoaderRoute: typeof OnboardingIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding/password': {
-      id: '/onboarding/password'
-      path: '/onboarding/password'
-      fullPath: '/onboarding/password'
-      preLoaderRoute: typeof OnboardingPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding/email': {
-      id: '/onboarding/email'
-      path: '/onboarding/email'
-      fullPath: '/onboarding/email'
-      preLoaderRoute: typeof OnboardingEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/checkout/success': {
-      id: '/checkout/success'
-      path: '/checkout/success'
-      fullPath: '/checkout/success'
-      preLoaderRoute: typeof CheckoutSuccessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/saved': {
@@ -518,13 +384,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/scan/$id/'
       preLoaderRoute: typeof AppScanIdIndexRouteImport
       parentRoute: typeof AppScanIdRoute
-    }
-    '/api/public/payments/webhook': {
-      id: '/api/public/payments/webhook'
-      path: '/api/public/payments/webhook'
-      fullPath: '/api/public/payments/webhook'
-      preLoaderRoute: typeof ApiPublicPaymentsWebhookRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/run-ingestion': {
       id: '/api/public/hooks/run-ingestion'
@@ -605,21 +464,14 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
-  LogoutRoute: LogoutRoute,
+  OnboardingRoute: OnboardingRoute,
   PaywallRoute: PaywallRoute,
   PrivacyRoute: PrivacyRoute,
-  ResetPasswordRoute: ResetPasswordRoute,
-  SigninRoute: SigninRoute,
   TermsRoute: TermsRoute,
-  CheckoutSuccessRoute: CheckoutSuccessRoute,
-  OnboardingEmailRoute: OnboardingEmailRoute,
-  OnboardingPasswordRoute: OnboardingPasswordRoute,
-  OnboardingIndexRoute: OnboardingIndexRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:
     ApiPublicHooksEnqueueVendorBackfillRoute,
   ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
   ApiPublicHooksRunIngestionRoute: ApiPublicHooksRunIngestionRoute,
-  ApiPublicPaymentsWebhookRoute: ApiPublicPaymentsWebhookRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

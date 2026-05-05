@@ -4,7 +4,6 @@ import { z } from "zod";
 import { resolveProductLinks, type ProductLink } from "@/server/product-links.server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { slugify } from "@/server/skinsort-slugs";
-import { requireScanEntitlement } from "@/server/scan-entitlement-middleware";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
@@ -77,7 +76,6 @@ export type DupeAnalysis = {
 };
 
 export const scanProduct = createServerFn({ method: "POST" })
-  .middleware([requireScanEntitlement])
   .inputValidator((data) => InputSchema.parse(data))
   .handler(async ({ data }): Promise<{ result: DupeAnalysis | null; error: string | null }> => {
     const apiKey = process.env.LOVABLE_API_KEY;
@@ -99,7 +97,6 @@ export const scanProduct = createServerFn({ method: "POST" })
               role: "system",
               content: [
                 "You are a practical beauty dupe scanner. A shopper may scan a name-brand product, an affordable lookalike, or a normal product that simply needs a lower-cost alternative.",
-                "Step 0 (GATE): Confirm the image shows a real beauty OR personal-care product. IN SCOPE: skincare, makeup, haircare, fragrance, body care (lotion, body wash, body butter, scrubs, deodorant), hand/foot cream, oral care, nails, sun care, men's grooming, shaving, bath/shower products, baby personal care. OUT OF SCOPE: food, drinks (orange juice, soda, coffee, water bottles), electronics, clothing, household cleaners, pets, screenshots, empty hands, random objects. If out of scope, set isBeautyProduct: false, write a one-sentence rejectionReason naming what you see (e.g. 'That looks like orange juice, not a beauty or personal-care product'), set dupes: [], verdict: 'No dupe found', and stop. Otherwise set isBeautyProduct: true and continue.",
                 "Dupe culture is about TWO things, not just price:",
                 "(a) LOOKALIKE PACKAGING — the cheap product is intentionally designed to mimic a name brand (color palette, bottle shape, font, label layout). Treat visual mimicry as a first-class signal. If the photo shows an obvious lookalike (e.g. an XtraCare body balm copying Vaseline, a Dermasil tube copying Summer Fridays, an XtraCare cleanser saying 'Compare to Neutrogena'), the dupe IS that name brand even when the price gap is small.",
                 "(b) FORMULA — does the cheaper product actually deliver the same actives at usable percentages, or does it strip them out / swap in cheaper, riskier substitutes?",
@@ -158,14 +155,6 @@ export const scanProduct = createServerFn({ method: "POST" })
                 parameters: {
                   type: "object",
                   properties: {
-                    isBeautyProduct: {
-                      type: "boolean",
-                      description: "True if the image shows a beauty or personal-care product. False for food, drinks, electronics, clothing, etc.",
-                    },
-                    rejectionReason: {
-                      type: "string",
-                      description: "If isBeautyProduct is false, one short sentence explaining what you see and that it's out of scope. Empty string otherwise.",
-                    },
                     original: {
                       type: "object",
                       properties: {
@@ -365,28 +354,7 @@ export const scanProduct = createServerFn({ method: "POST" })
       if (!argsRaw) {
         return { result: null, error: "Couldn't read the product. Try a clearer, well-lit photo." };
       }
-      const rawArgs = JSON.parse(argsRaw) as Partial<DupeAnalysis> & {
-        isBeautyProduct?: boolean;
-        rejectionReason?: string;
-      };
-      if (rawArgs.isBeautyProduct === false) {
-        return {
-          result: null,
-          error:
-            (rawArgs.rejectionReason && rawArgs.rejectionReason.trim()) ||
-            "That doesn't look like a beauty or personal-care product. Try lotion, body wash, makeup, skincare, etc.",
-        };
-      }
-      const parsed = normalizeAnalysis(rawArgs);
-      // Belt-and-braces: reject if the detected category is clearly out of scope.
-      const cat = (parsed.original.category || "").toLowerCase();
-      const outOfScope = ["food", "beverage", "drink", "juice", "soda", "snack", "electronic", "appliance", "clothing", "apparel", "toy", "pet", "cleaner", "detergent"];
-      if (outOfScope.some((w) => cat.includes(w))) {
-        return {
-          result: null,
-          error: `That looks like ${parsed.original.category.toLowerCase()}, not a beauty or personal-care product.`,
-        };
-      }
+      const parsed = normalizeAnalysis(JSON.parse(argsRaw) as Partial<DupeAnalysis>);
 
       // Merge in SkinSort-mirrored community dupes for the scanned original.
       // Failure is silent — never blocks the scan.
