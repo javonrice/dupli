@@ -178,7 +178,7 @@ function OnboardingPage() {
         primary={{ label: "Get Started", onClick: () => navigate({ to: "/onboarding/email" }) }}
       >
         <div className="relative -mx-6 -mt-2 flex h-full flex-col">
-          <div className="relative h-[58vh] min-h-[360px] w-full overflow-hidden">
+          <div className="relative h-[52vh] min-h-[320px] w-full overflow-hidden">
             <img
               src={heroCameraScan}
               alt="Scanning a beauty product with Dupli"
@@ -192,7 +192,7 @@ function OnboardingPage() {
             </div>
           </div>
 
-          <div className="flex flex-1 flex-col items-center px-5 pt-2 text-center">
+          <div className="flex flex-1 flex-col items-center px-5 pt-3 text-center">
             <img
               src={dupliWordmark}
               alt="Dupli"
@@ -205,7 +205,7 @@ function OnboardingPage() {
             <p className="mt-2 max-w-[20rem] text-[14px] leading-relaxed text-muted-foreground">
               Point your camera at any beauty product to find a lower-cost match in seconds.
             </p>
-            <div className="mt-4 flex items-center gap-1">
+            <div className="mt-5 flex items-center gap-1">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Star key={i} className="h-4 w-4 fill-warning text-warning" strokeWidth={1.5} />
               ))}
