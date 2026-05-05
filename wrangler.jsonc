@@ -5,6 +5,7 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "@tanstack/react-start/server-entry",
   "vars": {
-    "PADDLE_ENVIRONMENT": "live"
+    "PADDLE_ENVIRONMENT": "live",
+    "STRIPE_ENVIRONMENT": "live"
   }
 }
