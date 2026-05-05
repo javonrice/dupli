@@ -12,9 +12,7 @@ import { isSuperUser } from "@/lib/superusers";
 
 const FREE_DAILY_LIMIT = 3;
 
-function getServerPaddleEnv(): "sandbox" | "live" {
-  const explicit = process.env.PADDLE_ENVIRONMENT;
-  if (explicit === "live" || explicit === "sandbox") return explicit;
+function getServerStripeEnv(): "sandbox" | "live" {
   return process.env.NODE_ENV === "production" ? "live" : "sandbox";
 }
 
@@ -38,7 +36,7 @@ export const requireScanEntitlement = createMiddleware({ type: "function" })
   .middleware([requireSupabaseAuth])
   .server(async ({ next, context }) => {
     const userId = (context as { userId: string }).userId;
-    const env = getServerPaddleEnv();
+    const env = getServerStripeEnv();
 
     // 0. Hardcoded super users always pass.
     if (isSuperUser(userId)) return next({ context });
