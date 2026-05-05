@@ -29,7 +29,7 @@ export function useSubscription() {
     }
 
     let cancelled = false;
-    const env = getStripeEnvironment();
+    const env = getClientStripeEnv();
 
     const load = async () => {
       const { data } = await (supabase as any)
