@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getStripeEnvironment } from "@/lib/stripe";
+import { getClientStripeEnv } from "@/lib/stripe-env";
 import { useAuth } from "@/hooks/use-auth";
 import { isSuperUser } from "@/lib/superusers";
+import { isSubscriptionActive } from "@/lib/access";
 
 export type Subscription = {
   id: string;
@@ -28,7 +29,7 @@ export function useSubscription() {
     }
 
     let cancelled = false;
-    const env = getStripeEnvironment();
+    const env = getClientStripeEnv();
 
     const load = async () => {
       const { data } = await (supabase as any)
@@ -67,17 +68,7 @@ export function useSubscription() {
     };
   }, [user, authLoading]);
 
-  const isActive = (() => {
-    if (isSuperUser(user?.id)) return true;
-    if (!subscription) return false;
-    const end = subscription.current_period_end
-      ? new Date(subscription.current_period_end).getTime()
-      : null;
-    const future = end === null || end > Date.now();
-    if (["active", "trialing", "past_due"].includes(subscription.status) && future) return true;
-    if (subscription.status === "canceled" && end !== null && end > Date.now()) return true;
-    return false;
-  })();
+  const isActive = isSuperUser(user?.id) || isSubscriptionActive(subscription);
 
   return { subscription, isActive, loading };
 }

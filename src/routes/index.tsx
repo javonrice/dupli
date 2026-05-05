@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { isOnboarded } from "@/lib/onboarding";
+import { getRouteResolution } from "@/server/onboarding.functions";
 
 /**
  * Wait briefly for an in-flight OAuth redirect to finish hydrating the
@@ -76,14 +77,29 @@ function IndexSplash() {
       const next =
         search.next && ALLOWED_NEXT.includes(search.next) ? search.next : null;
 
-      // 1. Signed-in users always go straight to the app, regardless of
-      //    whether the local onboarding flag is set on this device. Otherwise
-      //    a signed-in user on a fresh browser would be sent to /onboarding,
-      //    which redirects back to / → infinite spinner loop.
+      // 1. Signed-in users get routed by the canonical resolver
+      //    (server truth: subscription status + onboarding_completed).
+      //    `next=` is honored only when it matches the resolved destination.
       const session = await waitForOAuthSession();
       if (cancelled) return;
       if (session) {
-        navigate({ to: next ?? "/app", replace: true });
+        try {
+          const res = await getRouteResolution();
+          if (cancelled) return;
+          if (next && next === res.destination.to) {
+            navigate({ to: next, replace: true });
+            return;
+          }
+          const dest = res.destination;
+          if (dest.to === "/onboarding") {
+            navigate({ to: "/onboarding", search: dest.search, replace: true });
+          } else {
+            navigate({ to: dest.to, replace: true });
+          }
+        } catch {
+          // Resolver failure: fall through to safe default.
+          if (!cancelled) navigate({ to: "/paywall", replace: true });
+        }
         return;
       }
 

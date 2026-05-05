@@ -9,12 +9,10 @@ import { createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { isSuperUser } from "@/lib/superusers";
+import { getServerStripeEnv } from "@/lib/stripe-env.server";
+import { isSubscriptionActive } from "@/lib/access";
 
 const FREE_DAILY_LIMIT = 3;
-
-function getServerStripeEnv(): "sandbox" | "live" {
-  return process.env.NODE_ENV === "production" ? "live" : "sandbox";
-}
 
 function nextUtcMidnightISO(): string {
   const now = new Date();
@@ -51,18 +49,7 @@ export const requireScanEntitlement = createMiddleware({ type: "function" })
       .limit(1)
       .maybeSingle();
 
-    const now = Date.now();
-    const periodEnd = sub?.current_period_end
-      ? new Date(sub.current_period_end).getTime()
-      : null;
-    const status = sub?.status;
-    const isActive =
-      !!status &&
-      ((["active", "trialing", "past_due"].includes(status) &&
-        (periodEnd === null || periodEnd > now)) ||
-        (status === "canceled" && periodEnd !== null && periodEnd > now));
-
-    if (isActive) return next({ context });
+    if (isSubscriptionActive(sub)) return next({ context });
 
     // 2. Free tier: count successful scans in the current UTC day.
     const since = startOfUtcDayISO();
