@@ -12,10 +12,6 @@ import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
-  beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) throw redirect({ to: "/onboarding/email" });
-  },
   head: () => ({
     meta: [
       { title: "Go Premium — Dupli" },
