@@ -14,11 +14,11 @@ import { Route as SigninRouteImport } from './routes/signin'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as PaywallRouteImport } from './routes/paywall'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as LandingRouteImport } from './routes/landing'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as OnboardingIndexRouteImport } from './routes/onboarding.index'
 import { Route as OnboardingPasswordRouteImport } from './routes/onboarding.password'
 import { Route as OnboardingEmailRouteImport } from './routes/onboarding.email'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
@@ -61,11 +61,6 @@ const PaywallRoute = PaywallRouteImport.update({
   path: '/paywall',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
@@ -85,15 +80,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingIndexRoute = OnboardingIndexRouteImport.update({
+  id: '/onboarding/',
+  path: '/onboarding/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const OnboardingPasswordRoute = OnboardingPasswordRouteImport.update({
-  id: '/password',
-  path: '/password',
-  getParentRoute: () => OnboardingRoute,
+  id: '/onboarding/password',
+  path: '/onboarding/password',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingEmailRoute = OnboardingEmailRouteImport.update({
-  id: '/email',
-  path: '/email',
-  getParentRoute: () => OnboardingRoute,
+  id: '/onboarding/email',
+  path: '/onboarding/email',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
   id: '/checkout/success',
@@ -175,7 +175,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -188,6 +187,7 @@ export interface FileRoutesByFullPath {
   '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
+  '/onboarding/': typeof OnboardingIndexRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -202,7 +202,6 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -215,6 +214,7 @@ export interface FileRoutesByTo {
   '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
+  '/onboarding': typeof OnboardingIndexRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
@@ -230,7 +230,6 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/landing': typeof LandingRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRouteWithChildren
   '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/reset-password': typeof ResetPasswordRoute
@@ -243,6 +242,7 @@ export interface FileRoutesById {
   '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
+  '/onboarding/': typeof OnboardingIndexRoute
   '/_app/p/$productId': typeof AppPProductIdRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -259,7 +259,6 @@ export interface FileRouteTypes {
     | '/'
     | '/landing'
     | '/login'
-    | '/onboarding'
     | '/paywall'
     | '/privacy'
     | '/reset-password'
@@ -272,6 +271,7 @@ export interface FileRouteTypes {
     | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
+    | '/onboarding/'
     | '/p/$productId'
     | '/scan/$id'
     | '/community/$brand/$product'
@@ -286,7 +286,6 @@ export interface FileRouteTypes {
     | '/'
     | '/landing'
     | '/login'
-    | '/onboarding'
     | '/paywall'
     | '/privacy'
     | '/reset-password'
@@ -299,6 +298,7 @@ export interface FileRouteTypes {
     | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
+    | '/onboarding'
     | '/p/$productId'
     | '/community/$brand/$product'
     | '/scan/$id/share'
@@ -313,7 +313,6 @@ export interface FileRouteTypes {
     | '/_app'
     | '/landing'
     | '/login'
-    | '/onboarding'
     | '/paywall'
     | '/privacy'
     | '/reset-password'
@@ -326,6 +325,7 @@ export interface FileRouteTypes {
     | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
+    | '/onboarding/'
     | '/_app/p/$productId'
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
@@ -342,13 +342,15 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren
   LandingRoute: typeof LandingRoute
   LoginRoute: typeof LoginRoute
-  OnboardingRoute: typeof OnboardingRouteWithChildren
   PaywallRoute: typeof PaywallRoute
   PrivacyRoute: typeof PrivacyRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SigninRoute: typeof SigninRoute
   TermsRoute: typeof TermsRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
+  OnboardingEmailRoute: typeof OnboardingEmailRoute
+  OnboardingPasswordRoute: typeof OnboardingPasswordRoute
+  OnboardingIndexRoute: typeof OnboardingIndexRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
   ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
@@ -392,13 +394,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PaywallRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -427,19 +422,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/onboarding/': {
+      id: '/onboarding/'
+      path: '/onboarding'
+      fullPath: '/onboarding/'
+      preLoaderRoute: typeof OnboardingIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/onboarding/password': {
       id: '/onboarding/password'
-      path: '/password'
+      path: '/onboarding/password'
       fullPath: '/onboarding/password'
       preLoaderRoute: typeof OnboardingPasswordRouteImport
-      parentRoute: typeof OnboardingRoute
+      parentRoute: typeof rootRouteImport
     }
     '/onboarding/email': {
       id: '/onboarding/email'
-      path: '/email'
+      path: '/onboarding/email'
       fullPath: '/onboarding/email'
       preLoaderRoute: typeof OnboardingEmailRouteImport
-      parentRoute: typeof OnboardingRoute
+      parentRoute: typeof rootRouteImport
     }
     '/checkout/success': {
       id: '/checkout/success'
@@ -578,32 +580,20 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
-interface OnboardingRouteChildren {
-  OnboardingEmailRoute: typeof OnboardingEmailRoute
-  OnboardingPasswordRoute: typeof OnboardingPasswordRoute
-}
-
-const OnboardingRouteChildren: OnboardingRouteChildren = {
-  OnboardingEmailRoute: OnboardingEmailRoute,
-  OnboardingPasswordRoute: OnboardingPasswordRoute,
-}
-
-const OnboardingRouteWithChildren = OnboardingRoute._addFileChildren(
-  OnboardingRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LandingRoute: LandingRoute,
   LoginRoute: LoginRoute,
-  OnboardingRoute: OnboardingRouteWithChildren,
   PaywallRoute: PaywallRoute,
   PrivacyRoute: PrivacyRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SigninRoute: SigninRoute,
   TermsRoute: TermsRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
+  OnboardingEmailRoute: OnboardingEmailRoute,
+  OnboardingPasswordRoute: OnboardingPasswordRoute,
+  OnboardingIndexRoute: OnboardingIndexRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:
     ApiPublicHooksEnqueueVendorBackfillRoute,
   ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
