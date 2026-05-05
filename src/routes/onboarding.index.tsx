@@ -538,6 +538,12 @@ function OnboardingPage() {
           navigate({ to: "/onboarding", replace: true });
           return;
         }
+        if (outcome.kind === "anonymous") {
+          // Session was lost between the explicit check above and the resolver
+          // call. Send back to email entry rather than silently falling through.
+          navigate({ to: "/onboarding/email", replace: true });
+          return;
+        }
         // Transient — completion DID save server-side, so a direct push to
         // /paywall is correct (paywall will re-verify on its own).
         navigate({ to: "/paywall", replace: true });

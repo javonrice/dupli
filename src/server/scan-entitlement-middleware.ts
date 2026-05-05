@@ -17,7 +17,7 @@ export const requireScanEntitlement = createMiddleware({ type: "function" })
     if (isSuperUser(userId)) return next({ context });
 
     const env = getServerStripeEnv();
-    const { data: sub } = await supabaseAdmin
+    const { data: sub, error } = await supabaseAdmin
       .from("subscriptions")
       .select("status,current_period_end")
       .eq("user_id", userId)
@@ -25,6 +25,11 @@ export const requireScanEntitlement = createMiddleware({ type: "function" })
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (error) {
+      console.error("[requireScanEntitlement] subscription lookup failed", error);
+      throw new Response("Subscription lookup failed", { status: 500 });
+    }
 
     if (isSubscriptionActive(sub)) return next({ context });
 

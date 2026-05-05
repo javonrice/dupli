@@ -116,8 +116,13 @@ function PasswordStep() {
             } else {
               navigate({ to: dest.to });
             }
-          } catch {
-            navigate({ to: "/" });
+          } catch (err) {
+            const { isAuthError, resetToOnboarding } = await import("@/lib/auth-reset");
+            if (isAuthError(err)) {
+              await resetToOnboarding(navigate);
+            } else {
+              navigate({ to: "/onboarding", replace: true });
+            }
           }
         }
       }
