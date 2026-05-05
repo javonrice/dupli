@@ -40,6 +40,9 @@ export const requireScanEntitlement = createMiddleware({ type: "function" })
     const userId = (context as { userId: string }).userId;
     const env = getServerPaddleEnv();
 
+    // 0. Hardcoded super users always pass.
+    if (isSuperUser(userId)) return next({ context });
+
     // 1. Active subscription always passes.
     const { data: sub } = await supabaseAdmin
       .from("subscriptions")
