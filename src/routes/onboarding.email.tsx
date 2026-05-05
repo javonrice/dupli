@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { setPendingEmail } from "@/lib/onboarding";
 import { supabase } from "@/integrations/supabase/client";
+import { checkEmailExists } from "@/server/onboarding.functions";
 
 export const Route = createFileRoute("/onboarding/email")({
   component: EmailStep,
