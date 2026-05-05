@@ -2,9 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-function getServerPaddleEnv(): "sandbox" | "live" {
-  const explicit = process.env.PADDLE_ENVIRONMENT;
-  if (explicit === "live" || explicit === "sandbox") return explicit;
+function getServerStripeEnv(): "sandbox" | "live" {
   return process.env.NODE_ENV === "production" ? "live" : "sandbox";
 }
 
@@ -15,7 +13,7 @@ export const getRouteResolution = createServerFn({ method: "GET" })
       context,
     }): Promise<{ hasActiveSub: boolean; onboardingCompleted: boolean }> => {
       const userId = (context as { userId: string }).userId;
-      const env = getServerPaddleEnv();
+      const env = getServerStripeEnv();
 
       const [profileRes, subRes] = await Promise.all([
         supabaseAdmin

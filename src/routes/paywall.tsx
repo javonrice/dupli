@@ -1,20 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { toast } from "sonner";
 import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubscription } from "@/hooks/use-subscription";
-import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
-import { getPaddleDiscountId } from "@/lib/paddle";
+import { useStripeCheckout } from "@/hooks/use-stripe-checkout";
 import {
   readPaywallReason,
   readScanBlock,
   formatResetCountdown,
   clearPaywallReason,
 } from "@/lib/scan-quota";
-
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
@@ -36,10 +33,7 @@ const BENEFITS = [
 const PRICE_IDS = {
   yearly: "dupli_pro_yearly",
   monthly: "dupli_pro_monthly",
-  intro: "dupli_pro_intro_monthly",
 } as const;
-
-const INTRO_DISCOUNT_DESCRIPTION = "Dupli Intro - $0.99 first month";
 
 type Plan = "yearly" | "monthly";
 
@@ -47,8 +41,7 @@ function PaywallPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const { isActive, loading: subLoading } = useSubscription();
-  const { openCheckout, loading: checkoutLoading } = usePaddleCheckout();
-  const [introLoading, setIntroLoading] = useState(false);
+  const { openCheckout, closeCheckout, isOpen, checkoutElement } = useStripeCheckout();
   const [quotaReason, setQuotaReason] = useState<{ resetAt: string } | null>(null);
   const [plan, setPlan] = useState<Plan>(() => {
     if (typeof window === "undefined") return "yearly";
@@ -60,8 +53,6 @@ function PaywallPage() {
     }
   });
 
-  // On mount, check whether the user landed here because they ran out of free
-  // scans (vs. an organic upgrade tap from the discovery hub).
   useEffect(() => {
     if (readPaywallReason() === "quota") {
       const block = readScanBlock();
@@ -81,7 +72,6 @@ function PaywallPage() {
     track("paywall_viewed_after_result");
   }, []);
 
-  // Auth/sub-aware redirects (run after hydration so we don't bounce paid users).
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
@@ -93,72 +83,49 @@ function PaywallPage() {
     }
   }, [authLoading, subLoading, user, isActive, navigate]);
 
-  const startTrial = async (planOverride?: Plan) => {
+  const startTrial = () => {
     if (!user) return;
-    const chosen = planOverride ?? plan;
-    track("trial_started", { plan: chosen });
-    try {
-      await openCheckout({
-        priceId: PRICE_IDS[chosen],
-        customerEmail: user.email,
-        customData: { userId: user.id },
-        successUrl: `${window.location.origin}/checkout/success`,
-      });
-    } catch (e) {
-      console.error("[paywall] trial checkout failed", e);
-      const msg = e instanceof Error ? e.message : "";
-      if (/Price not found/i.test(msg)) {
-        toast.error("Plan not available right now. Please try another plan.");
-      } else if (/Paddle\.js failed to load|VITE_PAYMENTS_CLIENT_TOKEN/i.test(msg)) {
-        toast.error("Payment system unavailable. Check your connection and retry.");
-      } else {
-        toast.error("Couldn't open checkout. Please try again.");
-      }
-    }
-  };
-
-  const startCheap = async () => {
-    if (!user) return;
-    track("trial_started", { plan: "intro_99c" });
-    setIntroLoading(true);
-    try {
-      const discountId = await getPaddleDiscountId(INTRO_DISCOUNT_DESCRIPTION);
-      if (!discountId) {
-        toast.error("Intro offer unavailable. Try the free trial instead.");
-        return;
-      }
-      await openCheckout({
-        priceId: PRICE_IDS.intro,
-        discountId,
-        customerEmail: user.email,
-        customData: { userId: user.id },
-        successUrl: `${window.location.origin}/checkout/success`,
-      });
-    } catch (e) {
-      console.error("[paywall] intro checkout failed", e);
-      toast.error("Couldn't open checkout. Please try again.");
-    } finally {
-      setIntroLoading(false);
-    }
+    track("trial_started", { plan });
+    openCheckout({
+      priceId: PRICE_IDS[plan],
+      customerEmail: user.email,
+      userId: user.id,
+      returnUrl: `${window.location.origin}/checkout/success`,
+    });
   };
 
   const handleClose = () => {
-    // The "reason" flag is one-shot; the blockedUntil timestamp persists so
-    // the FAB stays locked until reset.
     clearPaywallReason();
-    if (user) {
-      navigate({ to: "/app" });
-    } else {
-      navigate({ to: "/onboarding" });
-    }
+    if (user) navigate({ to: "/app" });
+    else navigate({ to: "/onboarding" });
   };
-
-  const busy = checkoutLoading || introLoading;
 
   if (authLoading || subLoading) {
     return (
       <div className="flex h-screen-safe items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (isOpen) {
+    return (
+      <div className="flex min-h-screen-safe flex-col bg-background">
+        <div className="pt-safe" />
+        <div className="flex items-center justify-between px-4 pt-2 pb-1">
+          <button
+            type="button"
+            onClick={closeCheckout}
+            className="tap text-[14px] font-semibold text-foreground"
+          >
+            ← Back
+          </button>
+          <span className="text-[12px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Secure checkout
+          </span>
+          <span className="w-8" />
+        </div>
+        <div className="flex-1 px-2 pb-safe">{checkoutElement}</div>
       </div>
     );
   }
@@ -189,7 +156,7 @@ function PaywallPage() {
           </div>
         )}
         <p className="text-center text-[12px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          7-day free trial
+          5-day free trial
         </p>
         <h1 className="mt-2 text-center font-display text-[30px] font-bold leading-[1.1] tracking-tight">
           Start finding cheaper beauty today.
@@ -197,7 +164,7 @@ function PaywallPage() {
 
         <div className="mt-6">
           <TrialTimeline
-            price={plan === "yearly" ? "$39.99" : "$9.99"}
+            price={plan === "yearly" ? "$49.99" : "$7.99"}
             cadence={plan === "yearly" ? "year" : "month"}
           />
         </div>
@@ -221,7 +188,7 @@ function PaywallPage() {
               track("paywall_plan_toggled", { plan: "monthly" });
             }}
             title="Monthly"
-            price="$9.99"
+            price="$7.99"
             sub="per month"
           />
           <PlanCard
@@ -231,9 +198,9 @@ function PaywallPage() {
               track("paywall_plan_toggled", { plan: "yearly" });
             }}
             title="Yearly"
-            price="$39.99"
-            sub="$3.33 / mo"
-            badge="Save 67%"
+            price="$49.99"
+            sub="$4.17 / mo"
+            badge="Save 48%"
           />
         </div>
       </div>
@@ -241,28 +208,13 @@ function PaywallPage() {
       <div className="pb-safe space-y-2 px-6 pt-3">
         <button
           type="button"
-          onClick={() => startTrial()}
-          disabled={busy}
-          className="tap flex h-[58px] w-full flex-col items-center justify-center rounded-[16px] bg-foreground text-background shadow-lift disabled:opacity-60"
+          onClick={startTrial}
+          className="tap flex h-[58px] w-full flex-col items-center justify-center rounded-[16px] bg-foreground text-background shadow-lift"
         >
-          {checkoutLoading ? (
-            <Loader2 className="h-5 w-5 animate-spin" />
-          ) : (
-            <>
-              <span className="text-[15px] font-semibold">Start My Free Trial</span>
-              <span className="text-[11px] opacity-80">
-                7 days free, then {plan === "yearly" ? "$39.99/year" : "$9.99/month"} · cancel anytime
-              </span>
-            </>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={startCheap}
-          disabled={busy}
-          className="tap w-full text-center text-[12px] font-medium text-muted-foreground underline-offset-4 hover:underline disabled:opacity-60"
-        >
-          {introLoading ? "Opening checkout…" : "Or try for $0.99 your first month"}
+          <span className="text-[15px] font-semibold">Start My Free Trial</span>
+          <span className="text-[11px] opacity-80">
+            5 days free, then {plan === "yearly" ? "$49.99/year" : "$7.99/month"} · cancel anytime
+          </span>
         </button>
         {user && (
           <button

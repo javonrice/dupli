@@ -14,7 +14,7 @@ import { createCustomerPortalSession } from "@/server/billing.functions";
 import { TabBarSpacer } from "@/components/tab-bar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { getPaddleEnvironment } from "@/lib/paddle";
+import { getStripeEnvironment } from "@/lib/stripe";
 
 export const Route = createFileRoute("/_app/profile")({
   component: ProfilePage,
@@ -62,7 +62,7 @@ function ProfilePage() {
     if (portalLoading) return;
     setPortalLoading(true);
     try {
-      const res = await openPortal({ data: { environment: getPaddleEnvironment() } });
+      const res = await openPortal({ data: { environment: getStripeEnvironment() } });
       if (res.url) window.open(res.url, "_blank", "noopener,noreferrer");
       else toast.error(res.error ?? "Couldn't open subscription portal.");
     } catch {

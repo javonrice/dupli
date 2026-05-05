@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getPaddleEnvironment } from "@/lib/paddle";
+import { getStripeEnvironment } from "@/lib/stripe";
 import { useAuth } from "@/hooks/use-auth";
 import { isSuperUser } from "@/lib/superusers";
 
@@ -28,7 +28,7 @@ export function useSubscription() {
     }
 
     let cancelled = false;
-    const env = getPaddleEnvironment();
+    const env = getStripeEnvironment();
 
     const load = async () => {
       const { data } = await (supabase as any)

@@ -8,9 +8,7 @@ import { createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-function getServerPaddleEnv(): "sandbox" | "live" {
-  const explicit = process.env.PADDLE_ENVIRONMENT;
-  if (explicit === "live" || explicit === "sandbox") return explicit;
+function getServerStripeEnv(): "sandbox" | "live" {
   return process.env.NODE_ENV === "production" ? "live" : "sandbox";
 }
 
@@ -18,7 +16,7 @@ export const requireActiveSubscription = createMiddleware({ type: "function" })
   .middleware([requireSupabaseAuth])
   .server(async ({ next, context }) => {
     const userId = (context as { userId: string }).userId;
-    const env = getServerPaddleEnv();
+    const env = getServerStripeEnv();
 
     const { data, error } = await supabaseAdmin
       .from("subscriptions")

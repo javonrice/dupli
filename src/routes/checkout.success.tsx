@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getPaddleEnvironment } from "@/lib/paddle";
+import { getStripeEnvironment } from "@/lib/stripe";
 import { markOnboardingComplete } from "@/lib/onboarding";
 import { completeOnboarding } from "@/server/onboarding.functions";
 
@@ -28,7 +28,7 @@ function CheckoutSuccessPage() {
 
     let timeoutId: number | undefined;
     const start = Date.now();
-    const env = getPaddleEnvironment();
+    const env = getStripeEnvironment();
 
     const tick = async () => {
       if (cancelledRef.current) return;

@@ -1,28 +1,50 @@
 import { createServerFn } from "@tanstack/react-start";
-import { gatewayFetch, type PaddleEnv } from "@/lib/paddle.server";
+import { type StripeEnv, createStripeClient } from "@/lib/stripe.server";
 
-export const resolvePaddlePrice = createServerFn({ method: "GET" })
-  .inputValidator((data: { priceId: string; environment: PaddleEnv }) => data)
+export const createCheckoutSession = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: {
+      priceId: string;
+      customerEmail?: string;
+      userId?: string;
+      returnUrl: string;
+      environment: StripeEnv;
+    }) => {
+      if (!/^[a-zA-Z0-9_-]+$/.test(data.priceId)) throw new Error("Invalid priceId");
+      if (data.environment !== "sandbox" && data.environment !== "live") {
+        throw new Error("Invalid environment");
+      }
+      return data;
+    },
+  )
   .handler(async ({ data }) => {
-    const response = await gatewayFetch(
-      data.environment,
-      `/prices?external_id=${encodeURIComponent(data.priceId)}`,
-    );
-    const result = await response.json();
-    if (!result.data?.length) throw new Error(`Price not found: ${data.priceId}`);
-    return result.data[0].id as string;
-  });
+    const stripe = createStripeClient(data.environment);
 
-export const resolvePaddleDiscount = createServerFn({ method: "GET" })
-  .inputValidator((data: { description: string; environment: PaddleEnv }) => data)
-  .handler(async ({ data }) => {
-    const response = await gatewayFetch(
-      data.environment,
-      `/discounts?status=active&per_page=100`,
-    );
-    const result = await response.json();
-    const match = (result.data ?? []).find(
-      (d: { description?: string }) => d.description === data.description,
-    );
-    return (match?.id ?? null) as string | null;
+    const prices = await stripe.prices.list({ lookup_keys: [data.priceId] });
+    if (!prices.data.length) throw new Error("Price not found");
+    const stripePrice = prices.data[0];
+    const isRecurring = stripePrice.type === "recurring";
+
+    const session = await stripe.checkout.sessions.create({
+      line_items: [{ price: stripePrice.id, quantity: 1 }],
+      mode: isRecurring ? "subscription" : "payment",
+      ui_mode: "embedded_page",
+      return_url: data.returnUrl,
+      ...(data.customerEmail && { customer_email: data.customerEmail }),
+      ...(data.userId && {
+        metadata: { userId: data.userId },
+        ...(isRecurring && {
+          subscription_data: {
+            metadata: { userId: data.userId },
+            trial_period_days: 5,
+          },
+        }),
+      }),
+      ...(!data.userId &&
+        isRecurring && {
+          subscription_data: { trial_period_days: 5 },
+        }),
+    });
+
+    return session.client_secret;
   });
