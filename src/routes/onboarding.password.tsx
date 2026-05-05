@@ -2,7 +2,7 @@ import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
-import { getPendingEmail } from "@/lib/onboarding";
+import { getPendingEmail, clearPendingEmail } from "@/lib/onboarding";
 import { supabase } from "@/integrations/supabase/client";
 import { getRouteResolution } from "@/server/onboarding.functions";
 
