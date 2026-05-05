@@ -11,8 +11,6 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as PrivacyRouteImport } from './routes/privacy'
-import { Route as PaywallRouteImport } from './routes/paywall'
-import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
@@ -23,9 +21,6 @@ import { Route as AppAppRouteImport } from './routes/_app/app'
 import { Route as AppScanIdRouteImport } from './routes/_app/scan.$id'
 import { Route as AppPProductIdRouteImport } from './routes/_app/p.$productId'
 import { Route as AppScanIdIndexRouteImport } from './routes/_app/scan.$id.index'
-import { Route as ApiPublicHooksRunIngestionRouteImport } from './routes/api/public/hooks/run-ingestion'
-import { Route as ApiPublicHooksIngestProductRouteImport } from './routes/api/public/hooks/ingest-product'
-import { Route as ApiPublicHooksEnqueueVendorBackfillRouteImport } from './routes/api/public/hooks/enqueue-vendor-backfill'
 import { Route as AppScanIdShareRouteImport } from './routes/_app/scan.$id.share'
 import { Route as AppCommunityBrandProductRouteImport } from './routes/_app/community.$brand.$product'
 
@@ -37,16 +32,6 @@ const TermsRoute = TermsRouteImport.update({
 const PrivacyRoute = PrivacyRouteImport.update({
   id: '/privacy',
   path: '/privacy',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const PaywallRoute = PaywallRouteImport.update({
-  id: '/paywall',
-  path: '/paywall',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const OnboardingRoute = OnboardingRouteImport.update({
-  id: '/onboarding',
-  path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -98,24 +83,6 @@ const AppScanIdIndexRoute = AppScanIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppScanIdRoute,
 } as any)
-const ApiPublicHooksRunIngestionRoute =
-  ApiPublicHooksRunIngestionRouteImport.update({
-    id: '/api/public/hooks/run-ingestion',
-    path: '/api/public/hooks/run-ingestion',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicHooksIngestProductRoute =
-  ApiPublicHooksIngestProductRouteImport.update({
-    id: '/api/public/hooks/ingest-product',
-    path: '/api/public/hooks/ingest-product',
-    getParentRoute: () => rootRouteImport,
-  } as any)
-const ApiPublicHooksEnqueueVendorBackfillRoute =
-  ApiPublicHooksEnqueueVendorBackfillRouteImport.update({
-    id: '/api/public/hooks/enqueue-vendor-backfill',
-    path: '/api/public/hooks/enqueue-vendor-backfill',
-    getParentRoute: () => rootRouteImport,
-  } as any)
 const AppScanIdShareRoute = AppScanIdShareRouteImport.update({
   id: '/share',
   path: '/share',
@@ -131,8 +98,6 @@ const AppCommunityBrandProductRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRoute
-  '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
@@ -143,16 +108,11 @@ export interface FileRoutesByFullPath {
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
-  '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
-  '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
-  '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRoute
-  '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/app': typeof AppAppRoute
@@ -162,9 +122,6 @@ export interface FileRoutesByTo {
   '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
-  '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
-  '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
-  '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/scan/$id': typeof AppScanIdIndexRoute
 }
 export interface FileRoutesById {
@@ -172,8 +129,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
-  '/onboarding': typeof OnboardingRoute
-  '/paywall': typeof PaywallRoute
   '/privacy': typeof PrivacyRoute
   '/terms': typeof TermsRoute
   '/_app/app': typeof AppAppRoute
@@ -184,9 +139,6 @@ export interface FileRoutesById {
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/_app/scan/$id/share': typeof AppScanIdShareRoute
-  '/api/public/hooks/enqueue-vendor-backfill': typeof ApiPublicHooksEnqueueVendorBackfillRoute
-  '/api/public/hooks/ingest-product': typeof ApiPublicHooksIngestProductRoute
-  '/api/public/hooks/run-ingestion': typeof ApiPublicHooksRunIngestionRoute
   '/_app/scan/$id/': typeof AppScanIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -194,8 +146,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
-    | '/onboarding'
-    | '/paywall'
     | '/privacy'
     | '/terms'
     | '/app'
@@ -206,16 +156,11 @@ export interface FileRouteTypes {
     | '/scan/$id'
     | '/community/$brand/$product'
     | '/scan/$id/share'
-    | '/api/public/hooks/enqueue-vendor-backfill'
-    | '/api/public/hooks/ingest-product'
-    | '/api/public/hooks/run-ingestion'
     | '/scan/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
-    | '/onboarding'
-    | '/paywall'
     | '/privacy'
     | '/terms'
     | '/app'
@@ -225,17 +170,12 @@ export interface FileRouteTypes {
     | '/p/$productId'
     | '/community/$brand/$product'
     | '/scan/$id/share'
-    | '/api/public/hooks/enqueue-vendor-backfill'
-    | '/api/public/hooks/ingest-product'
-    | '/api/public/hooks/run-ingestion'
     | '/scan/$id'
   id:
     | '__root__'
     | '/'
     | '/_app'
     | '/login'
-    | '/onboarding'
-    | '/paywall'
     | '/privacy'
     | '/terms'
     | '/_app/app'
@@ -246,9 +186,6 @@ export interface FileRouteTypes {
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
     | '/_app/scan/$id/share'
-    | '/api/public/hooks/enqueue-vendor-backfill'
-    | '/api/public/hooks/ingest-product'
-    | '/api/public/hooks/run-ingestion'
     | '/_app/scan/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -256,13 +193,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
-  OnboardingRoute: typeof OnboardingRoute
-  PaywallRoute: typeof PaywallRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
-  ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
-  ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
-  ApiPublicHooksRunIngestionRoute: typeof ApiPublicHooksRunIngestionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -279,20 +211,6 @@ declare module '@tanstack/react-router' {
       path: '/privacy'
       fullPath: '/privacy'
       preLoaderRoute: typeof PrivacyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/paywall': {
-      id: '/paywall'
-      path: '/paywall'
-      fullPath: '/paywall'
-      preLoaderRoute: typeof PaywallRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/onboarding': {
-      id: '/onboarding'
-      path: '/onboarding'
-      fullPath: '/onboarding'
-      preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -365,27 +283,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppScanIdIndexRouteImport
       parentRoute: typeof AppScanIdRoute
     }
-    '/api/public/hooks/run-ingestion': {
-      id: '/api/public/hooks/run-ingestion'
-      path: '/api/public/hooks/run-ingestion'
-      fullPath: '/api/public/hooks/run-ingestion'
-      preLoaderRoute: typeof ApiPublicHooksRunIngestionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/hooks/ingest-product': {
-      id: '/api/public/hooks/ingest-product'
-      path: '/api/public/hooks/ingest-product'
-      fullPath: '/api/public/hooks/ingest-product'
-      preLoaderRoute: typeof ApiPublicHooksIngestProductRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/hooks/enqueue-vendor-backfill': {
-      id: '/api/public/hooks/enqueue-vendor-backfill'
-      path: '/api/public/hooks/enqueue-vendor-backfill'
-      fullPath: '/api/public/hooks/enqueue-vendor-backfill'
-      preLoaderRoute: typeof ApiPublicHooksEnqueueVendorBackfillRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/_app/scan/$id/share': {
       id: '/_app/scan/$id/share'
       path: '/share'
@@ -443,15 +340,18 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
-  OnboardingRoute: OnboardingRoute,
-  PaywallRoute: PaywallRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
-  ApiPublicHooksEnqueueVendorBackfillRoute:
-    ApiPublicHooksEnqueueVendorBackfillRoute,
-  ApiPublicHooksIngestProductRoute: ApiPublicHooksIngestProductRoute,
-  ApiPublicHooksRunIngestionRoute: ApiPublicHooksRunIngestionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
