@@ -55,7 +55,7 @@ function ProfilePage() {
     } catch {
       /* ignore */
     }
-    window.location.assign("/login");
+    window.location.assign("/onboarding");
   };
 
   const handleManageSubscription = async () => {
