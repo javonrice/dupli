@@ -629,15 +629,29 @@ function OnboardingPage() {
   }
 
   if (step === "sample_result") {
+    const finishToPaywall = async () => {
+      markOnboardingComplete();
+      try {
+        await saveOnboardingAnswers({
+          data: {
+            answers: { gender, ageRange, frequency, categories, goal },
+          },
+        });
+        await completeOnboarding();
+      } catch {
+        /* non-fatal — paywall will still gate access */
+      }
+      navigate({ to: "/paywall" });
+    };
     return (
       <SampleResultScreen
         progress={progress}
         onScanOwn={() => {
           track("onboarding_scan_selected");
-          navigate({ to: "/paywall" });
+          void finishToPaywall();
         }}
         onSeeFull={() => {
-          navigate({ to: "/paywall" });
+          void finishToPaywall();
         }}
       />
     );
