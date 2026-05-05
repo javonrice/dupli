@@ -46,9 +46,11 @@ export const Route = createFileRoute("/paywall")({
         clearStaleClientState();
         throw redirect({ to: "/onboarding" });
       }
-      // Transient error → don't silently render paywall. Send to onboarding
-      // (safe public entry); component effect will retry the resolver.
-      throw redirect({ to: "/onboarding" });
+      // Transient error: do NOT bounce. The paywall component re-verifies
+      // on the client; if the user really is paid/anonymous, that effect
+      // routes them. Bouncing here trapped legit unpaid users away from
+      // the only place they can complete checkout.
+      return;
     }
   },
   head: () => ({
