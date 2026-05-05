@@ -64,12 +64,52 @@ export const Route = createFileRoute("/onboarding/")({
       } catch (e) {
         const { isRedirect } = await import("@tanstack/react-router");
         if (isRedirect(e)) throw e;
+        const { isAuthError, clearStaleClientState } = await import(
+          "@/lib/auth-reset"
+        );
+        if (isAuthError(e)) {
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            /* ignore */
+          }
+          clearStaleClientState();
+          throw redirect({ to: "/onboarding" });
+        }
       }
       return;
     }
 
+    // Anonymous (or stale-session) visitors land here. If a session exists,
+    // verify it with the server before sending the user to "/" — otherwise a
+    // deleted-user JWT can trigger a /paywall bounce loop. Auth failures =
+    // wipe and stay on the splash.
     if (data.session) {
-      throw redirect({ to: "/" });
+      try {
+        const { getRouteResolution } = await import(
+          "@/server/onboarding.functions"
+        );
+        await getRouteResolution();
+        throw redirect({ to: "/" });
+      } catch (e) {
+        const { isRedirect } = await import("@tanstack/react-router");
+        if (isRedirect(e)) throw e;
+        const { isAuthError, clearStaleClientState } = await import(
+          "@/lib/auth-reset"
+        );
+        if (isAuthError(e)) {
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            /* ignore */
+          }
+          clearStaleClientState();
+          // fall through and render the splash
+          return;
+        }
+        // Transient — render splash, don't redirect.
+        return;
+      }
     }
   },
   head: () => ({
