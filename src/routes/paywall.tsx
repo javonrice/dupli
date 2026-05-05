@@ -68,6 +68,38 @@ function PaywallPage() {
   const { isActive, loading: subLoading } = useSubscription();
   const { openCheckout, closeCheckout, isOpen, checkoutElement } = useStripeCheckout();
   const [quotaReason, setQuotaReason] = useState<{ resetAt: string } | null>(null);
+  // Client-side resolver gate: beforeLoad is a no-op during SSR, so on direct
+  // hydrated loads we must re-verify destination=/paywall before rendering
+  // any paywall content. Prevents anonymous/paid users from briefly seeing
+  // the paywall.
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          navigate({ to: "/onboarding/email", replace: true });
+          return;
+        }
+        const res = await getRouteResolution();
+        if (cancelled) return;
+        const dest = res.destination;
+        if (dest.to === "/paywall") {
+          setVerified(true);
+        } else if (dest.to === "/onboarding") {
+          navigate({ to: "/onboarding", search: dest.search, replace: true });
+        } else {
+          navigate({ to: dest.to, replace: true });
+        }
+      } catch {
+        if (!cancelled) setVerified(true); // safe fallback: render paywall
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
   const [plan, setPlan] = useState<Plan>(() => {
     if (typeof window === "undefined") return "yearly";
     try {
