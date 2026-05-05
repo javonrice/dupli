@@ -122,6 +122,22 @@ function OnboardingPage() {
     track("onboarding_screen_viewed", { step });
   }, [step]);
 
+  // Quiz steps require auth. If unauthenticated and past welcome, send to email step.
+  useEffect(() => {
+    if (step === "welcome") return;
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase.auth.getSession();
+      if (!cancelled && !data.session) {
+        navigate({ to: "/onboarding/email", replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, navigate]);
+
   const progress = useMemo(() => Math.max(1, ORDER.indexOf(step)), [step]);
 
   const goNext = (s: Step) => () => setStep(s);
@@ -188,10 +204,10 @@ function OnboardingPage() {
         step={1}
         total={TOTAL}
         hideProgress
-        primary={{ label: "Get Started", onClick: goNext("gender") }}
+        primary={{ label: "Get Started", onClick: () => navigate({ to: "/onboarding/email" }) }}
         textLink={{
           label: "I already have an account · Sign in",
-          onClick: () => navigate({ to: "/signin" }),
+          onClick: () => navigate({ to: "/onboarding/email" }),
         }}
       >
         <div className="relative -mx-6 -mt-2 flex h-full flex-col">

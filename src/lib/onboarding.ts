@@ -3,6 +3,32 @@
 // we don't have to add a new DB table for v1.
 
 const KEY = "dupli.onboarding.v1";
+const PENDING_EMAIL_KEY = "dupli.onboarding.pending_email";
+
+export function setPendingEmail(email: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(PENDING_EMAIL_KEY, email.trim().toLowerCase());
+  } catch {
+    /* ignore */
+  }
+}
+export function getPendingEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(PENDING_EMAIL_KEY);
+  } catch {
+    return null;
+  }
+}
+export function clearPendingEmail() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(PENDING_EMAIL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
 
 export type Frequency =
   | "few_per_year"

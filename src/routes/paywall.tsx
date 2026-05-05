@@ -1,20 +1,21 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { track } from "@/lib/onboarding";
 import { TrialTimeline } from "@/components/onboarding/trial-timeline";
 import { useAuth } from "@/hooks/use-auth";
+import { useSubscription } from "@/hooks/use-subscription";
 import { usePaddleCheckout } from "@/hooks/use-paddle-checkout";
 import { getPaddleDiscountId } from "@/lib/paddle";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
-  // NOTE: auth + subscription checks happen client-side in the component.
-  // Running them in beforeLoad executes on the server (no localStorage/session
-  // cookies in this setup), which always redirects fresh visitors to /login —
-  // not native-app behavior.
+  beforeLoad: async () => {
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) throw redirect({ to: "/onboarding/email" });
+  },
   head: () => ({
     meta: [
       { title: "Go Premium — Dupli" },
@@ -43,6 +44,7 @@ type Plan = "yearly" | "monthly";
 function PaywallPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
+  const { isActive, loading: subLoading } = useSubscription();
   const { openCheckout, loading: checkoutLoading } = usePaddleCheckout();
   const [introLoading, setIntroLoading] = useState(false);
   const [plan, setPlan] = useState<Plan>(() => {
@@ -54,7 +56,6 @@ function PaywallPage() {
       return "yearly";
     }
   });
-  const [gateChecking, setGateChecking] = useState(true);
 
   useEffect(() => {
     try {
@@ -64,69 +65,27 @@ function PaywallPage() {
     }
   }, [plan]);
 
-  // Client-side gate: skip the paywall ONLY if the user is already signed in
-  // and has an active subscription. We intentionally do NOT redirect anonymous
-  // visitors to /login — the paywall is part of the onboarding funnel and must
-  // be shown before account creation. Login is required later, at checkout.
-  useEffect(() => {
-    if (authLoading) return;
-    let cancelled = false;
-    (async () => {
-      if (!user) {
-        if (!cancelled) setGateChecking(false);
-        return;
-      }
-      try {
-        const { getPaddleEnvironment } = await import("@/lib/paddle");
-        const env = getPaddleEnvironment();
-        const { data: sub } = await (supabase as any)
-          .from("subscriptions")
-          .select("status,current_period_end")
-          .eq("user_id", user.id)
-          .eq("environment", env)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        if (sub) {
-          const end = sub.current_period_end ? new Date(sub.current_period_end).getTime() : null;
-          const future = end === null || end > Date.now();
-          const active =
-            (["active", "trialing", "past_due"].includes(sub.status) && future) ||
-            (sub.status === "canceled" && end !== null && end > Date.now());
-          if (active && !cancelled) {
-            navigate({ to: "/app", replace: true });
-            return;
-          }
-        }
-      } catch (e) {
-        console.error("[paywall] subscription check failed", e);
-      }
-      if (!cancelled) setGateChecking(false);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [authLoading, user, navigate]);
-
   useEffect(() => {
     track("paywall_viewed_after_result");
   }, []);
 
+  // Already paid? Bounce to /app.
+  useEffect(() => {
+    if (!authLoading && !subLoading && user && isActive) {
+      navigate({ to: "/app", replace: true });
+    }
+  }, [authLoading, subLoading, user, isActive, navigate]);
+
   const startTrial = async (planOverride?: Plan) => {
+    if (!user) return;
     const chosen = planOverride ?? plan;
     track("trial_started", { plan: chosen });
-    // Signed-in users: webhook attaches sub via customData.userId, send to /app.
-    // Anonymous users: no userId yet; success URL routes to a claim screen
-    // where they create/sign in to an account that gets linked by email.
-    const successUrl = user
-      ? `${window.location.origin}/app?checkout=success`
-      : `${window.location.origin}/checkout/account`;
     try {
       await openCheckout({
         priceId: PRICE_IDS[chosen],
-        customerEmail: user?.email,
-        customData: user ? { userId: user.id } : undefined,
-        successUrl,
+        customerEmail: user.email,
+        customData: { userId: user.id },
+        successUrl: `${window.location.origin}/checkout/success`,
       });
     } catch (e) {
       console.error("[paywall] trial checkout failed", e);
@@ -142,11 +101,9 @@ function PaywallPage() {
   };
 
   const startCheap = async () => {
+    if (!user) return;
     track("trial_started", { plan: "intro_99c" });
     setIntroLoading(true);
-    const successUrl = user
-      ? `${window.location.origin}/app?checkout=success`
-      : `${window.location.origin}/checkout/account`;
     try {
       const discountId = await getPaddleDiscountId(INTRO_DISCOUNT_DESCRIPTION);
       if (!discountId) {
@@ -156,9 +113,9 @@ function PaywallPage() {
       await openCheckout({
         priceId: PRICE_IDS.intro,
         discountId,
-        customerEmail: user?.email,
-        customData: user ? { userId: user.id } : undefined,
-        successUrl,
+        customerEmail: user.email,
+        customData: { userId: user.id },
+        successUrl: `${window.location.origin}/checkout/success`,
       });
     } catch (e) {
       console.error("[paywall] intro checkout failed", e);
@@ -168,22 +125,13 @@ function PaywallPage() {
     }
   };
 
-  // (Removed legacy intent-resume: anonymous users now go directly to checkout.)
-
-  const handleClose = async () => {
-    if (user) {
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.error("[paywall] sign out failed", e);
-      }
-    }
-    navigate({ to: "/onboarding", replace: true });
+  const handleClose = () => {
+    navigate({ to: "/onboarding" });
   };
 
   const busy = checkoutLoading || introLoading;
 
-  if (authLoading || gateChecking) {
+  if (authLoading || subLoading) {
     return (
       <div className="flex h-screen-safe items-center justify-center bg-background">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -282,15 +230,6 @@ function PaywallPage() {
         >
           {introLoading ? "Opening checkout…" : "Or try for $0.99 your first month"}
         </button>
-        {!user && (
-          <button
-            type="button"
-            onClick={() => navigate({ to: "/login", search: { next: "/app" } })}
-            className="tap w-full text-center text-[12px] text-muted-foreground"
-          >
-            Already a member? <span className="font-semibold text-foreground">Sign in</span>
-          </button>
-        )}
       </div>
     </div>
   );
