@@ -122,6 +122,22 @@ function OnboardingPage() {
     track("onboarding_screen_viewed", { step });
   }, [step]);
 
+  // Quiz steps require auth. If unauthenticated and past welcome, send to email step.
+  useEffect(() => {
+    if (step === "welcome") return;
+    let cancelled = false;
+    (async () => {
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data } = await supabase.auth.getSession();
+      if (!cancelled && !data.session) {
+        navigate({ to: "/onboarding/email", replace: true });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step, navigate]);
+
   const progress = useMemo(() => Math.max(1, ORDER.indexOf(step)), [step]);
 
   const goNext = (s: Step) => () => setStep(s);
