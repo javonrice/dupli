@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { createClient } from "@supabase/supabase-js";
-import { type StripeEnv, verifyWebhook } from "@/lib/stripe.server";
+import { type StripeEnv, verifyWebhook, createStripeClient } from "@/lib/stripe.server";
 
 let _supabase: ReturnType<typeof createClient> | null = null;
 function getSupabase() {
@@ -13,8 +13,38 @@ function getSupabase() {
   return _supabase;
 }
 
+async function resolveUserIdFromSubscription(
+  subscription: any,
+  env: StripeEnv,
+): Promise<string | null> {
+  const fromSub = subscription.metadata?.userId ?? null;
+  if (fromSub) return fromSub;
+  // Best-effort fallback: check the customer's metadata. We don't currently
+  // set customer.metadata.userId at checkout, so this typically won't help —
+  // but it's harmless and future-proofs the path.
+  try {
+    const customerId = subscription.customer;
+    if (!customerId) return null;
+    const stripe = createStripeClient(env);
+    const customer = await stripe.customers.retrieve(customerId as string);
+    if (!customer || (customer as any).deleted) return null;
+    return (customer as any).metadata?.userId ?? null;
+  } catch (e) {
+    console.error("[webhook] customer lookup failed", e);
+    return null;
+  }
+}
+
 async function handleSubscriptionCreated(subscription: any, env: StripeEnv) {
-  const userId = subscription.metadata?.userId ?? null;
+  const userId = await resolveUserIdFromSubscription(subscription, env);
+  if (!userId) {
+    console.error("[webhook] orphan subscription created", {
+      subscriptionId: subscription.id,
+      customerId: subscription.customer,
+      env,
+    });
+  }
+
   const item = subscription.items?.data?.[0];
   const priceId = item?.price?.metadata?.lovable_external_id || item?.price?.id;
   const productId = item?.price?.product;
@@ -46,17 +76,38 @@ async function handleSubscriptionUpdated(subscription: any, env: StripeEnv) {
   const periodStart = item?.current_period_start ?? subscription.current_period_start;
   const periodEnd = item?.current_period_end ?? subscription.current_period_end;
 
+  // Reconcile user_id if the existing row is unattached but we now have one.
+  const updates: Record<string, unknown> = {
+    status: subscription.status,
+    product_id: productId,
+    price_id: priceId,
+    current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
+    current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
+    cancel_at_period_end: subscription.cancel_at_period_end || false,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data: existing } = await (getSupabase() as any)
+    .from("subscriptions")
+    .select("user_id")
+    .eq("stripe_subscription_id", subscription.id)
+    .eq("environment", env)
+    .maybeSingle();
+
+  if (existing && !existing.user_id) {
+    const resolved = await resolveUserIdFromSubscription(subscription, env);
+    if (resolved) {
+      updates.user_id = resolved;
+      console.log("[webhook] reconciled orphan subscription", {
+        subscriptionId: subscription.id,
+        userId: resolved,
+      });
+    }
+  }
+
   await (getSupabase() as any)
     .from("subscriptions")
-    .update({
-      status: subscription.status,
-      product_id: productId,
-      price_id: priceId,
-      current_period_start: periodStart ? new Date(periodStart * 1000).toISOString() : null,
-      current_period_end: periodEnd ? new Date(periodEnd * 1000).toISOString() : null,
-      cancel_at_period_end: subscription.cancel_at_period_end || false,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updates)
     .eq("stripe_subscription_id", subscription.id)
     .eq("environment", env);
 }
