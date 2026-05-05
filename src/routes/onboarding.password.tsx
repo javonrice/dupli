@@ -86,7 +86,19 @@ function PasswordStep() {
         if (error) {
           setError(error.message);
         } else {
-          navigate({ to: "/" });
+          // Subscription check first — paid users skip onboarding/paywall.
+          try {
+            const res = await getRouteResolution();
+            if (res.hasActiveSub) {
+              navigate({ to: "/app" });
+            } else if (res.onboardingCompleted) {
+              navigate({ to: "/paywall" });
+            } else {
+              navigate({ to: "/onboarding", search: { start: "quiz" } });
+            }
+          } catch {
+            navigate({ to: "/" });
+          }
         }
       }
     } finally {
