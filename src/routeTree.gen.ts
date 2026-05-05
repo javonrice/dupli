@@ -22,7 +22,6 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as OnboardingPasswordRouteImport } from './routes/onboarding.password'
 import { Route as OnboardingEmailRouteImport } from './routes/onboarding.email'
 import { Route as CheckoutSuccessRouteImport } from './routes/checkout.success'
-import { Route as CheckoutAccountRouteImport } from './routes/checkout.account'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
@@ -99,11 +98,6 @@ const OnboardingEmailRoute = OnboardingEmailRouteImport.update({
 const CheckoutSuccessRoute = CheckoutSuccessRouteImport.update({
   id: '/checkout/success',
   path: '/checkout/success',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const CheckoutAccountRoute = CheckoutAccountRouteImport.update({
-  id: '/checkout/account',
-  path: '/checkout/account',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppSavedRoute = AppSavedRouteImport.update({
@@ -191,7 +185,6 @@ export interface FileRoutesByFullPath {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
-  '/checkout/account': typeof CheckoutAccountRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
@@ -219,7 +212,6 @@ export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
-  '/checkout/account': typeof CheckoutAccountRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
@@ -248,7 +240,6 @@ export interface FileRoutesById {
   '/_app/history': typeof AppHistoryRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
-  '/checkout/account': typeof CheckoutAccountRoute
   '/checkout/success': typeof CheckoutSuccessRoute
   '/onboarding/email': typeof OnboardingEmailRoute
   '/onboarding/password': typeof OnboardingPasswordRoute
@@ -278,7 +269,6 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
-    | '/checkout/account'
     | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
@@ -306,7 +296,6 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
-    | '/checkout/account'
     | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
@@ -334,7 +323,6 @@ export interface FileRouteTypes {
     | '/_app/history'
     | '/_app/profile'
     | '/_app/saved'
-    | '/checkout/account'
     | '/checkout/success'
     | '/onboarding/email'
     | '/onboarding/password'
@@ -360,7 +348,6 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SigninRoute: typeof SigninRoute
   TermsRoute: typeof TermsRoute
-  CheckoutAccountRoute: typeof CheckoutAccountRoute
   CheckoutSuccessRoute: typeof CheckoutSuccessRoute
   ApiPublicHooksEnqueueVendorBackfillRoute: typeof ApiPublicHooksEnqueueVendorBackfillRoute
   ApiPublicHooksIngestProductRoute: typeof ApiPublicHooksIngestProductRoute
@@ -459,13 +446,6 @@ declare module '@tanstack/react-router' {
       path: '/checkout/success'
       fullPath: '/checkout/success'
       preLoaderRoute: typeof CheckoutSuccessRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/checkout/account': {
-      id: '/checkout/account'
-      path: '/checkout/account'
-      fullPath: '/checkout/account'
-      preLoaderRoute: typeof CheckoutAccountRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/saved': {
@@ -623,7 +603,6 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SigninRoute: SigninRoute,
   TermsRoute: TermsRoute,
-  CheckoutAccountRoute: CheckoutAccountRoute,
   CheckoutSuccessRoute: CheckoutSuccessRoute,
   ApiPublicHooksEnqueueVendorBackfillRoute:
     ApiPublicHooksEnqueueVendorBackfillRoute,
@@ -634,3 +613,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
