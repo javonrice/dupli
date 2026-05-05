@@ -81,16 +81,25 @@ export const Route = createFileRoute("/onboarding/")({
     }
 
     // Anonymous (or stale-session) visitors land here. If a session exists,
-    // verify it with the server before sending the user to "/" — otherwise a
-    // deleted-user JWT can trigger a /paywall bounce loop. Auth failures =
-    // wipe and stay on the splash.
+    // route by canonical destination (NOT a blanket redirect to "/", which
+    // creates a /onboarding → /onboarding/email → / → /onboarding loop).
     if (data.session) {
       try {
         const { getRouteResolution } = await import(
           "@/server/onboarding.functions"
         );
-        await getRouteResolution();
-        throw redirect({ to: "/" });
+        const res = await getRouteResolution();
+        const dest = res.destination;
+        if (dest.to === "/app" || dest.to === "/paywall") {
+          if (import.meta.env.DEV) console.debug("[onboarding-flow] welcome beforeLoad redirect", dest.to);
+          throw redirect({ to: dest.to });
+        }
+        if (dest.to === "/onboarding" && dest.search?.start === "quiz") {
+          if (import.meta.env.DEV) console.debug("[onboarding-flow] welcome beforeLoad redirect /onboarding?start=quiz");
+          throw redirect({ to: "/onboarding", search: { start: "quiz" } });
+        }
+        // dest is /onboarding (welcome) — render the splash.
+        return;
       } catch (e) {
         const { isRedirect } = await import("@tanstack/react-router");
         if (isRedirect(e)) throw e;

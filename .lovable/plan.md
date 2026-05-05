@@ -1,95 +1,72 @@
-## Goal
-
-Eliminate the "deleted/stale-user paywall trap." A user must only land on `/paywall` when they have a valid session, completed onboarding, and no active subscription. Any auth/resolver failure should sign out, clear stale state, and route to `/onboarding` — never to `/paywall`.
-
 ## Root cause
 
-Multiple guards currently treat resolver failures as "render paywall as safe fallback":
+The "Get Started" button still calls `navigate({ to: "/onboarding/email" })`, but two `beforeLoad` guards turn that navigation into an immediate loop back to `/onboarding`:
 
-- `src/routes/_app.tsx` — catch block sets destination to `/paywall`
-- `src/routes/paywall.tsx` — `beforeLoad` and the in-component effect both fall through to rendering paywall on resolver error
-- `src/routes/checkout.success.tsx` — when resolver returns `/paywall`, falls back to `/app`, but never handles "auth invalid" (deleted user); polling loop just stalls
-- `src/routes/index.tsx` — on resolver failure redirects to `/paywall`
-- `src/routes/onboarding.index.tsx` — `welcome` step's `beforeLoad` sends any session-bearing visitor to `/` even if that session belongs to a deleted user (which then loops via index → paywall)
-- `src/lib/onboarding.ts` `isOnboarded()` is read on the public path, so leftover localStorage can still influence routing
+1. **`src/routes/onboarding.index.tsx` welcome `beforeLoad`** — when *any* session exists, it calls `getRouteResolution()` and on success unconditionally `throw redirect({ to: "/" })`, ignoring the actual resolved destination.
+2. **`src/routes/onboarding.email.tsx` `beforeLoad`** — `if (data.session) throw redirect({ to: "/" })`. Any session sends the user to `/`.
+3. **`src/routes/index.tsx`** — for a sessioned user it calls the resolver and navigates wherever it points, often back to `/onboarding`. Loop closes: `/onboarding → /onboarding/email → / → /onboarding`. The click appears to do nothing.
 
-The server resolver (`requireSupabaseAuth`) throws a `Response(401)` for invalid/expired/deleted-user tokens. Today none of the callers distinguish "401 → auth dead" from "500 → transient" — both fall through to paywall.
+For a fully clean anonymous user the click does work, but in production most users hitting this page have *some* supabase token (mid-onboarding signup, prior partial session, OAuth flicker), so the loop fires.
 
-## Plan
+`resetToOnboarding` and `clearStaleClientState` themselves are not the trigger. The bug is the two beforeLoads doing blanket `redirect({ to: "/" })` instead of routing by canonical destination.
 
-### 1. New helper: `src/lib/auth-reset.ts`
+## Fix
 
-Single source of truth for "this session is dead, restart cleanly."
+Keep the stale/deleted-user protections, but make the welcome and email guards loop-safe and destination-aware.
 
-```ts
-clearStaleClientState()    // remove dupli.onboarding.v1, dupli.onboarding.pending_email,
-                           // dupli.paywall.plan, dupli.checkout.*, dupli.paywall.reason,
-                           // dupli.scan.* keys. Leave unrelated keys alone.
+### 1. `src/routes/onboarding.index.tsx` — welcome `beforeLoad`
 
-isAuthError(err): boolean  // true for fetch Response status 401/403, supabase
-                           // AuthApiError codes (user_not_found, invalid_jwt,
-                           // bad_jwt, session_not_found), and "Unauthorized"
-                           // text from our middleware.
+For a sessioned user on the welcome path (no `?start=quiz`):
+- Call `getRouteResolution()`.
+- Branch on `res.destination`:
+  - `/app` or `/paywall` → `throw redirect({ to: dest.to })`.
+  - `/onboarding` with `search.start === "quiz"` → `throw redirect({ to: "/onboarding", search: { start: "quiz" } })`. URL actually changes, so the next `beforeLoad` invocation hits the existing `start=quiz` branch (which already short-circuits when `onboardingCompleted` is false). No same-URL loop.
+  - `/onboarding` without `start=quiz` → return (render splash). Should be rare; means resolver agrees the user belongs on the welcome page.
+- `isAuthError` → signOut + `clearStaleClientState` + return (render splash). (Current behavior, keep.)
+- Transient error → return (render splash). (Current behavior, keep.)
 
-async resetToOnboarding(navigate?)  // signOut() best-effort → clearStaleClientState()
-                                    // → navigate/redirect to "/onboarding"
-```
+Anonymous users (no session): unchanged — render splash. No `resetToOnboarding` call.
 
-### 2. Update each route guard to use the helper
+### 2. `src/routes/onboarding.email.tsx` — `beforeLoad`
 
-**`src/routes/_app.tsx`**
-- Wrap `getRouteResolution()` in try/catch.
-- On `isAuthError` → `await resetToOnboarding(navigate)` then return `<Navigate to="/onboarding" />`.
-- On non-auth error → keep showing splash with a small retry; do NOT default to `/paywall`.
+Replace `if (data.session) throw redirect({ to: "/" })` with destination-aware logic:
+- No session → return (render). This is the common path; never call `resetToOnboarding`.
+- Session present → call `getRouteResolution()`:
+  - dest `/app` or `/paywall` → `throw redirect({ to: dest.to })`.
+  - dest `/onboarding` with `start=quiz` → `throw redirect({ to: "/onboarding", search: { start: "quiz" } })`.
+  - dest `/onboarding` (welcome) → return (render the email screen; user explicitly navigated here from the splash, do not bounce).
+  - Resolver throws `isAuthError` → signOut + `clearStaleClientState` + return (render email; now effectively anonymous).
+  - Transient error → return (render; don't trap).
 
-**`src/routes/paywall.tsx`**
-- `beforeLoad`: if no session → redirect `/onboarding` (already does). If `getRouteResolution` throws and `isAuthError` → call cleanup synchronously (signOut + clear) then `throw redirect({ to: "/onboarding" })`. Remove "render paywall as safe fallback" comment + behavior. On non-auth error, still throw the error so the route's errorComponent can show retry instead of silently rendering paywall.
-- In-component `useEffect`: same — on auth error, `resetToOnboarding`; on transient error, set an error state with retry button instead of `setVerified(true)`.
+Both guards must wrap the resolver call in try/catch and re-throw `isRedirect(e)` errors so intentional redirects aren't swallowed.
 
-**`src/routes/checkout.success.tsx`**
-- In `checkOnce`: if `supabase.auth.getSession()` returns no session → `resetToOnboarding`.
-- Wrap the subscriptions query and resolver calls; if 401/auth error → `resetToOnboarding`.
-- Keep current "stalled → Retry/support" UI for the no-subscription-yet case (already correct, no auto-bounce to paywall).
+### 3. `src/lib/auth-reset.ts` — anonymous no-op guard
 
-**`src/routes/index.tsx`**
-- Replace the `catch { navigate("/paywall") }` fallback with `isAuthError ? resetToOnboarding : navigate("/onboarding")`. Never default to paywall.
+In `resetToOnboarding`, before calling `signOut()` and `clearStaleClientState()`, check `await supabase.auth.getSession()`. If there is no session, skip both side-effects and just navigate to `/onboarding`. Prevents an accidental call from a clean anonymous visitor from clearing storage or doing a full reload.
 
-**`src/routes/onboarding.index.tsx`**
-- `beforeLoad` welcome path: when `data.session` exists, call `getRouteResolution()` first. If it throws auth error → `resetToOnboarding` (no redirect to `/`). Only if resolver succeeds do we redirect to `/`.
-- Welcome step (anonymous) must always render the splash regardless of `isOnboarded()` localStorage. Confirmed already (no `isOnboarded()` read here) — just make sure the `beforeLoad` doesn't trust a dead session.
+`clearStaleClientState` does NOT touch `dupli.onboarding.v1` (verified — not in `STALE_LOCAL_KEYS` or any prefix). No change needed there.
 
-**`src/hooks/use-auth.ts`**
-- In `onAuthStateChange`, if event is `SIGNED_OUT` or session becomes null, optionally call `clearStaleClientState()` (keeps localStorage from re-poisoning a fresh anon visit). Do NOT await Supabase calls inside the callback.
+### 4. Temporary diagnostic logs
 
-**`src/routes/logout.tsx`**
-- Replace ad-hoc `localStorage.clear()` with `clearStaleClientState()` so we don't nuke unrelated keys, then `signOut` + redirect (existing behavior).
-
-### 3. Server-side: surface auth errors clearly
-
-`src/integrations/supabase/auth-middleware.ts` already throws `Response(401, "Unauthorized: …")`. Confirm callers can detect this via `err instanceof Response && err.status === 401` — that's what `isAuthError` will check first. No server changes needed beyond confirming the contract.
-
-### 4. Acceptance test mapping
-
-| Test | Covered by |
-|---|---|
-| A. Deleted user visits `/app` | `_app.tsx` catch → `resetToOnboarding` |
-| B. Deleted user visits `/paywall` | `paywall.tsx` `beforeLoad` + effect |
-| C. Deleted user visits `/checkout/success` | `checkout.success.tsx` `checkOnce` auth-error branch |
-| D. Anon w/ stale localStorage on `/onboarding` | welcome step renders unconditionally; `beforeLoad` no longer trusts dead session |
-| E/F/G. Normal valid users | Unchanged resolver outcomes |
-
-### Out of scope (per request)
-
-- No pricing, checkout, UI redesign, or auth-provider changes.
-- No new visible "close paywall" button.
+Gated by `import.meta.env.DEV` so production bundles strip them; never log tokens or emails:
+- "Get Started clicked" in welcome `primary.onClick`.
+- "navigate → /onboarding/email".
+- "/onboarding/email beforeLoad session=yes|no destination=…".
+- "redirecting because: <reason>" in each `throw redirect`.
 
 ## Files touched
+- `src/routes/onboarding.index.tsx` — rewrite welcome `beforeLoad`; add dev log in Get Started handler.
+- `src/routes/onboarding.email.tsx` — rewrite `beforeLoad`; add dev logs.
+- `src/lib/auth-reset.ts` — add anonymous no-op guard in `resetToOnboarding`.
 
-- `src/lib/auth-reset.ts` *(new)*
-- `src/routes/_app.tsx`
-- `src/routes/paywall.tsx`
-- `src/routes/checkout.success.tsx`
-- `src/routes/index.tsx`
-- `src/routes/onboarding.index.tsx`
-- `src/routes/logout.tsx`
-- `src/hooks/use-auth.ts` *(small)*
+## Out of scope
+Auth architecture, payments, paywall, checkout, subscription rules, visual design — all unchanged. `_app.tsx`, `paywall.tsx`, `checkout.success.tsx`, `logout.tsx`, `index.tsx` not modified.
+
+## Acceptance verification
+- A. Clean anon → click Get Started → `/onboarding/email` renders. No reset call.
+- B. Anon + stale localStorage → same as A.
+- C. Stale/deleted authenticated state on `/onboarding` → splash renders (auth-error path clears state) → click → `/onboarding/email` renders (no session left).
+- D. Valid signed-in user on `/onboarding`:
+  - paid → `/app`
+  - unpaid + complete → `/paywall`
+  - unpaid + incomplete → `/onboarding?start=quiz` (URL changes, no loop with `/`).
