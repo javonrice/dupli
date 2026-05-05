@@ -112,9 +112,11 @@ function PaywallPage() {
           await resetToOnboarding(navigate);
           return;
         }
-        // Transient error → bounce to onboarding splash rather than render
-        // paywall to a user we couldn't verify.
-        navigate({ to: "/onboarding", replace: true });
+        // Transient error → render the paywall. The user has a session and
+        // this is the safest place for an unpaid completed user; checkout
+        // server actions will re-verify on submit. Bouncing to /onboarding
+        // here previously trapped legit unpaid users out of checkout.
+        setVerified(true);
       }
     })();
     return () => {
