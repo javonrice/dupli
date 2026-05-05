@@ -110,8 +110,8 @@ function IndexSplash() {
         return;
       }
 
-      // 3. Signed out + onboarded → onboarding email entry point.
-      navigate({ to: "/onboarding/email", replace: true });
+      // 3. Signed out → branded onboarding splash (single public entry point).
+      navigate({ to: "/onboarding", replace: true });
     })();
     return () => {
       cancelled = true;

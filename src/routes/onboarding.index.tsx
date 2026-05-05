@@ -58,7 +58,7 @@ export const Route = createFileRoute("/onboarding/")({
   // Route access rules:
   // - /onboarding (welcome): public for signed-out; signed-in users go through splash.
   // - /onboarding?start=quiz: requires an authenticated user who has NOT yet
-  //   completed onboarding. Signed-out → /onboarding/email. Already
+  //   completed onboarding. Signed-out → /onboarding (welcome). Already
   //   onboarded → "/" (which routes to /app or /paywall as appropriate).
   beforeLoad: async ({ search }) => {
     const { supabase } = await import("@/integrations/supabase/client");
@@ -66,7 +66,7 @@ export const Route = createFileRoute("/onboarding/")({
 
     if (search.start === "quiz") {
       if (!data.session) {
-        throw redirect({ to: "/onboarding/email" });
+        throw redirect({ to: "/onboarding" });
       }
       try {
         const { getRouteResolution } = await import(
@@ -166,7 +166,7 @@ function OnboardingPage() {
       const { supabase } = await import("@/integrations/supabase/client");
       const { data } = await supabase.auth.getSession();
       if (!cancelled && !data.session) {
-        navigate({ to: "/onboarding/email", replace: true });
+        navigate({ to: "/onboarding", replace: true });
       }
     })();
     return () => {
@@ -241,10 +241,6 @@ function OnboardingPage() {
         total={TOTAL}
         hideProgress
         primary={{ label: "Get Started", onClick: () => navigate({ to: "/onboarding/email" }) }}
-        textLink={{
-          label: "I already have an account · Sign in",
-          onClick: () => navigate({ to: "/onboarding/email" }),
-        }}
       >
         <div className="relative -mx-6 -mt-2 flex h-full flex-col">
           {/* Immersive hero — camera POV scanning a real product */}

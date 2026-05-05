@@ -48,7 +48,7 @@ function AppLayout() {
   }, [authLoading, user]);
 
   if (authLoading) return <SplashSpinner />;
-  if (!user) return <Navigate to="/onboarding/email" replace />;
+  if (!user) return <Navigate to="/onboarding" replace />;
   if (resolving || !resolution) return <SplashSpinner />;
 
   if (resolution.destination.to !== "/app") {

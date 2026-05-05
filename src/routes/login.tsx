@@ -1,11 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
-// Compatibility redirect. The standalone login form has been removed —
-// /onboarding/email is now the single email/password auth entry point.
+// Compatibility redirect. /onboarding is the single branded public entry point.
 export const Route = createFileRoute("/login")({
   beforeLoad: () => {
-    throw redirect({ to: "/onboarding/email", replace: true });
+    throw redirect({ to: "/onboarding", replace: true });
   },
   component: LoginRedirect,
 });
