@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, isRedirect, redirect, useNavigate } from "@tanstack/react-router";
 import { Check, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { track } from "@/lib/onboarding";
@@ -6,6 +6,8 @@ import { TrialTimeline } from "@/components/onboarding/trial-timeline";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubscription } from "@/hooks/use-subscription";
 import { useStripeCheckout } from "@/hooks/use-stripe-checkout";
+import { supabase } from "@/integrations/supabase/client";
+import { getRouteResolution } from "@/server/onboarding.functions";
 import {
   readPaywallReason,
   readScanBlock,
@@ -15,6 +17,29 @@ import {
 
 export const Route = createFileRoute("/paywall")({
   component: PaywallPage,
+  beforeLoad: async () => {
+    // Skip during SSR — the browser supabase client owns the session and
+    // localStorage isn't available server-side. The component-level effects
+    // still gate rendering on the client when needed.
+    if (typeof window === "undefined") return;
+    const { data } = await supabase.auth.getSession();
+    if (!data.session) {
+      throw redirect({ to: "/onboarding/email" });
+    }
+    try {
+      const res = await getRouteResolution();
+      if (res.destination.to !== "/paywall") {
+        const dest = res.destination;
+        if (dest.to === "/onboarding") {
+          throw redirect({ to: "/onboarding", search: dest.search });
+        }
+        throw redirect({ to: dest.to });
+      }
+    } catch (e) {
+      if (isRedirect(e)) throw e;
+      // Resolver failure: render paywall as the safe fallback.
+    }
+  },
   head: () => ({
     meta: [
       { title: "Go Premium — Dupli" },
