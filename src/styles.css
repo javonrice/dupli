@@ -110,4 +110,40 @@
   /* Hairline border (iOS uses sub-pixel separators on retina) */
   .hairline-b { border-bottom: 0.5px solid var(--color-border); }
   .hairline-t { border-top: 0.5px solid var(--color-border); }
+
+  /* Device frame — keep app phone-sized on larger viewports.
+     Uses container-query units so child screens sized with
+     h-screen-safe / h-screen-minus-tabbar fill the frame, not the window.
+     Fixed-position descendants (modals, sheets, FAB) are contained because
+     `transform` on the frame establishes a containing block. */
+  .device-backdrop {
+    position: fixed;
+    inset: 0;
+    background: oklch(0.16 0 0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  .device-frame {
+    position: relative;
+    width: min(100vw, 430px);
+    height: 100dvh;
+    max-height: 100dvh;
+    background-color: var(--color-background);
+    overflow: hidden;
+    container-type: size;
+    transform: translateZ(0);
+    isolation: isolate;
+  }
+  @media (min-width: 640px) {
+    .device-frame {
+      height: min(100dvh, 920px);
+      border-radius: 2.25rem;
+      box-shadow: 0 20px 60px oklch(0 0 0 / 0.45), 0 0 0 1px oklch(1 0 0 / 0.04);
+    }
+  }
+  .device-frame .h-screen-safe { height: 100cqh; }
+  .device-frame .min-h-screen-safe { min-height: 100cqh; }
+  .device-frame .h-screen-minus-tabbar { height: calc(100cqh - var(--tab-bar-h)); }
 }
