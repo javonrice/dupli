@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { getStripeEnvironment } from "@/lib/stripe";
+import { getClientStripeEnv } from "@/lib/stripe-env";
 import { useAuth } from "@/hooks/use-auth";
 import { isSuperUser } from "@/lib/superusers";
+import { isSubscriptionActive } from "@/lib/access";
 
 export type Subscription = {
   id: string;
