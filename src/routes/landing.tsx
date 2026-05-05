@@ -24,11 +24,11 @@ export const Route = createFileRoute("/landing")({
 function LandingPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
+      <header className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-5 py-5 sm:px-6">
         <img src={wordmark} alt="Dupli" className="h-8 w-auto" width={887} height={414} />
         <nav className="flex items-center gap-5 text-sm text-muted-foreground">
-          <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
-          <Link to="/terms" className="hover:text-foreground">Terms</Link>
+          <Link to="/privacy" className="hidden hover:text-foreground sm:inline">Privacy</Link>
+          <Link to="/terms" className="hidden hover:text-foreground sm:inline">Terms</Link>
           <Link
             to="/onboarding/email"
             className="rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
@@ -42,7 +42,7 @@ function LandingPage() {
         <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">
           AI Dupe Finder
         </p>
-        <h1 className="mt-3 font-display text-5xl font-bold leading-tight tracking-tight sm:text-6xl">
+        <h1 className="mt-3 font-display text-4xl font-bold leading-tight tracking-tight sm:text-5xl md:text-6xl">
           Snap any product.{" "}
           <span className="italic text-muted-foreground">Find the dupe.</span>
         </h1>
