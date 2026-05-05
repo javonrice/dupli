@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { setPendingEmail } from "@/lib/onboarding";
-import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 
 export const Route = createFileRoute("/onboarding/email")({
