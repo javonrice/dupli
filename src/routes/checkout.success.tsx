@@ -50,7 +50,11 @@ function CheckoutSuccessPage() {
         } else {
           navigate({ to: dest.to, replace: true });
         }
-      } catch {
+      } catch (err) {
+        if (isAuthError(err)) {
+          await resetToOnboarding(navigate);
+          return;
+        }
         navigate({ to: "/app", replace: true });
       }
       void userId;
