@@ -40,11 +40,12 @@ function AppLayout() {
   if (authLoading) return <SplashSpinner />;
   if (!user) return <Navigate to="/onboarding/email" replace />;
   if (subLoading || onboardingCompleted === null) return <SplashSpinner />;
-  if (!isActive) {
-    if (!onboardingCompleted) {
-      return <Navigate to="/onboarding" search={{ start: "quiz" }} replace />;
-    }
-    return <Navigate to="/paywall" replace />;
+  // Unpaid users with incomplete onboarding go finish the quiz.
+  // Unpaid but onboarded users are allowed into /app — scan quota is enforced
+  // server-side (3 free scans per UTC day) and the scan button is gated client-
+  // side via sessionStorage["dupli.scan.blockedUntil"] when the quota is hit.
+  if (!isActive && !onboardingCompleted) {
+    return <Navigate to="/onboarding" search={{ start: "quiz" }} replace />;
   }
 
   return (
