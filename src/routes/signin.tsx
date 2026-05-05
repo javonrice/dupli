@@ -1,10 +1,10 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { Loader2 } from "lucide-react";
 
-// Compatibility redirect. /onboarding/email is the single auth entry point.
+// Compatibility redirect. /onboarding is the single branded public entry point.
 export const Route = createFileRoute("/signin")({
   beforeLoad: () => {
-    throw redirect({ to: "/onboarding/email", replace: true });
+    throw redirect({ to: "/onboarding", replace: true });
   },
   component: SigninRedirect,
 });

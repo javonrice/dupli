@@ -59,7 +59,7 @@ function CheckoutSuccessPage() {
       const { data: session } = await supabase.auth.getSession();
       const userId = session.session?.user.id;
       if (!userId) {
-        navigate({ to: "/onboarding/email" });
+        navigate({ to: "/onboarding" });
         return true;
       }
       const { data: sub } = await (supabase as any)

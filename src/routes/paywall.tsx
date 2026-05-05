@@ -24,7 +24,7 @@ export const Route = createFileRoute("/paywall")({
     if (typeof window === "undefined") return;
     const { data } = await supabase.auth.getSession();
     if (!data.session) {
-      throw redirect({ to: "/onboarding/email" });
+      throw redirect({ to: "/onboarding" });
     }
     try {
       const res = await getRouteResolution();
@@ -79,7 +79,7 @@ function PaywallPage() {
       try {
         const { data } = await supabase.auth.getSession();
         if (!data.session) {
-          navigate({ to: "/onboarding/email", replace: true });
+          navigate({ to: "/onboarding", replace: true });
           return;
         }
         const res = await getRouteResolution();
