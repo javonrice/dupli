@@ -46,7 +46,7 @@ import { useScanFlow } from "@/lib/use-scan-flow";
 import { ScanningScreen, ResultsScreen } from "@/components/scanner";
 import { LiveCamera } from "@/components/camera/live-camera";
 
-export const Route = createFileRoute("/onboarding")({
+export const Route = createFileRoute("/onboarding/")({
   component: OnboardingPage,
   // Signed-in users go through the splash router (/) which decides between
   // /app (active sub) and /paywall (no sub). Don't shortcut to /app here —
