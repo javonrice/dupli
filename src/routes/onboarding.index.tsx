@@ -586,6 +586,11 @@ function OnboardingPage() {
             ))}
           </ul>
         </GuidedLineReveal>
+        {finishError && (
+          <div className="mt-4 rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
+            {finishError}
+          </div>
+        )}
       </OnboardingShell>
     );
   }
