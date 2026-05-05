@@ -1,73 +1,78 @@
-# Free tier: 3 scans/day with paywall fallback
+## Migrate payments to Stripe + update pricing model
 
-Open up `/app` to unpaid users so they can browse and scan, but cap them at **3 successful scans per day** (UTC). On the 4th attempt, route them to the paywall. If they decline the paywall they keep full browse access but cannot scan again until midnight UTC, when their daily quota resets.
+Two changes in one pass:
+1. Switch the payments integration from Paddle to Lovable's built-in Stripe.
+2. Update pricing to match the uploaded mockup: **$49.99/year** (Best Value, 5-day free trial) and **$7.99/month** (5-day free trial). The $0.99 intro offer is removed.
 
-## Changes
+All existing behavior is preserved: free 3-scans/day quota, super user bypass, paywall UX, customer portal, onboarding flow.
 
-### 1. `src/routes/_app.tsx` — stop bouncing unpaid users
+---
 
-Replace the unpaid → `/paywall` redirect with: only redirect when the user hasn't finished onboarding. Otherwise let unpaid users into the app.
+### New pricing model
 
-```text
-if (!user)                              → /onboarding/email
-if (!isActive && !onboardingCompleted)  → /onboarding?start=quiz
-otherwise                               → render app
-```
+| Plan    | Price       | Trial         | Notes                              |
+|---------|-------------|---------------|------------------------------------|
+| Yearly  | $49.99/year | 5-day free    | Best Value · "Just $4.17/mo · Save 48%" |
+| Monthly | $7.99/month | 5-day free    | —                                  |
 
-The `/paywall` route stays available for upsell from the scanner and any "go premium" CTA. A "Maybe later" / back button on `/paywall` returns the user to `/app` (browse-only mode).
+- Crossed-out comparison price `$95.88` (12 × $7.99) shown on the yearly card.
+- "Save 48%" badge (computed from $49.99 vs $95.88).
+- The intro `$0.99 first month` offer is removed entirely (button + Stripe coupon + price).
 
-### 2. New middleware `requireScanEntitlement` on `scanProduct`
+### Stripe integration
 
-File: `src/server/scan-entitlement-middleware.ts`
+**Backend / infra**
+1. Enable Lovable's built-in Stripe integration. This auto-provisions `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` and registers the webhook.
+2. Create Stripe products + prices in test (auto-synced to live on publish), reusing the same human-readable IDs the rest of the app already references:
+   - `dupli_pro_yearly` → $49.99/year, 5-day trial
+   - `dupli_pro_monthly` → $7.99/month, 5-day trial
+3. Replace `src/lib/paddle.server.ts` with `src/lib/stripe.server.ts` (Stripe SDK client + `verifyWebhook` using `STRIPE_WEBHOOK_SECRET`).
+4. Replace `src/routes/api/public/payments/webhook.ts` to handle Stripe events:
+   - `checkout.session.completed` → upsert subscription (read `metadata.userId`)
+   - `customer.subscription.created/updated/deleted` → update status, period, cancel_at_period_end
+   - Verify with `stripe.webhooks.constructEvent`.
+5. Replace `src/server/payments.functions.ts`:
+   - `resolveStripePrice({ priceId })` — looks up Stripe Price by `lookup_key`.
+   - New `createCheckoutSession({ priceId, userId, email })` — creates a Stripe Checkout Session (subscription mode, 5-day trial, success URL `/checkout/success`, cancel URL `/paywall`) and returns the URL.
+6. Replace `src/server/billing.functions.ts` `createCustomerPortalSession` to call `stripe.billingPortal.sessions.create`.
 
-- Run `requireSupabaseAuth` first (need `userId`).
-- Look up active subscription. If active → `next()`.
-- Else count `scans` rows for `user_id = userId` where `created_at >= date_trunc('day', now() at time zone 'UTC')`.
-- If `count >= 3` → `throw new Response(JSON.stringify({ reason: "quota", resetAt: <next UTC midnight ISO> }), { status: 402, headers: { "content-type": "application/json" } })`.
-- Else → `next()`.
+**Database**
+- Migration: rename `paddle_subscription_id` → `stripe_subscription_id`, `paddle_customer_id` → `stripe_customer_id` (same string columns, repurposed). The `environment` column still gates `'sandbox'` vs `'live'`. `has_active_subscription()` is unchanged. RLS unchanged.
 
-Wire it up in `src/server/scan.functions.ts`: replace `.middleware([requireActiveSubscription])` with `.middleware([requireScanEntitlement])` on `scanProduct`.
+**Frontend**
+7. Replace `src/lib/paddle.ts` → `src/lib/stripe.ts` — `getStripeEnvironment()` (derived from `pk_test_` vs `pk_live_` prefix) + `redirectToCheckout(priceId)` helper that calls the server function and does `window.location.href = url`.
+8. Replace `src/hooks/use-paddle-checkout.ts` → `src/hooks/use-stripe-checkout.ts` with the same `{ openCheckout, loading }` shape.
+9. Update `src/routes/paywall.tsx`:
+   - Swap to the new hook + helpers.
+   - Remove the "Or try for $0.99 your first month" button and `startCheap` flow.
+   - Update plan cards to the new prices ($49.99/year and $7.99/month).
+   - Yearly card: show crossed-out `$95.88`, "Save 48%" badge, and "Just $4.17/mo · 5-day free trial" subline.
+   - Monthly card: "$7.99/month · 5-day free trial".
+   - Update `<TrialTimeline>` to "5-day free trial" and the new prices.
+   - Update CTA: "Start My Free Trial" → "Then $49.99/year" or "Then $7.99/month" depending on plan.
+   - Footer microcopy: "Try free for 5 days. Cancel anytime. No risk."
+10. Update `src/components/onboarding/trial-timeline.tsx` for 5-day trial wording.
+11. Update `src/hooks/use-subscription.ts` env detection to use `getStripeEnvironment()` (super user bypass preserved).
+12. Update `src/components/payment-test-mode-banner.tsx` to read the Stripe env helper.
+13. Update `.env.development` / `.env.production` — add `VITE_STRIPE_PUBLISHABLE_KEY`, remove `VITE_PAYMENTS_CLIENT_TOKEN` and `PADDLE_ENVIRONMENT`. Update `wrangler.jsonc` vars.
 
-### 3. Scanner client handles 402 → paywall with quota reason
+**Cleanup**
+14. Remove `@paddle/paddle-node-sdk`. Delete obsolete Paddle helpers and the `resolvePaddleDiscount` function.
 
-`src/lib/use-scan-flow.ts`: on 402, parse the body, write `sessionStorage["dupli.paywall.reason"] = "quota"` and `sessionStorage["dupli.paywall.resetAt"] = resetAt`, then `navigate({ to: "/paywall" })`.
+### What stays the same
+- `subscriptions` table schema (only column names renamed), RLS, `has_active_subscription`.
+- `requireScanEntitlement` middleware (3 scans/day for free users).
+- `SUPER_USER_IDS` hardcoded bypass.
+- Paywall layout, plan toggle, "Maybe later" flow, quota banner.
+- `useSubscription` hook contract (`isActive`, `loading`).
+- Onboarding routing in `_app.tsx`, `/checkout/success` page.
 
-### 4. `src/routes/paywall.tsx` — quota state + "Maybe later"
+### Differences user will notice
+- Checkout opens as a **hosted Stripe Checkout page** (full redirect) instead of the Paddle overlay. This is the standard Lovable Stripe flow and is more reliable on iOS/PWA.
+- Customer portal still opens in a new tab.
+- Test card: `4242 4242 4242 4242`, any future expiry, any CVC.
 
-- On mount, read the sessionStorage flags. If `reason === "quota"`, show a banner above the headline:
-  > "You've used your 3 free scans for today. They reset in `<countdown to resetAt>`."
-- Add / surface a "Maybe later" button that navigates back to `/app`. Browsing (history, saved scans, trending, search) keeps working — only the scan action is blocked.
+### Note on the visual style of the mockup
+The uploaded image shows a dark theme with a gradient CTA and green "Best Value" ribbon. Your current paywall uses a light/neutral theme with a black CTA. I will keep the **content/structure** from the mockup (prices, trial length, save % badge, crossed-out price) but keep the existing visual styling consistent with the rest of the app. If you want me to also restyle to match the dark gradient mockup, say so and I'll do that as a follow-up.
 
-### 5. Browse-only UX in `/app` for the rest of today
-
-When the scanner attempts a scan and the server returns 402, in addition to the paywall redirect, store `sessionStorage["dupli.scan.blockedUntil"] = resetAt`. The scan FAB / Scan button in `src/routes/_app.tsx` (and any other entry points like the Discovery Hub FAB) reads this on mount:
-
-- If `blockedUntil` is in the future and the user is unpaid, the scan button:
-  - stays visible but tapping it routes to `/paywall` instead of opening the camera, and
-  - shows a small "Resets in `<countdown>`" hint underneath.
-- If `blockedUntil` has passed, clear the key and restore normal scan behavior.
-- Paid users ignore the flag entirely.
-
-This means a user who hits the cap, declines the paywall, and comes back to `/app` can keep browsing all day but cannot trigger a scan until the next UTC midnight.
-
-## What does NOT change
-
-- Paid users: unchanged.
-- Onboarding flow: unchanged.
-- Scan persistence (`saveScan`) — unchanged. Quota counts persisted scans, so failed AI calls don't burn quota.
-- `requireActiveSubscription` middleware stays in place for any future premium-only endpoints.
-
-## Edge cases
-
-- **Race / concurrent scans**: count happens before the AI call; in the rare race two scans both pass at count=2, the user gets a 4th. Acceptable.
-- **Timezone**: window is UTC midnight, documented in the middleware comment.
-- **Stale sessionStorage**: `blockedUntil` is checked against `Date.now()`; if it's in the past it's cleared and scanning works again immediately.
-
-## Verification
-
-1. Unpaid onboarded user → lands on `/app` (not paywall).
-2. Run 3 scans → all succeed.
-3. 4th scan → redirected to `/paywall` with "3 free scans used, resets in Xh Ym" banner.
-4. Tap "Maybe later" → back on `/app`, can browse history/trending/saved, but the scan button routes to `/paywall` until UTC midnight.
-5. After UTC midnight (or by clearing sessionStorage) → scanning works again.
-6. Paid user → unlimited scans, no banner, no block.
+After approval I'll implement everything in one pass.
