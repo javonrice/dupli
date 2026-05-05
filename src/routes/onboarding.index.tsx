@@ -58,8 +58,11 @@ export const Route = createFileRoute("/onboarding/")({
           "@/server/onboarding.functions"
         );
         const res = await getRouteResolution();
-        if (res.onboardingCompleted) {
-          throw redirect({ to: "/" });
+        const dest = res.destination;
+        // Already paid → /app. Already completed unpaid → /paywall.
+        // Otherwise (incomplete) render the quiz.
+        if (dest.to === "/app" || dest.to === "/paywall") {
+          throw redirect({ to: dest.to });
         }
       } catch (e) {
         const { isRedirect } = await import("@tanstack/react-router");
@@ -76,6 +79,7 @@ export const Route = createFileRoute("/onboarding/")({
           clearStaleClientState();
           throw redirect({ to: "/onboarding" });
         }
+        // Transient — render the quiz.
       }
       return;
     }
