@@ -1,9 +1,6 @@
-// Gate the scanProduct server function on either an active subscription OR
-// remaining free-tier quota (3 successful scans per UTC day).
-//
-// On quota exhaustion, throws HTTP 402 with a JSON body so the client can
-// route to /paywall with a quota-aware message and disable the scan button
-// until the next UTC midnight.
+// Hard paywall: only active subscribers (or superusers) may scan. There is
+// no free-tier quota. On failure, throws HTTP 402 so the client can route
+// to /paywall.
 
 import { createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -12,34 +9,14 @@ import { isSuperUser } from "@/lib/superusers";
 import { getServerStripeEnv } from "@/lib/stripe-env.server";
 import { isSubscriptionActive } from "@/lib/access";
 
-const FREE_DAILY_LIMIT = 3;
-
-function nextUtcMidnightISO(): string {
-  const now = new Date();
-  const next = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0),
-  );
-  return next.toISOString();
-}
-
-function startOfUtcDayISO(): string {
-  const now = new Date();
-  const start = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0),
-  );
-  return start.toISOString();
-}
-
 export const requireScanEntitlement = createMiddleware({ type: "function" })
   .middleware([requireSupabaseAuth])
   .server(async ({ next, context }) => {
     const userId = (context as { userId: string }).userId;
-    const env = getServerStripeEnv();
 
-    // 0. Hardcoded super users always pass.
     if (isSuperUser(userId)) return next({ context });
 
-    // 1. Active subscription always passes.
+    const env = getServerStripeEnv();
     const { data: sub } = await supabaseAdmin
       .from("subscriptions")
       .select("status,current_period_end")
@@ -51,30 +28,8 @@ export const requireScanEntitlement = createMiddleware({ type: "function" })
 
     if (isSubscriptionActive(sub)) return next({ context });
 
-    // 2. Free tier: count successful scans in the current UTC day.
-    const since = startOfUtcDayISO();
-    const { count, error: countError } = await supabaseAdmin
-      .from("scans")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .gte("created_at", since);
-
-    if (countError) {
-      console.error("[requireScanEntitlement] scan count failed", countError);
-      throw new Response("Scan quota lookup failed", { status: 500 });
-    }
-
-    if ((count ?? 0) >= FREE_DAILY_LIMIT) {
-      const body = JSON.stringify({
-        reason: "quota",
-        limit: FREE_DAILY_LIMIT,
-        resetAt: nextUtcMidnightISO(),
-      });
-      throw new Response(body, {
-        status: 402,
-        headers: { "content-type": "application/json" },
-      });
-    }
-
-    return next({ context });
+    throw new Response(
+      JSON.stringify({ reason: "subscription_required" }),
+      { status: 402, headers: { "content-type": "application/json" } },
+    );
   });

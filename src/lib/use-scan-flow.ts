@@ -7,7 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
 import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
 import { saveScan, setSaved } from "@/server/scans.functions";
-import { setScanBlocked } from "@/lib/scan-quota";
+
 
 export type ScanStage = "idle" | "scanning" | "results";
 
@@ -102,14 +102,6 @@ export function useScanFlow() {
             ? (e as { status?: number }).status
             : undefined;
         if (status === 402) {
-          // Try to read the structured body so we can mark the user blocked
-          // until the next UTC midnight and show a quota banner on /paywall.
-          try {
-            const body = await (e as Response).clone().json();
-            if (body?.resetAt) setScanBlocked(body.resetAt, body.reason ?? "quota");
-          } catch {
-            /* non-JSON body — fall through to plain paywall */
-          }
           setStage("idle");
           setPreview(null);
           navigate({ to: "/paywall" });
