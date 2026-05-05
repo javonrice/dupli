@@ -79,6 +79,7 @@ function PasswordStep() {
           }
         } else {
           // Signed up — drop straight into the personalization quiz.
+          clearPendingEmail();
           navigate({ to: "/onboarding", search: { start: "quiz" } });
         }
       } else {
@@ -86,15 +87,15 @@ function PasswordStep() {
         if (error) {
           setError(error.message);
         } else {
-          // Subscription check first — paid users skip onboarding/paywall.
+          clearPendingEmail();
+          // Canonical resolver decides where the user goes next.
           try {
             const res = await getRouteResolution();
-            if (res.hasActiveSub) {
-              navigate({ to: "/app" });
-            } else if (res.onboardingCompleted) {
-              navigate({ to: "/paywall" });
+            const dest = res.destination;
+            if (dest.to === "/onboarding") {
+              navigate({ to: "/onboarding", search: dest.search });
             } else {
-              navigate({ to: "/onboarding", search: { start: "quiz" } });
+              navigate({ to: dest.to });
             }
           } catch {
             navigate({ to: "/" });
