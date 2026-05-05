@@ -8,6 +8,7 @@
 import { createMiddleware } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { isSuperUser } from "@/lib/superusers";
 
 const FREE_DAILY_LIMIT = 3;
 
