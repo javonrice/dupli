@@ -1,6 +1,51 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequestIP } from "@tanstack/react-start/server";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+
+// Best-effort per-IP rate limit. Workers are multi-instance so this is not a
+// hard guarantee — it just blunts trivial enumeration attempts. The endpoint
+// always returns only { exists: boolean } so it leaks no PII either way.
+const RATE_BUCKET = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60_000;
+
+function rateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = RATE_BUCKET.get(ip);
+  if (!entry || entry.resetAt < now) {
+    RATE_BUCKET.set(ip, { count: 1, resetAt: now + RATE_WINDOW_MS });
+    return false;
+  }
+  entry.count += 1;
+  return entry.count > RATE_LIMIT;
+}
+
+const checkEmailSchema = z.object({
+  email: z.string().trim().toLowerCase().email().max(255),
+});
+
+export const checkEmailExists = createServerFn({ method: "POST" })
+  .inputValidator((input: unknown) => checkEmailSchema.parse(input))
+  .handler(async ({ data }): Promise<{ exists: boolean }> => {
+    try {
+      const ip = getRequestIP({ xForwardedFor: true }) ?? "unknown";
+      if (rateLimited(ip)) return { exists: false };
+
+      const { data: row } = await supabaseAdmin
+        .from("profiles")
+        .select("id")
+        .eq("email", data.email)
+        .limit(1)
+        .maybeSingle();
+
+      return { exists: !!row };
+    } catch {
+      // Fail-open into signup; password screen has a duplicate-user fallback.
+      return { exists: false };
+    }
+  });
 
 function getServerStripeEnv(): "sandbox" | "live" {
   return process.env.NODE_ENV === "production" ? "live" : "sandbox";

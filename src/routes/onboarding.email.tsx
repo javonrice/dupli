@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { setPendingEmail } from "@/lib/onboarding";
 import { supabase } from "@/integrations/supabase/client";
+import { checkEmailExists } from "@/server/onboarding.functions";
 
 export const Route = createFileRoute("/onboarding/email")({
   component: EmailStep,
@@ -30,7 +31,7 @@ function EmailStep() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     const trimmed = email.trim().toLowerCase();
@@ -40,7 +41,14 @@ function EmailStep() {
     }
     setSubmitting(true);
     setPendingEmail(trimmed);
-    navigate({ to: "/onboarding/password", search: { mode: "signup" } });
+    let mode: "signup" | "login" = "signup";
+    try {
+      const res = await checkEmailExists({ data: { email: trimmed } });
+      if (res?.exists) mode = "login";
+    } catch {
+      // fall through to signup; password screen handles duplicate-user fallback
+    }
+    navigate({ to: "/onboarding/password", search: { mode } });
   };
 
   return (

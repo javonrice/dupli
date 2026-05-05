@@ -1,78 +1,69 @@
-## Migrate payments to Stripe + update pricing model
+# Onboarding auth: detect existing accounts before password step
 
-Two changes in one pass:
-1. Switch the payments integration from Paddle to Lovable's built-in Stripe.
-2. Update pricing to match the uploaded mockup: **$49.99/year** (Best Value, 5-day free trial) and **$7.99/month** (5-day free trial). The $0.99 intro offer is removed.
+## Scope
 
-All existing behavior is preserved: free 3-scans/day quota, super user bypass, paywall UX, customer portal, onboarding flow.
+Fix `/onboarding/email` so it detects whether an account already exists, route the user to the correct password mode, and route correctly after login. No DB migrations; no new dependencies.
 
----
+Note: the project already migrated from Paddle to Stripe. The "PADDLE_ENVIRONMENT" wording in the request is treated as the project's payment environment (`sandbox` vs `live`), which is sourced from `getServerStripeEnv()` (server) and `getStripeEnvironment()` (client) — the same source of truth used by every other subscription check.
 
-### New pricing model
+## 1. New server function: `checkEmailExists`
 
-| Plan    | Price       | Trial         | Notes                              |
-|---------|-------------|---------------|------------------------------------|
-| Yearly  | $49.99/year | 5-day free    | Best Value · "Just $4.17/mo · Save 48%" |
-| Monthly | $7.99/month | 5-day free    | —                                  |
+Add to `src/server/onboarding.functions.ts`:
 
-- Crossed-out comparison price `$95.88` (12 × $7.99) shown on the yearly card.
-- "Save 48%" badge (computed from $49.99 vs $95.88).
-- The intro `$0.99 first month` offer is removed entirely (button + Stripe coupon + price).
+- `createServerFn({ method: "POST" })` — public (no `requireSupabaseAuth`).
+- Input validated with **Zod**: `{ email: z.string().trim().toLowerCase().email().max(255) }`.
+- Implementation:
+  - Query `profiles` via `supabaseAdmin` with `.select("id").eq("email", normalizedEmail).limit(1).maybeSingle()`.
+  - The `handle_new_user` trigger writes `email` into `profiles` for every auth signup, so this is an exact, indexed-style lookup (1 row max) — no admin pagination, no in-memory filtering.
+  - Return strictly `{ exists: boolean }`. No id, provider, timestamps, metadata.
+- Lightweight in-memory rate limit per IP (e.g. 20/min) using `getRequestIP` from `@tanstack/react-start/server`; on overflow return `{ exists: false }` (fails open into signup; the password screen's duplicate-user fallback still protects the user). Best-effort only — Workers are multi-instance.
+- No raw email logging. On internal error, return `{ exists: false }` (caller treats as signup; duplicate-user fallback handles it).
 
-### Stripe integration
+Edge case: if a user exists in `auth.users` but somehow lacks a profile row, the lookup says "doesn't exist" → user lands in signup mode → `signUp` throws duplicate-user → password screen flips to login mode (requirement #6). Safe.
 
-**Backend / infra**
-1. Enable Lovable's built-in Stripe integration. This auto-provisions `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `VITE_STRIPE_PUBLISHABLE_KEY` and registers the webhook.
-2. Create Stripe products + prices in test (auto-synced to live on publish), reusing the same human-readable IDs the rest of the app already references:
-   - `dupli_pro_yearly` → $49.99/year, 5-day trial
-   - `dupli_pro_monthly` → $7.99/month, 5-day trial
-3. Replace `src/lib/paddle.server.ts` with `src/lib/stripe.server.ts` (Stripe SDK client + `verifyWebhook` using `STRIPE_WEBHOOK_SECRET`).
-4. Replace `src/routes/api/public/payments/webhook.ts` to handle Stripe events:
-   - `checkout.session.completed` → upsert subscription (read `metadata.userId`)
-   - `customer.subscription.created/updated/deleted` → update status, period, cancel_at_period_end
-   - Verify with `stripe.webhooks.constructEvent`.
-5. Replace `src/server/payments.functions.ts`:
-   - `resolveStripePrice({ priceId })` — looks up Stripe Price by `lookup_key`.
-   - New `createCheckoutSession({ priceId, userId, email })` — creates a Stripe Checkout Session (subscription mode, 5-day trial, success URL `/checkout/success`, cancel URL `/paywall`) and returns the URL.
-6. Replace `src/server/billing.functions.ts` `createCustomerPortalSession` to call `stripe.billingPortal.sessions.create`.
+## 2. `src/routes/onboarding.email.tsx`
 
-**Database**
-- Migration: rename `paddle_subscription_id` → `stripe_subscription_id`, `paddle_customer_id` → `stripe_customer_id` (same string columns, repurposed). The `environment` column still gates `'sandbox'` vs `'live'`. `has_active_subscription()` is unchanged. RLS unchanged.
+On submit:
+- Call `checkEmailExists({ data: { email: trimmedLower } })`.
+- `exists === true` → `navigate({ to: "/onboarding/password", search: { mode: "login" } })`.
+- Else (or on thrown error) → `mode: "signup"`.
+- Keep `setPendingEmail(trimmed)` before navigation.
 
-**Frontend**
-7. Replace `src/lib/paddle.ts` → `src/lib/stripe.ts` — `getStripeEnvironment()` (derived from `pk_test_` vs `pk_live_` prefix) + `redirectToCheckout(priceId)` helper that calls the server function and does `window.location.href = url`.
-8. Replace `src/hooks/use-paddle-checkout.ts` → `src/hooks/use-stripe-checkout.ts` with the same `{ openCheckout, loading }` shape.
-9. Update `src/routes/paywall.tsx`:
-   - Swap to the new hook + helpers.
-   - Remove the "Or try for $0.99 your first month" button and `startCheap` flow.
-   - Update plan cards to the new prices ($49.99/year and $7.99/month).
-   - Yearly card: show crossed-out `$95.88`, "Save 48%" badge, and "Just $4.17/mo · 5-day free trial" subline.
-   - Monthly card: "$7.99/month · 5-day free trial".
-   - Update `<TrialTimeline>` to "5-day free trial" and the new prices.
-   - Update CTA: "Start My Free Trial" → "Then $49.99/year" or "Then $7.99/month" depending on plan.
-   - Footer microcopy: "Try free for 5 days. Cancel anytime. No risk."
-10. Update `src/components/onboarding/trial-timeline.tsx` for 5-day trial wording.
-11. Update `src/hooks/use-subscription.ts` env detection to use `getStripeEnvironment()` (super user bypass preserved).
-12. Update `src/components/payment-test-mode-banner.tsx` to read the Stripe env helper.
-13. Update `.env.development` / `.env.production` — add `VITE_STRIPE_PUBLISHABLE_KEY`, remove `VITE_PAYMENTS_CLIENT_TOKEN` and `PADDLE_ENVIRONMENT`. Update `wrangler.jsonc` vars.
+## 3. `src/routes/onboarding.password.tsx`
 
-**Cleanup**
-14. Remove `@paddle/paddle-node-sdk`. Delete obsolete Paddle helpers and the `resolvePaddleDiscount` function.
+The screen already supports both modes with the correct titles, subtitles, CTAs, and the duplicate-user fallback (flips to login mode + shows the required inline copy). Two changes:
 
-### What stays the same
-- `subscriptions` table schema (only column names renamed), RLS, `has_active_subscription`.
-- `requireScanEntitlement` middleware (3 scans/day for free users).
-- `SUPER_USER_IDS` hardcoded bypass.
-- Paywall layout, plan toggle, "Maybe later" flow, quota banner.
-- `useSubscription` hook contract (`isActive`, `loading`).
-- Onboarding routing in `_app.tsx`, `/checkout/success` page.
+**a. Post-login routing** — replace `navigate({ to: "/" })` after successful `signInWithPassword`:
+```
+const res = await getRouteResolution();
+if (res.hasActiveSub)              → navigate("/app")
+else if (res.onboardingCompleted)  → navigate("/paywall")
+else                               → navigate("/onboarding", { search: { start: "quiz" } })
+```
+Subscription check is first, exactly per spec. On resolver failure, fall back to `/` (existing index route already handles routing).
 
-### Differences user will notice
-- Checkout opens as a **hosted Stripe Checkout page** (full redirect) instead of the Paddle overlay. This is the standard Lovable Stripe flow and is more reliable on iOS/PWA.
-- Customer portal still opens in a new tab.
-- Test card: `4242 4242 4242 4242`, any future expiry, any CVC.
+**b. Post-signup routing** — keep current `navigate({ to: "/onboarding", search: { start: "quiz" } })`. The `handle_new_user` DB trigger already creates the profile row, satisfying "ensure profile exists." No extra round-trip.
 
-### Note on the visual style of the mockup
-The uploaded image shows a dark theme with a gradient CTA and green "Best Value" ribbon. Your current paywall uses a light/neutral theme with a black CTA. I will keep the **content/structure** from the mockup (prices, trial length, save % badge, crossed-out price) but keep the existing visual styling consistent with the rest of the app. If you want me to also restyle to match the dark gradient mockup, say so and I'll do that as a follow-up.
+## 4. Quiz route target
 
-After approval I'll implement everything in one pass.
+The codebase has no `/onboarding/quiz` route. The established, working pattern is `/onboarding?start=quiz` — `onboarding.index.tsx` already validates `search.start === "quiz"`, requires an authenticated session, and survives refresh (the search param is in the URL). Use this existing pattern; do not invent a new route.
+
+## 5. Environment consistency
+
+`getRouteResolution` already calls `getServerStripeEnv()` (NODE_ENV-based: production=live, otherwise sandbox), matching `subscription-middleware.ts`, `scan-entitlement-middleware.ts`, and the client `getStripeEnvironment()`. No host inference. No change needed.
+
+## 6. Files touched
+
+- `src/server/onboarding.functions.ts` — add `checkEmailExists`.
+- `src/routes/onboarding.email.tsx` — call `checkEmailExists`, branch on `exists`.
+- `src/routes/onboarding.password.tsx` — post-login resolver routing.
+
+No DB changes, no new packages.
+
+## Acceptance test mapping
+
+- **A** Existing email → check returns `exists:true` → login mode → resolver routes by sub/onboarding state.
+- **B** New email → `exists:false` → signup mode → trigger creates profile → quiz.
+- **C** Lookup failure → signup fallback → duplicate-user error in `signUp` flips screen to login mode (already implemented).
+- **D** Paid returning user → `hasActiveSub` true → `/app` (subscription check first).
+- **E** Unpaid returning user → routed by `onboardingCompleted` to `/paywall` or quiz.
