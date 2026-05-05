@@ -55,13 +55,35 @@ export const Route = createFileRoute("/onboarding/")({
   validateSearch: (s: Record<string, unknown>): { start?: "quiz" } => {
     return s.start === "quiz" ? { start: "quiz" } : {};
   },
-  // Signed-in users normally route via the splash. Exception: when arriving
-  // from signup with `?start=quiz`, we want them to actually run the quiz
-  // before hitting the paywall.
+  // Route access rules:
+  // - /onboarding (welcome): public for signed-out; signed-in users go through splash.
+  // - /onboarding?start=quiz: requires an authenticated user who has NOT yet
+  //   completed onboarding. Signed-out → /onboarding/email. Already
+  //   onboarded → "/" (which routes to /app or /paywall as appropriate).
   beforeLoad: async ({ search }) => {
-    if (search.start === "quiz") return;
     const { supabase } = await import("@/integrations/supabase/client");
     const { data } = await supabase.auth.getSession();
+
+    if (search.start === "quiz") {
+      if (!data.session) {
+        throw redirect({ to: "/onboarding/email" });
+      }
+      try {
+        const { getRouteResolution } = await import(
+          "@/server/onboarding.functions"
+        );
+        const res = await getRouteResolution();
+        if (res.onboardingCompleted) {
+          throw redirect({ to: "/" });
+        }
+      } catch (e) {
+        const { isRedirect } = await import("@tanstack/react-router");
+        if (isRedirect(e)) throw e;
+        // Fail open — let the quiz render rather than dead-end the user.
+      }
+      return;
+    }
+
     if (data.session) {
       throw redirect({ to: "/" });
     }
