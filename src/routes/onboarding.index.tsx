@@ -297,7 +297,7 @@ function OnboardingPage() {
     return (
       <OnboardingShell step={progress} total={TOTAL} onBack={goBack("category")}>
         <GuidedLineReveal headline="What usually makes beauty shopping frustrating?">
-          <ProductHero src={painImage} alt="A shopper holding a viral product while Dupli surfaces a cheaper match" />
+          <ProductHero src={painImage} alt="A shopper holding a viral product while Dupli surfaces a cheaper match" compact />
         </GuidedLineReveal>
         <div className="mt-5 space-y-2.5">
           {opts.map((o) => (
@@ -462,8 +462,8 @@ function OnboardingPage() {
             "Based on how you shop, Dupli can help you scan products, compare alternatives, and save money before you buy.",
           ]}
         >
-          <ProductHero src={planReadyImage} alt="Personalized Dupli home with savings and recent dupes" />
-          <ul className="space-y-2">
+          <ProductHero src={planReadyImage} alt="Personalized Dupli home with savings and recent dupes" compact />
+          <ul className="space-y-1.5">
             {[
               "Scan beauty products before purchasing",
               "See useful comparison-style results",
@@ -472,7 +472,7 @@ function OnboardingPage() {
             ].map((line) => (
               <li
                 key={line}
-                className="flex items-center gap-3 rounded-[14px] border border-border bg-card px-4 py-3"
+                className="flex items-center gap-3 rounded-[14px] border border-border bg-card px-4 py-2.5"
               >
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-foreground text-background">
                   <Check className="h-3.5 w-3.5" strokeWidth={3} />
@@ -495,10 +495,12 @@ function ProductHero({
   src,
   alt,
   badge,
+  compact = false,
 }: {
   src: string;
   alt: string;
   badge?: string;
+  compact?: boolean;
 }) {
   return (
     <div className="relative -mx-2 overflow-hidden rounded-[24px] border border-border bg-muted/40 shadow-soft">
@@ -506,7 +508,9 @@ function ProductHero({
         src={src}
         alt={alt}
         loading="lazy"
-        className="block h-auto w-full animate-[result-rise_700ms_cubic-bezier(0.2,0.8,0.2,1)_120ms_both]"
+        className={`block w-full animate-[result-rise_700ms_cubic-bezier(0.2,0.8,0.2,1)_120ms_both] ${
+          compact ? "h-[26vh] max-h-[220px] object-cover" : "h-auto"
+        }`}
         draggable={false}
       />
       {badge && (
@@ -587,7 +591,7 @@ function ChecklistLoading({
   }, []);
   return (
     <OnboardingShell step={progress} total={TOTAL}>
-      <div className="flex h-full flex-col items-center justify-center pt-8 text-center">
+      <div className="flex h-full flex-col items-center justify-center pt-4 text-center">
         <h1 className="font-display text-[24px] font-bold tracking-tight">{headline}</h1>
         <ul className="mt-8 w-full max-w-xs space-y-3 text-left">
           {items.map((label, i) => {
