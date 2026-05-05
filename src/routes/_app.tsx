@@ -19,6 +19,8 @@ function AppLayout() {
   const [resolution, setResolution] = useState<RouteResolution | null>(null);
   const [resolving, setResolving] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [transientError, setTransientError] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Hard-paywall gate: only paid (or superuser) sessions render /app.
   // Unpaid users with onboarding incomplete go to the quiz; unpaid onboarded
@@ -27,10 +29,13 @@ function AppLayout() {
   //
   // Auth/resolver failures NEVER fall through to /paywall — that traps deleted
   // or expired users. We sign out + clear stale state + send to /onboarding.
+  // Transient (network/500) errors NEVER grant /app access and NEVER force a
+  // bounce to /paywall — we show a retry surface instead.
   useEffect(() => {
     if (authLoading || !user) return;
     let cancelled = false;
     setResolving(true);
+    setTransientError(false);
     (async () => {
       try {
         const res = await getRouteResolution();
@@ -42,10 +47,8 @@ function AppLayout() {
           await resetToOnboarding(navigate);
           return;
         }
-        // Transient/network error — surface as redirect to onboarding rather
-        // than render paywall. Onboarding splash is always a safe public
-        // landing point.
-        navigate({ to: "/onboarding", replace: true });
+        // Transient — surface a retry instead of routing into paywall or app.
+        setTransientError(true);
       } finally {
         if (!cancelled) setResolving(false);
       }
@@ -53,11 +56,28 @@ function AppLayout() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user, navigate]);
+  }, [authLoading, user, navigate, retryCount]);
 
   if (authLoading) return <SplashSpinner />;
   if (!user) return <Navigate to="/onboarding" replace />;
-  if (resetting || resolving || !resolution) return <SplashSpinner />;
+  if (resetting) return <SplashSpinner />;
+  if (transientError) {
+    return (
+      <div className="flex h-screen-safe flex-col items-center justify-center gap-4 bg-background px-6 text-center">
+        <p className="text-[14px] text-muted-foreground">
+          We couldn't reach the server. Check your connection and try again.
+        </p>
+        <button
+          type="button"
+          onClick={() => setRetryCount((n) => n + 1)}
+          className="tap rounded-[14px] bg-foreground px-5 py-2.5 text-[14px] font-semibold text-background"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+  if (resolving || !resolution) return <SplashSpinner />;
 
   if (resolution.destination.to !== "/app") {
     const dest = resolution.destination;

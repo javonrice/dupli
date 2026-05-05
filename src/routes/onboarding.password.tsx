@@ -5,6 +5,7 @@ import { OnboardingShell } from "@/components/onboarding/onboarding-shell";
 import { getPendingEmail, clearPendingEmail } from "@/lib/onboarding";
 import { supabase } from "@/integrations/supabase/client";
 import { getRouteResolution } from "@/server/onboarding.functions";
+import { resolveCanonicalDestination, performAuthReset } from "@/lib/auth-routing";
 
 type Mode = "signup" | "login";
 
@@ -15,8 +16,26 @@ export const Route = createFileRoute("/onboarding/password")({
     return { mode };
   },
   beforeLoad: async () => {
-    const { data } = await supabase.auth.getSession();
-    if (data.session) throw redirect({ to: "/" });
+    if (typeof window === "undefined") return;
+    // Anonymous users render the password screen (signup or login).
+    // Sessioned users get routed by canonical destination — never a blanket
+    // redirect to "/" which can loop or trap unpaid users.
+    const outcome = await resolveCanonicalDestination();
+    if (outcome.kind === "anonymous") return;
+    if (outcome.kind === "destination") {
+      const dest = outcome.destination;
+      if (dest.to === "/onboarding") {
+        // Already-signed-in user with incomplete onboarding → quiz.
+        throw redirect({ to: "/onboarding", search: dest.search });
+      }
+      throw redirect({ to: dest.to });
+    }
+    if (outcome.kind === "auth_error") {
+      await performAuthReset();
+      return;
+    }
+    // Transient: render the screen rather than trap the user.
+    return;
   },
   head: () => ({
     meta: [

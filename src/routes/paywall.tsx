@@ -46,9 +46,11 @@ export const Route = createFileRoute("/paywall")({
         clearStaleClientState();
         throw redirect({ to: "/onboarding" });
       }
-      // Transient error → don't silently render paywall. Send to onboarding
-      // (safe public entry); component effect will retry the resolver.
-      throw redirect({ to: "/onboarding" });
+      // Transient error: do NOT bounce. The paywall component re-verifies
+      // on the client; if the user really is paid/anonymous, that effect
+      // routes them. Bouncing here trapped legit unpaid users away from
+      // the only place they can complete checkout.
+      return;
     }
   },
   head: () => ({
@@ -110,9 +112,11 @@ function PaywallPage() {
           await resetToOnboarding(navigate);
           return;
         }
-        // Transient error → bounce to onboarding splash rather than render
-        // paywall to a user we couldn't verify.
-        navigate({ to: "/onboarding", replace: true });
+        // Transient error → render the paywall. The user has a session and
+        // this is the safest place for an unpaid completed user; checkout
+        // server actions will re-verify on submit. Bouncing to /onboarding
+        // here previously trapped legit unpaid users out of checkout.
+        setVerified(true);
       }
     })();
     return () => {

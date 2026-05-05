@@ -58,8 +58,11 @@ export const Route = createFileRoute("/onboarding/")({
           "@/server/onboarding.functions"
         );
         const res = await getRouteResolution();
-        if (res.onboardingCompleted) {
-          throw redirect({ to: "/" });
+        const dest = res.destination;
+        // Already paid → /app. Already completed unpaid → /paywall.
+        // Otherwise (incomplete) render the quiz.
+        if (dest.to === "/app" || dest.to === "/paywall") {
+          throw redirect({ to: dest.to });
         }
       } catch (e) {
         const { isRedirect } = await import("@tanstack/react-router");
@@ -76,6 +79,7 @@ export const Route = createFileRoute("/onboarding/")({
           clearStaleClientState();
           throw redirect({ to: "/onboarding" });
         }
+        // Transient — render the quiz.
       }
       return;
     }
@@ -183,6 +187,8 @@ function OnboardingPage() {
   const [categoryChoice, setCategoryChoice] = useState<CategoryChoice | undefined>();
   const [pain, setPain] = useState<Pain | undefined>();
   const [commitment, setCommitment] = useState<Commitment | undefined>();
+  const [finishing, setFinishing] = useState(false);
+  const [finishError, setFinishError] = useState<string | null>(null);
 
   useEffect(() => {
     track("onboarding_started");
@@ -482,9 +488,25 @@ function OnboardingPage() {
 
   /* 9. Plan ready */
   if (step === "plan_ready") {
-    const finishToPaywall = async () => {
-      markOnboardingComplete();
+    const finish = async () => {
+      if (finishing) return;
+      setFinishError(null);
+      setFinishing(true);
       try {
+        // Require a live session before we can persist or route by server
+        // truth. If the user lost their session here, send them to sign in
+        // again — never silently route into /paywall or /app.
+        const { supabase } = await import("@/integrations/supabase/client");
+        const { data } = await supabase.auth.getSession();
+        if (!data.session) {
+          navigate({ to: "/onboarding/email", replace: true });
+          return;
+        }
+
+        markOnboardingComplete();
+        // Persist answers + completion BEFORE navigating. Server is the
+        // source of truth for /paywall and /app gates; if completion didn't
+        // save, /paywall would bounce the user back into the quiz.
         await saveOnboardingAnswers({
           data: {
             answers: {
@@ -495,17 +517,48 @@ function OnboardingPage() {
           },
         });
         await completeOnboarding();
-      } catch {
-        /* non-fatal — paywall will still gate access */
+
+        // Route by canonical resolver. For a freshly-completed unpaid user
+        // this resolves to /paywall. Paid users (rare here) go to /app.
+        const { resolveCanonicalDestination, performAuthReset } = await import(
+          "@/lib/auth-routing"
+        );
+        const outcome = await resolveCanonicalDestination();
+        if (outcome.kind === "destination") {
+          const dest = outcome.destination;
+          if (dest.to === "/onboarding") {
+            navigate({ to: "/onboarding", search: dest.search, replace: true });
+          } else {
+            navigate({ to: dest.to, replace: true });
+          }
+          return;
+        }
+        if (outcome.kind === "auth_error") {
+          await performAuthReset();
+          navigate({ to: "/onboarding", replace: true });
+          return;
+        }
+        // Transient — completion DID save server-side, so a direct push to
+        // /paywall is correct (paywall will re-verify on its own).
+        navigate({ to: "/paywall", replace: true });
+      } catch (err) {
+        if (import.meta.env.DEV) console.warn("[onboarding-flow] finish failed", err);
+        setFinishError(
+          "We couldn't save your answers. Check your connection and try again.",
+        );
+      } finally {
+        setFinishing(false);
       }
-      navigate({ to: "/paywall" });
     };
 
     return (
       <OnboardingShell
         step={progress}
         total={TOTAL}
-        primary={{ label: "Continue", onClick: () => void finishToPaywall() }}
+        primary={{
+          label: finishing ? "Saving…" : "Continue",
+          onClick: () => void finish(),
+        }}
       >
         <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider text-foreground">
           <Sparkles className="h-3 w-3" />
@@ -537,6 +590,11 @@ function OnboardingPage() {
             ))}
           </ul>
         </GuidedLineReveal>
+        {finishError && (
+          <div className="mt-4 rounded-[14px] border border-destructive/30 bg-destructive/5 px-4 py-2.5 text-center text-[13px] text-destructive">
+            {finishError}
+          </div>
+        )}
       </OnboardingShell>
     );
   }
