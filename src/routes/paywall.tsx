@@ -97,13 +97,11 @@ function PaywallPage() {
     track("paywall_viewed_after_result");
   }, []);
 
+  // Defensive: if subscription becomes active while the user is on the
+  // paywall (e.g. webhook lands during checkout), bounce to /app. Anonymous
+  // and already-paid sessions are caught by beforeLoad before render.
   useEffect(() => {
-    if (authLoading) return;
-    if (!user) {
-      navigate({ to: "/onboarding/email", replace: true });
-      return;
-    }
-    if (!subLoading && isActive) {
+    if (!authLoading && !subLoading && user && isActive) {
       navigate({ to: "/app", replace: true });
     }
   }, [authLoading, subLoading, user, isActive, navigate]);
