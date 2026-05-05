@@ -178,7 +178,7 @@ function OnboardingPage() {
         primary={{ label: "Get Started", onClick: () => navigate({ to: "/onboarding/email" }) }}
       >
         <div className="relative -mx-6 -mt-2 flex h-full flex-col">
-          <div className="relative h-[52vh] min-h-[320px] w-full overflow-hidden">
+          <div className="relative h-[44vh] min-h-[240px] max-h-[440px] w-full overflow-hidden">
             <img
               src={heroCameraScan}
               alt="Scanning a beauty product with Dupli"
@@ -196,16 +196,16 @@ function OnboardingPage() {
             <img
               src={dupliWordmark}
               alt="Dupli"
-              className="h-10 w-auto select-none"
+              className="h-9 w-auto select-none sm:h-10"
               draggable={false}
             />
-            <h1 className="mt-4 max-w-[20rem] font-display text-[26px] font-bold leading-[1.05] tracking-tight">
+            <h1 className="mt-3 max-w-[20rem] font-display text-[24px] font-bold leading-[1.05] tracking-tight sm:mt-4 sm:text-[26px]">
               Snap a product. Find the dupe.
             </h1>
-            <p className="mt-2 max-w-[20rem] text-[14px] leading-relaxed text-muted-foreground">
+            <p className="mt-2 max-w-[20rem] text-[13.5px] leading-relaxed text-muted-foreground sm:text-[14px]">
               Point your camera at any beauty product to find a lower-cost match in seconds.
             </p>
-            <div className="mt-5 flex items-center gap-1">
+            <div className="mt-4 flex items-center gap-1 sm:mt-5">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Star key={i} className="h-4 w-4 fill-warning text-warning" strokeWidth={1.5} />
               ))}
