@@ -76,9 +76,11 @@ function RootComponent() {
     installSupabaseFetchAuth();
   }, []);
   return (
-    <>
-      <PaymentTestModeBanner />
-      <Outlet />
-    </>
+    <div className="device-backdrop">
+      <div className="device-frame">
+        <PaymentTestModeBanner />
+        <Outlet />
+      </div>
+    </div>
   );
 }
