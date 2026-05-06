@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
-import { isOnboarded } from "@/lib/onboarding";
+
 
 /**
  * Wait briefly for an in-flight OAuth redirect to finish hydrating the
@@ -52,13 +52,6 @@ async function waitForOAuthSession(timeoutMs = 4000) {
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
-    // First-time visitors (no completed onboarding) always start in onboarding,
-    // regardless of whether they're signed in. Onboarding ends with either a
-    // sample result, a real first scan, or the paywall — and from there the
-    // user lands on /app or /login as appropriate.
-    if (typeof window !== "undefined" && !isOnboarded()) {
-      throw redirect({ to: "/onboarding" });
-    }
     const session = await waitForOAuthSession();
     throw redirect({ to: session ? "/app" : "/login" });
   },
