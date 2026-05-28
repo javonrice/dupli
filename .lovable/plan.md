@@ -1,37 +1,58 @@
-## Updated plan
+## Goal
 
-You’re right: if SkinSort marked it as a dupe, we should treat it as usable inventory instead of gating everything behind 70%+ match.
+Turn one-off video downloads into a real 30-day content pipeline: batch-generate 5/10/15/30 reels at once, every reel auto-saves to your library, bulk-download as a zip, and each video comes with a ready-to-paste TikTok caption with 5 hashtags.
 
-## What I found
+## What you'll get
 
-- Current strict filters only leave **5 usable cached pairs**, which is why you keep seeing the same products.
-- Without the 70% match filter, SkinSort has **109,264 dupe pairs**.
-- If we allow normal product images when cached images are missing, there are **4,944 priced cheaper dupe pairs** and about **4,901 fresh product-level options** after excluding recently used products.
+1. **Batch generator** — pick 5, 10, 15, or 30 and the app queues that many reels using your saved scans (your dupe discoveries). Progress bar shows "Rendered 7 / 30".
+2. **My Videos library** on the dashboard — every reel auto-saved with thumbnail, product names, date, caption, download.
+3. **Bulk zip download** — "Select all" → `dupli-videos.zip`.
+4. **Auto-generated caption** per video — UGC-style hook + 5 dupe-community hashtags, one-click "Copy caption".
 
-## Implementation plan
+## How it works
 
-1. **Use all SkinSort dupes, not just 70%+**
-   - Remove the `.gte("overall_match", 70)` restriction from the UGC reel picker.
-   - Treat missing/low match scores as acceptable because SkinSort already classified the relationship as a dupe.
+### 1. Batch generation
+- New **Batch** panel on `/dashboard` with chips: `5 · 10 · 15 · 30`.
+- Pulls from your saved scans (and, if you don't have enough saved, falls back to top trending dupes) so each reel uses a real product pair.
+- Runs sequentially in the browser tab (one render at a time so ffmpeg.wasm doesn't OOM), with a live progress bar and per-item status (queued / scripting / rendering / saved / failed).
+- Failed items can be retried individually; you can leave the tab open and walk away.
+- Safety cap: 30 max per batch; rate-limited per minute.
 
-2. **Avoid products we’ve already touched**
-   - Exclude recently used `original_product_id` and `dupe_product_id`, not just exact pair combinations.
-   - This means every click should select four products that haven’t appeared recently.
+### 2. Storage
+- New Cloud storage bucket `user-videos` (private, owner-scoped).
+- Each MP4 uploaded to `user-videos/{user_id}/{video_id}.mp4` after render.
 
-3. **Use more of the product catalog**
-   - Prefer `cached_image_url`, but fall back to `image_url` if needed.
-   - Keep price checks and positive savings for the reel, because the voiceover needs a real “save $X” claim.
+### 3. Database
+- New `user_videos` table: original product, dupe product, storage path, thumbnail URL, caption text, status, created_at.
+- RLS: users only see/insert/update/delete their own rows.
 
-4. **Remove the repeat-prone fallback**
-   - Don’t fall back to the same recent products unless there are genuinely fewer than four eligible fresh products.
-   - If inventory is somehow exhausted, show a clear error explaining that fresh usable inventory is low.
+### 4. Caption generation
+- Lovable AI (`google/gemini-2.5-flash`) writes a short, natural UGC-style caption from the dupe context.
+- Exactly **5 hashtags** appended, drawn from a curated dupe-community pool and rotated per video so they don't look spammy:
+  - Pool: `#dupe` `#dupealert` `#dupesoftiktok` `#beautydupes` `#affordablebeauty` `#makeupdupes` `#skincaredupes` `#luxuryforless` `#savemoney` `#tiktokmademebuyit`
+  - Always includes `#dupe` + one category tag matched to product type.
 
-5. **Fix the script JSON error**
-   - Make `writeScript()` resilient to bad AI formatting.
-   - Add a deterministic fallback script so the reel can still generate even if the AI returns non-JSON text.
+### 5. My Videos UI
+- Grid of saved reels: thumbnail, "Original → Dupe", date, **Download**, **Copy caption**, **Delete**.
+- Top bar: **Select all** + **Download selected (.zip)** via `jszip`.
+- Existing single-reel download keeps working — it just also saves a copy now.
 
-## Files to update
+## Technical details
 
-- `src/lib/dashboard.functions.ts`
-- `src/lib/reel-voiceover.server.ts`
-- Possibly `src/components/dashboard/ugc-generator.tsx` only if we need a clearer user-facing error message
+- Migration: create `user_videos` table + GRANTs + RLS + `user-videos` storage bucket + storage policies scoped by `auth.uid()::text = (storage.foldername(name))[1]`.
+- `src/components/dashboard/batch-generator.tsx`: new component, queue state machine, calls existing script + render pipeline per item.
+- `src/components/dashboard/ugc-generator.tsx`: after `renderReelToMp4`, upload blob to storage, insert `user_videos` row, generate caption.
+- New `src/lib/captions.functions.ts` + `captions.server.ts` (Lovable AI + hashtag picker).
+- New `src/lib/user-videos.functions.ts`: `listMyVideos`, `deleteMyVideo`, `getSignedVideoUrl`, `pickBatchCandidates`.
+- New `src/components/dashboard/my-videos.tsx`: grid + bulk-select + jszip bundler.
+
+## Cost & timing heads-up
+
+- ~30 reels ≈ 30× your current per-video cost (script + TTS + render). Batch of 30 takes roughly 30 × current render time in one open tab.
+
+## Out of scope (for this round)
+
+- Direct posting to TikTok/Instagram
+- Calendar / scheduling view
+- Server-side rendering (still uses your browser's ffmpeg.wasm)
+- Editing caption text in-app (copy → edit in TikTok)
