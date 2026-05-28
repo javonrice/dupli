@@ -12,7 +12,6 @@ import {
   TransitionSeries,
   springTiming,
 } from "@remotion/transitions";
-import { fade } from "@remotion/transitions/fade";
 import { slide } from "@remotion/transitions/slide";
 import { loadFont as loadOutfit } from "@remotion/google-fonts/Outfit";
 import { loadFont as loadFigtree } from "@remotion/google-fonts/Figtree";
@@ -31,17 +30,20 @@ const { fontFamily: BODY } = loadFigtree("normal", {
 export const FPS = 30;
 export const WIDTH = 1080;
 export const HEIGHT = 1920;
-const TAIL_FRAMES = 8; // breathing room after each voiceover
+const TAIL_FRAMES = 10;
+const TRANSITION_FRAMES = 12;
 
 export function segmentToFrames(durationSec: number): number {
-  return Math.max(45, Math.round(durationSec * FPS) + TAIL_FRAMES);
+  return Math.max(50, Math.round(durationSec * FPS) + TAIL_FRAMES);
 }
 
 export function totalDurationInFrames(script: ReelScript): number {
-  return script.segments.reduce(
+  // TransitionSeries overlaps each transition by TRANSITION_FRAMES.
+  const sum = script.segments.reduce(
     (acc, s) => acc + segmentToFrames(s.durationSec),
     0,
   );
+  return sum - TRANSITION_FRAMES * (script.segments.length - 1);
 }
 
 // ---------- Shared bits ----------
@@ -98,7 +100,6 @@ function KineticWords({
   perWordDelay = 4,
   fontSize,
   color = "#0d0d0d",
-  align = "center",
   weight = 900,
   letterSpacing = "-0.03em",
   lineHeight = 1.02,
@@ -108,7 +109,6 @@ function KineticWords({
   perWordDelay?: number;
   fontSize: number;
   color?: string;
-  align?: "left" | "center" | "right";
   weight?: number;
   letterSpacing?: string;
   lineHeight?: number;
@@ -125,7 +125,7 @@ function KineticWords({
         color,
         letterSpacing,
         lineHeight,
-        textAlign: align,
+        textAlign: "center",
         textWrap: "balance",
       }}
     >
@@ -233,7 +233,6 @@ function HookScene({ pair, text }: { pair: DupePair; text: string }) {
               filter: "drop-shadow(0 40px 60px rgba(0,0,0,0.25))",
             }}
           />
-          {/* Price sticker */}
           <div
             style={{
               position: "absolute",
@@ -255,14 +254,33 @@ function HookScene({ pair, text }: { pair: DupePair; text: string }) {
           </div>
         </div>
 
-        <KineticWords
-          text={text}
-          startFrame={6}
-          fontSize={108}
-          color="#0d0d0d"
-        />
+        <KineticWords text={text} startFrame={6} fontSize={108} color="#0d0d0d" />
       </div>
     </AbsoluteFill>
+  );
+}
+
+function Brackets() {
+  const arm = 60;
+  const thick = 8;
+  const inset = 50;
+  const color = "#4ade80";
+  const base = {
+    position: "absolute" as const,
+    background: color,
+    boxShadow: "0 0 16px rgba(74,222,128,0.7)",
+  };
+  return (
+    <>
+      <div style={{ ...base, top: inset, left: inset, width: arm, height: thick }} />
+      <div style={{ ...base, top: inset, left: inset, width: thick, height: arm }} />
+      <div style={{ ...base, top: inset, right: inset, width: arm, height: thick }} />
+      <div style={{ ...base, top: inset, right: inset, width: thick, height: arm }} />
+      <div style={{ ...base, bottom: inset, left: inset, width: arm, height: thick }} />
+      <div style={{ ...base, bottom: inset, left: inset, width: thick, height: arm }} />
+      <div style={{ ...base, bottom: inset, right: inset, width: arm, height: thick }} />
+      <div style={{ ...base, bottom: inset, right: inset, width: thick, height: arm }} />
+    </>
   );
 }
 
@@ -270,7 +288,6 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
   const frame = useCurrentFrame();
   const { fps, durationInFrames } = useVideoConfig();
 
-  // Scanning bar sweeps across product
   const scanProgress = interpolate(
     frame,
     [10, durationInFrames - 20],
@@ -284,10 +301,7 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
 
   return (
     <AbsoluteFill
-      style={{
-        background:
-          "linear-gradient(180deg, #0d0d0d 0%, #1a1a2e 100%)",
-      }}
+      style={{ background: "linear-gradient(180deg, #0d0d0d 0%, #1a1a2e 100%)" }}
     >
       <FloatingBlob delay={0} color="#4f46e5" size={580} x={-180} y={1100} />
       <FloatingBlob delay={30} color="#ff5a5f" size={440} x={720} y={-80} />
@@ -304,7 +318,6 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
           padding: 60,
         }}
       >
-        {/* Phone frame */}
         <div
           style={{
             width: 720,
@@ -336,11 +349,7 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
                 padding: 40,
               }}
             />
-
-            {/* scan bracket corners */}
             <Brackets />
-
-            {/* sweeping scan line */}
             <div
               style={{
                 position: "absolute",
@@ -364,8 +373,6 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
                   "linear-gradient(180deg, transparent, rgba(74,222,128,0.18))",
               }}
             />
-
-            {/* status pill */}
             <div
               style={{
                 position: "absolute",
@@ -388,43 +395,103 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
         </div>
 
         <div style={{ marginTop: 60, maxWidth: 900 }}>
-          <KineticWords
-            text={text}
-            startFrame={8}
-            fontSize={92}
-            color="#f5f3ee"
-          />
+          <KineticWords text={text} startFrame={8} fontSize={92} color="#f5f3ee" />
         </div>
       </div>
     </AbsoluteFill>
   );
 }
 
-function Brackets() {
-  const arm = 60;
-  const thick = 8;
-  const inset = 50;
-  const color = "#4ade80";
-  const base = {
-    position: "absolute" as const,
-    background: color,
-    boxShadow: "0 0 16px rgba(74,222,128,0.7)",
-  };
+function ProductCard({
+  label,
+  brand,
+  imageUrl,
+  price,
+  tint,
+  bg,
+  opacity,
+  translateX,
+  dimmed,
+}: {
+  label: string;
+  brand: string;
+  imageUrl: string;
+  price: number;
+  tint: string;
+  bg: string;
+  opacity: number;
+  translateX: number;
+  dimmed?: boolean;
+}) {
+  const textColor = bg === "#0d0d0d" ? "#f5f3ee" : "#0d0d0d";
   return (
-    <>
-      {/* TL */}
-      <div style={{ ...base, top: inset, left: inset, width: arm, height: thick }} />
-      <div style={{ ...base, top: inset, left: inset, width: thick, height: arm }} />
-      {/* TR */}
-      <div style={{ ...base, top: inset, right: inset, width: arm, height: thick }} />
-      <div style={{ ...base, top: inset, right: inset, width: thick, height: arm }} />
-      {/* BL */}
-      <div style={{ ...base, bottom: inset, left: inset, width: arm, height: thick }} />
-      <div style={{ ...base, bottom: inset, left: inset, width: thick, height: arm }} />
-      {/* BR */}
-      <div style={{ ...base, bottom: inset, right: inset, width: arm, height: thick }} />
-      <div style={{ ...base, bottom: inset, right: inset, width: thick, height: arm }} />
-    </>
+    <div
+      style={{
+        flex: 1,
+        background: bg,
+        borderRadius: 36,
+        padding: 28,
+        opacity,
+        transform: `translateX(${translateX}px)`,
+        boxShadow: "0 24px 60px rgba(0,0,0,0.15)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 18,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: BODY,
+          fontWeight: 700,
+          fontSize: 22,
+          letterSpacing: "0.22em",
+          color: tint,
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          width: "100%",
+          aspectRatio: "1/1",
+          background: bg === "#0d0d0d" ? "#1f1f1f" : "#f0ece4",
+          borderRadius: 24,
+          padding: 16,
+          filter: dimmed ? "grayscale(0.5)" : "none",
+        }}
+      >
+        <Img
+          src={imageUrl}
+          style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        />
+      </div>
+      <div
+        style={{
+          fontFamily: DISPLAY,
+          fontWeight: 700,
+          fontSize: 32,
+          letterSpacing: "-0.02em",
+          color: textColor,
+          textOverflow: "ellipsis",
+          overflow: "hidden",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {brand}
+      </div>
+      <div
+        style={{
+          fontFamily: DISPLAY,
+          fontWeight: 900,
+          fontSize: 64,
+          letterSpacing: "-0.04em",
+          color: textColor,
+          lineHeight: 1,
+        }}
+      >
+        ${price.toFixed(0)}
+      </div>
+    </div>
   );
 }
 
@@ -444,7 +511,6 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
     config: { damping: 8, stiffness: 200 },
   });
 
-  // animated price counter
   const priceProgress = interpolate(frame, [30, 60], [0, 1], {
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
@@ -455,9 +521,7 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
 
   return (
     <AbsoluteFill
-      style={{
-        background: "linear-gradient(180deg, #f5f3ee 0%, #ffe9d4 100%)",
-      }}
+      style={{ background: "linear-gradient(180deg, #f5f3ee 0%, #ffe9d4 100%)" }}
     >
       <GrainOverlay />
 
@@ -470,7 +534,6 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
           padding: 70,
         }}
       >
-        {/* Compare row */}
         <div
           style={{
             display: "flex",
@@ -502,7 +565,6 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
             translateX={interpolate(rightSpring, [0, 1], [60, 0])}
           />
 
-          {/* match badge */}
           <div
             style={{
               position: "absolute",
@@ -547,13 +609,7 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
           </div>
         </div>
 
-        {/* Savings */}
-        <div
-          style={{
-            marginTop: 60,
-            textAlign: "center",
-          }}
-        >
+        <div style={{ marginTop: 60, textAlign: "center" }}>
           <div
             style={{
               fontFamily: BODY,
@@ -573,119 +629,25 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
               fontWeight: 900,
               fontSize: 220,
               letterSpacing: "-0.05em",
-  return (
-    <AbsoluteFill style={{ background: "#0d0d0d" }}>
-      <TransitionSeries>
-        {placed.flatMap((p, idx) => {
-          const nodes = [
-            <TransitionSeries.Sequence
-              key={`s-${p.key}`}
-              durationInFrames={p.dur}
-            >
-              {p.render(p.seg.text)}
-            </TransitionSeries.Sequence>,
-          ];
-          if (idx < placed.length - 1) {
-            nodes.push(
-              <TransitionSeries.Transition
-                key={`t-${p.key}`}
-                presentation={slide()}
-                timing={springTiming({
-                  config: { damping: 200 },
-                  durationInFrames: 12,
-                })}
-              />,
-            );
-          }
-          return nodes;
-        })}
-      </TransitionSeries>
-
-      {/* Audio layer — absolute positions, accounting for transition overlap */}
-      {placed.map((p, idx) => {
-        // Transitions overlap by 12 frames; shift audio start back by 12*idx
-        const audioFrom = Math.max(0, p.from - idx * 12);
-        return (
-          <Sequence
-            key={`a-${p.key}`}
-            from={audioFrom}
-            durationInFrames={p.dur}
+              color: "#0d0d0d",
+              lineHeight: 0.95,
+            }}
           >
-            <Audio src={p.seg.audioDataUrl} />
-          </Sequence>
-        );
-      })}
-    </AbsoluteFill>
-  );
-}
+            ${animatedSavings}
+          </div>
+        </div>
 
-        borderRadius: 36,
-        padding: 28,
-        opacity,
-        transform: `translateX(${translateX}px)`,
-        boxShadow: "0 24px 60px rgba(0,0,0,0.15)",
-        display: "flex",
-        flexDirection: "column",
-        gap: 18,
-      }}
-    >
-      <div
-        style={{
-          fontFamily: BODY,
-          fontWeight: 700,
-          fontSize: 22,
-          letterSpacing: "0.22em",
-          color: tint,
-        }}
-      >
-        {label}
+        <div style={{ marginTop: 40, maxWidth: 900, alignSelf: "center" }}>
+          <KineticWords
+            text={text}
+            startFrame={36}
+            fontSize={56}
+            color="#0d0d0d"
+            weight={700}
+          />
+        </div>
       </div>
-      <div
-        style={{
-          width: "100%",
-          aspectRatio: "1/1",
-          background: bg === "#0d0d0d" ? "#1f1f1f" : "#f0ece4",
-          borderRadius: 24,
-          padding: 16,
-          filter: dimmed ? "grayscale(0.5)" : "none",
-        }}
-      >
-        <Img
-          src={imageUrl}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "contain",
-          }}
-        />
-      </div>
-      <div
-        style={{
-          fontFamily: DISPLAY,
-          fontWeight: 700,
-          fontSize: 32,
-          letterSpacing: "-0.02em",
-          color: textColor,
-          textOverflow: "ellipsis",
-          overflow: "hidden",
-          whiteSpace: "nowrap",
-        }}
-      >
-        {brand}
-      </div>
-      <div
-        style={{
-          fontFamily: DISPLAY,
-          fontWeight: 900,
-          fontSize: 64,
-          letterSpacing: "-0.04em",
-          color: textColor,
-          lineHeight: 1,
-        }}
-      >
-        ${price.toFixed(0)}
-      </div>
-    </div>
+    </AbsoluteFill>
   );
 }
 
@@ -738,12 +700,7 @@ function CtaScene({ text }: { text: string }) {
           <Wordmark scale={1.4} />
         </div>
 
-        <KineticWords
-          text={text}
-          startFrame={10}
-          fontSize={96}
-          color="#ffffff"
-        />
+        <KineticWords text={text} startFrame={10} fontSize={96} color="#ffffff" />
 
         <div
           style={{
@@ -785,69 +742,58 @@ export function DupeReel({ script }: DupeReelProps) {
     { key: "cta", render: (t) => <CtaScene text={t} /> },
   ];
 
-  // Build sequences with absolute frame positions so we can place per-scene audio.
-  let cursor = 0;
-  const placed = sceneOrder.map(({ key, render }) => {
+  // Build sequence durations + absolute audio start positions accounting for
+  // transition overlap inside TransitionSeries (each transition overlaps the
+  // surrounding sequences by TRANSITION_FRAMES).
+  let audioCursor = 0;
+  const placed = sceneOrder.map(({ key, render }, idx) => {
     const seg = script.segments.find((s) => s.key === key);
     if (!seg) throw new Error(`Missing segment ${key}`);
     const dur = segmentToFrames(seg.durationSec);
-    const from = cursor;
-    cursor += dur;
-    return { key, render, seg, from, dur };
+    const audioFrom = audioCursor;
+    // Next scene starts (dur - TRANSITION_FRAMES) later, since the transition
+    // overlaps the tail of this scene and the head of the next.
+    audioCursor += dur - (idx === sceneOrder.length - 1 ? 0 : TRANSITION_FRAMES);
+    return { key, render, seg, dur, audioFrom };
   });
 
   return (
     <AbsoluteFill style={{ background: "#0d0d0d" }}>
       <TransitionSeries>
-        {placed.map((p, idx) => (
-          <TransitionSeriesGroup
-            key={p.key}
-            duration={p.dur}
-            isLast={idx === placed.length - 1}
-          >
-            {p.render(p.seg.text)}
-          </TransitionSeriesGroup>
-        ))}
+        {placed.flatMap((p, idx) => {
+          const nodes: React.ReactNode[] = [
+            <TransitionSeries.Sequence
+              key={`s-${p.key}`}
+              durationInFrames={p.dur}
+            >
+              {p.render(p.seg.text)}
+            </TransitionSeries.Sequence>,
+          ];
+          if (idx < placed.length - 1) {
+            nodes.push(
+              <TransitionSeries.Transition
+                key={`t-${p.key}`}
+                presentation={slide()}
+                timing={springTiming({
+                  config: { damping: 200 },
+                  durationInFrames: TRANSITION_FRAMES,
+                })}
+              />,
+            );
+          }
+          return nodes;
+        })}
       </TransitionSeries>
 
-      {/* Audio layer — absolute positions */}
       {placed.map((p) => (
-        <Sequence key={`a-${p.key}`} from={p.from} durationInFrames={p.dur}>
+        <Sequence
+          key={`a-${p.key}`}
+          from={p.audioFrom}
+          durationInFrames={p.dur}
+        >
           <Audio src={p.seg.audioDataUrl} />
         </Sequence>
       ))}
     </AbsoluteFill>
   );
-}
-
-// Wrapper to keep TransitionSeries children API consistent
-function TransitionSeriesGroup({
-  duration,
-  isLast,
-  children,
-}: {
-  duration: number;
-  isLast: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <>
-      <TransitionSeries.Sequence durationInFrames={duration}>
-        {children}
-      </TransitionSeries.Sequence>
-      {!isLast && (
-        <TransitionSeries.Transition
-          presentation={idxIsCta(children) ? fade() : slide()}
-          timing={springTiming({
-            config: { damping: 200 },
-            durationInFrames: 14,
-          })}
-        />
-      )}
-    </>
-  );
-}
-
-function idxIsCta(_: React.ReactNode): boolean {
-  return false;
 }
