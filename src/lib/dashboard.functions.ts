@@ -4,7 +4,6 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { uploadProductImageDataUrl } from "@/lib/product-images.server";
 import type { DupePair } from "@/lib/dupe-types";
 
-export type { DupePair };
 
 
 // Pick a random high-match dupe pair where both products have images + prices
