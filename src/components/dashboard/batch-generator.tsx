@@ -111,11 +111,6 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
       label: `${pairs[0].original.brand} → ${pairs[0].dupe.brand}`,
     });
 
-    const ok = await waitForStage();
-    if (!ok || !hiddenPlayerRef.current || !hiddenStageRef.current) {
-      throw new Error("Renderer didn't mount");
-    }
-
     await renderAndSaveReel({
       script,
       pairs,
@@ -123,6 +118,19 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
       captureEl: hiddenStageRef.current,
       saveRecord,
       onProgress: (p) => updateItem(item.id, { progress: p }),
+      onDebug: (entry) => {
+        const tagged: DebugEntry =
+          "type" in entry && entry.type === "image"
+            ? { kind: "image", src: entry.src, reason: entry.reason }
+            : { kind: "frame", ...(entry as FrameFailure) };
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id
+              ? { ...it, debug: [...(it.debug ?? []), tagged].slice(-50) }
+              : it,
+          ),
+        );
+      },
     });
     updateItem(item.id, { status: "saved", progress: null });
   }
