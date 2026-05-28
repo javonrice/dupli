@@ -3,7 +3,8 @@
 // everything into a real MP4 using ffmpeg.wasm. Zero external services.
 
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { toBlobURL } from "@ffmpeg/util";
+import coreURL from "@ffmpeg/core?url";
+import wasmURL from "@ffmpeg/core/wasm?url";
 import { toCanvas } from "html-to-image";
 import type { PlayerRef } from "@remotion/player";
 import type { RefObject } from "react";
@@ -18,14 +19,16 @@ async function getFFmpeg(onLog?: (line: string) => void): Promise<FFmpeg> {
   loadPromise = (async () => {
     const ff = new FFmpeg();
     if (onLog) ff.on("log", ({ message }) => onLog(message));
-    const baseURL = "https://unpkg.com/@ffmpeg/[email protected]/dist/umd";
     await ff.load({
-      coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, "text/javascript"),
-      wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, "application/wasm"),
+      coreURL,
+      wasmURL,
     });
     ffmpegInstance = ff;
     return ff;
-  })();
+  })().catch((err) => {
+    loadPromise = null;
+    throw err;
+  });
   return loadPromise;
 }
 
