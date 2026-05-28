@@ -169,32 +169,40 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
   onProgress?.({ stage: "audio", pct: 0 });
   const decodeCtx = new AudioContext();
   const decoded: AudioBuffer[] = [];
-  for (let i = 0; i < script.segments.length; i++) {
-    const seg = script.segments[i];
-    const bytes = dataUrlToBytes(seg.audioDataUrl);
-    const ab = bytes.buffer.slice(
-      bytes.byteOffset,
-      bytes.byteOffset + bytes.byteLength,
-    ) as ArrayBuffer;
-    try {
-      decoded.push(await decodeCtx.decodeAudioData(ab));
-    } catch (err) {
-      const info = classifyError(err);
-      const failure: FrameFailure = {
-        frame: segmentStartFrames[i] ?? 0,
-        segmentKey: seg.key,
-        cause: "audio-decode",
-        message: info.message,
-        attempts: 1,
-      };
-      onDebug?.(failure);
-      console.warn("[render-reel] audio decode failed", failure);
-      throw err;
+  try {
+    for (let i = 0; i < script.segments.length; i++) {
+      const seg = script.segments[i];
+      const bytes = dataUrlToBytes(seg.audioDataUrl);
+      const ab = bytes.buffer.slice(
+        bytes.byteOffset,
+        bytes.byteOffset + bytes.byteLength,
+      ) as ArrayBuffer;
+      try {
+        decoded.push(await decodeCtx.decodeAudioData(ab));
+      } catch (err) {
+        const info = classifyError(err);
+        const failure: FrameFailure = {
+          frame: segmentStartFrames[i] ?? 0,
+          segmentKey: seg.key,
+          cause: "audio-decode",
+          message: info.message,
+          attempts: 1,
+        };
+        onDebug?.(failure);
+        console.warn("[render-reel] audio decode failed", failure);
+        throw err;
+      }
+    }
+  } finally {
+    if (decodeCtx.state !== "closed") {
+      try {
+        await decodeCtx.close();
+      } catch (err) {
+        console.warn("[render-reel] audio context close failed", err);
+      }
     }
   }
-  await decodeCtx.close();
 
-  await decodeCtx.close();
 
   const offline = new OfflineAudioContext(
     2,
