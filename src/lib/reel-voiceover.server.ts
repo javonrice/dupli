@@ -32,26 +32,35 @@ export async function writeScript(
     )
     .join("\n\n");
 
-  const prompt = `Write a TikTok voiceover script for a dupe-finder app called Dupli. Tone: trendy Gen-Z girl, casual, conversational, slightly hyped — like a beauty TikToker doing a "stop overpaying" video. No emojis, no hashtags, no quotes, no stage directions.
+  const prompt = `Write a TikTok voiceover script for a dupe-finder app called Dupli. You ARE a Gen-Z beauty UGC creator talking straight to camera — casual, hyped, like you're texting your bestie. Sound HUMAN, not like an ad read.
 
-The video shows 4 viral/luxury beauty products and reveals a cheaper dupe for each one. For each reveal you must briefly explain WHY it's a dupe — infer from the product names (same active ingredient, same finish, same formula type, same shade range, same packaging, etc.). Sound informed, not generic. Never say "similar product" or "great alternative."
+CRITICAL voice rules (this is for text-to-speech, punctuation literally changes how it sounds):
+- NO em dashes, NO en dashes, NO semicolons, NO colons mid-sentence. They make TTS pause weird and sound robotic.
+- Use periods and commas only. Short sentences. Natural breath rhythm.
+- No parentheses, no quotes, no emojis, no hashtags, no stage directions.
+- Write numbers as words when it flows better (say "twenty bucks" not "$20") but keep dollar amounts as digits with the word dollars, like "20 dollars".
+- Use filler words a real creator uses: "okay so", "literally", "like", "y'all", "no cause", "bestie", "girl", "I'm telling you", "trust me".
+- Contractions always (it's, that's, you're, I'm, don't).
+
+The video shows 4 viral/luxury beauty products and reveals a cheaper dupe for each. For each reveal explain WHY it's a dupe — infer from product names (same active ingredient, same finish, same formula, same shade, same packaging). Sound like you actually use this stuff.
 
 ${pairBlock}
 
-Total savings across all 4: $${totalSavings.toFixed(0)}
+Total savings across all 4: $${totalSavings.toFixed(0)} dollars
 
 Return ONLY a JSON object with keys: hook, reveal_1, reveal_2, reveal_3, reveal_4, cta.
 
-- hook: 5–9 words. SCROLL-STOPPING opener that tees up "4 dupes". Name the number, make a bold promise. Examples: "I dupe'd 4 viral products you actually buy.", "4 overpriced beauty buys. 4 cheaper twins.", "Stop overpaying for these 4 — I found dupes."
-- reveal_1: 12–20 words. Shape: "[${pairs[0].dupe.brand}] dupes it for $${pairs[0].savingsUsd.toFixed(0)} less — [one short reason it works]." Reason must reference a concrete shared trait (ingredient, finish, formula, shade, packaging) inferred from "${pairs[0].original.name}" vs "${pairs[0].dupe.name}".
-- reveal_2: same shape for Pair 2 — ${pairs[1].dupe.brand}, $${pairs[1].savingsUsd.toFixed(0)} savings, reason from "${pairs[1].original.name}" vs "${pairs[1].dupe.name}".
-- reveal_3: same shape for Pair 3 — ${pairs[2].dupe.brand}, $${pairs[2].savingsUsd.toFixed(0)} savings, reason from "${pairs[2].original.name}" vs "${pairs[2].dupe.name}".
-- reveal_4: same shape for Pair 4 — ${pairs[3].dupe.brand}, $${pairs[3].savingsUsd.toFixed(0)} savings, reason from "${pairs[3].original.name}" vs "${pairs[3].dupe.name}".
-- cta: 6–10 words. Tell viewers to download Dupli and scan anything. Mention total saved ~$${totalSavings.toFixed(0)}.
+- hook: 6–10 words. Open like a real UGC creator. MUST start with one of: "hey y'all", "okay so", "back again with", "no cause y'all", "bestie", "girl listen". Then tease 4 dupes. Example: "hey y'all I found 4 dupes that actually slap."
+- reveal_1: 12–22 words. Name the dupe brand, say how much you save in dollars, give one real reason it works (ingredient, finish, formula, shade, packaging) from "${pairs[0].original.name}" vs "${pairs[0].dupe.name}". No dashes.
+- reveal_2: same vibe for Pair 2, ${pairs[1].dupe.brand}, ${pairs[1].savingsUsd.toFixed(0)} dollars saved, reason from "${pairs[1].original.name}" vs "${pairs[1].dupe.name}".
+- reveal_3: same for Pair 3, ${pairs[2].dupe.brand}, ${pairs[2].savingsUsd.toFixed(0)} dollars saved, reason from "${pairs[2].original.name}" vs "${pairs[2].dupe.name}".
+- reveal_4: same for Pair 4, ${pairs[3].dupe.brand}, ${pairs[3].savingsUsd.toFixed(0)} dollars saved, reason from "${pairs[3].original.name}" vs "${pairs[3].dupe.name}".
+- cta: 8–12 words. Tell viewers to download Dupli and scan anything. Mention saving about ${totalSavings.toFixed(0)} dollars total. Sound chill, not salesy.
 
-Vary the phrasing — don't start every reveal the same way. Mix in casual connectors like "literally", "basically", "same vibe", "same formula", "for real".
+Vary how each reveal starts. Mix in "okay this one", "next up", "and this", "oh and", "wait til you see". No dashes ANYWHERE.
 
 Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...","reveal_4":"...","cta":"..."}`;
+
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
