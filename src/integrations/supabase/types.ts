@@ -224,6 +224,7 @@ export type Database = {
         Row: {
           brand_name: string
           brand_slug: string
+          cached_image_url: string | null
           category: string | null
           contains: string[]
           created_at: string
@@ -246,6 +247,7 @@ export type Database = {
         Insert: {
           brand_name: string
           brand_slug: string
+          cached_image_url?: string | null
           category?: string | null
           contains?: string[]
           created_at?: string
@@ -268,6 +270,7 @@ export type Database = {
         Update: {
           brand_name?: string
           brand_slug?: string
+          cached_image_url?: string | null
           category?: string | null
           contains?: string[]
           created_at?: string
