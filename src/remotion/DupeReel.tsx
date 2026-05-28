@@ -16,7 +16,8 @@ import { slide } from "@remotion/transitions/slide";
 import { loadFont as loadOutfit } from "@remotion/google-fonts/Outfit";
 import { loadFont as loadFigtree } from "@remotion/google-fonts/Figtree";
 import type { DupePair } from "@/lib/dashboard.functions";
-import type { ReelScript } from "@/lib/reel-voiceover.functions";
+import type { ReelScript, ReelSegmentKey } from "@/lib/reel-voiceover.functions";
+
 
 const { fontFamily: DISPLAY } = loadOutfit("normal", {
   weights: ["700", "900"],
@@ -750,15 +751,20 @@ export type DupeReelProps = {
 };
 
 export function DupeReel({ script }: DupeReelProps) {
+  const [p0, p1, p2, p3] = script.pairs;
   const sceneOrder: Array<{
-    key: "hook" | "scan" | "compare" | "cta";
+    key: ReelSegmentKey;
+
     render: (text: string) => React.ReactNode;
   }> = [
-    { key: "hook", render: (t) => <HookScene pair={script.pair} text={t} /> },
-    { key: "scan", render: (t) => <ScanScene pair={script.pair} text={t} /> },
-    { key: "compare", render: (t) => <CompareScene pair={script.pair} text={t} /> },
+    { key: "hook", render: (t) => <HookScene pair={p0} text={t} /> },
+    { key: "reveal_1", render: (t) => <CompareScene pair={p0} text={t} /> },
+    { key: "reveal_2", render: (t) => <CompareScene pair={p1} text={t} /> },
+    { key: "reveal_3", render: (t) => <CompareScene pair={p2} text={t} /> },
+    { key: "reveal_4", render: (t) => <CompareScene pair={p3} text={t} /> },
     { key: "cta", render: (t) => <CtaScene text={t} /> },
   ];
+
 
   // Build sequence durations + absolute audio start positions accounting for
   // transition overlap inside TransitionSeries (each transition overlaps the

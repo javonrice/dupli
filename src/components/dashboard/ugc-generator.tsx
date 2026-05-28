@@ -3,11 +3,12 @@ import { useRef, useState } from "react";
 import { Loader2, RefreshCw, Video, AlertCircle, Download } from "lucide-react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
-import { pickRandomDupePair, type DupePair } from "@/lib/dashboard.functions";
+import { pickRandomDupePairs, type DupePair } from "@/lib/dashboard.functions";
 import {
   generateReelScript,
   type ReelScript,
 } from "@/lib/reel-voiceover.functions";
+
 import {
   DupeReel,
   FPS,
@@ -36,10 +37,10 @@ const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
 };
 
 export function UgcGenerator() {
-  const pickPair = useServerFn(pickRandomDupePair);
+  const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
 
-  const [pair, setPair] = useState<DupePair | null>(null);
+  const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -55,14 +56,14 @@ export function UgcGenerator() {
   async function run() {
     setError(null);
     setScript(null);
-    setPair(null);
+    setPairs(null);
     try {
       setStage("picking");
-      const newPair = await pickPair();
-      setPair(newPair);
+      const newPairs = await pickPairs({ data: { count: 4 } });
+      setPairs(newPairs);
       setStage("scripting");
       setStage("voicing");
-      const s = await writeScript({ data: { pair: newPair } });
+      const s = await writeScript({ data: { pairs: newPairs } });
       setScript(s);
       setStage("done");
     } catch (e) {
@@ -71,15 +72,15 @@ export function UgcGenerator() {
     }
   }
 
+
   const totalFrames = script ? totalDurationInFrames(script) : 0;
 
   async function handleDownload() {
-    if (!script || !pair) return;
+    if (!script || !pairs || pairs.length === 0) return;
     setError(null);
     setExporting(true);
     setProgress({ stage: "audio", pct: 0 });
     try {
-      // Wait for hidden player + stage to mount and refs to populate.
       for (let i = 0; i < 60; i++) {
         if (hiddenPlayerRef.current && hiddenStageRef.current) break;
         await new Promise((r) => setTimeout(r, 50));
@@ -100,7 +101,9 @@ export function UgcGenerator() {
         onProgress: setProgress,
       });
 
-      const slug = `${pair.original.brand}-${pair.dupe.brand}`
+      const slug = pairs
+        .map((p) => p.dupe.brand)
+        .join("-")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "")
@@ -121,6 +124,7 @@ export function UgcGenerator() {
     }
   }
 
+
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
       <div className="flex items-start justify-between gap-4">
@@ -132,10 +136,11 @@ export function UgcGenerator() {
             Dupe Reel (Remotion + ElevenLabs)
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Picks a dupe pair, writes a 4-beat script, voices each line with
-            ElevenLabs, and renders a vertical reel where every scene is timed
-            to its voiceover. Download as MP4 — rendered in your browser.
+            Picks 4 random dupe pairs, writes a hook + 4 reveals + CTA,
+            voices each line with ElevenLabs, and renders a vertical reel
+            timed to the voiceover. Download as MP4 — rendered in your browser.
           </p>
+
         </div>
         <Button onClick={run} disabled={loading || exporting} size="lg">
           {loading ? (
@@ -152,24 +157,29 @@ export function UgcGenerator() {
         </Button>
       </div>
 
-      {pair && (
-        <div className="mt-5 rounded-xl border border-border bg-background/40 p-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="font-semibold">{pair.original.brand}</span>
-            <span className="text-muted-foreground">→</span>
-            <span className="font-semibold">{pair.dupe.brand}</span>
-            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
-              {pair.matchPct}% match
-            </span>
-            <span className="text-muted-foreground">
-              Save ${pair.savingsUsd.toFixed(0)}
-            </span>
-          </div>
+      {pairs && (
+        <div className="mt-5 space-y-3 rounded-xl border border-border bg-background/40 p-4">
+          <ul className="space-y-2 text-sm">
+            {pairs.map((p, i) => (
+              <li key={p.pairId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-mono text-xs text-muted-foreground">#{i + 1}</span>
+                <span className="font-semibold">{p.original.brand}</span>
+                <span className="text-muted-foreground">→</span>
+                <span className="font-semibold">{p.dupe.brand}</span>
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+                  {p.matchPct}% match
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  Save ${p.savingsUsd.toFixed(0)}
+                </span>
+              </li>
+            ))}
+          </ul>
           {script && (
-            <ul className="mt-3 space-y-1.5 text-xs text-foreground/80">
+            <ul className="mt-3 space-y-1.5 border-t border-border pt-3 text-xs text-foreground/80">
               {script.segments.map((s) => (
                 <li key={s.key} className="flex gap-3">
-                  <span className="w-16 shrink-0 font-mono uppercase text-muted-foreground">
+                  <span className="w-20 shrink-0 font-mono uppercase text-muted-foreground">
                     {s.key} · {s.durationSec.toFixed(1)}s
                   </span>
                   <span className="italic">"{s.text}"</span>
@@ -179,6 +189,8 @@ export function UgcGenerator() {
           )}
         </div>
       )}
+
+
 
       {loading && (
         <div className="mt-5 flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">

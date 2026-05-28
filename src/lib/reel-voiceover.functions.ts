@@ -1,7 +1,20 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { DupePair } from "@/lib/dashboard.functions";
 
-export type ReelSegmentKey = "hook" | "scan" | "compare" | "cta";
+export type ReelSegmentKey =
+  | "hook"
+  | "reveal_1"
+  | "reveal_2"
+  | "reveal_3"
+  | "reveal_4"
+  | "cta";
+
+export const REVEAL_KEYS: ReelSegmentKey[] = [
+  "reveal_1",
+  "reveal_2",
+  "reveal_3",
+  "reveal_4",
+];
 
 export type ReelSegment = {
   key: ReelSegmentKey;
@@ -11,36 +24,54 @@ export type ReelSegment = {
 };
 
 export type ReelScript = {
-  pair: DupePair;
-  segments: ReelSegment[];
+  pairs: DupePair[]; // length 4
+  segments: ReelSegment[]; // hook + 4 reveals + cta
 };
 
 // CBR MP3 (128kbps) duration estimate from byte length.
-// ElevenLabs default `mp3_44100_128` is 128kbps constant.
 function estimateMp3DurationSec(byteLength: number): number {
   return byteLength / (128_000 / 8);
 }
 
-// Use Lovable AI to produce 4 short punchy lines aligned to the scene beats.
-async function writeScript(pair: DupePair): Promise<Record<ReelSegmentKey, string>> {
+// Use Lovable AI to produce 6 short punchy lines (hook + 4 reveals + cta).
+async function writeScript(
+  pairs: DupePair[],
+): Promise<Record<ReelSegmentKey, string>> {
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
 
-  const prompt = `Write a 4-line TikTok voiceover script for a dupe-finder app. Each line must be SHORT (5–9 words), conversational, no emojis, no hashtags, no quotes.
+  const totalSavings = pairs.reduce((acc, p) => acc + p.savingsUsd, 0);
 
-Original: ${pair.original.brand} ${pair.original.name} — $${pair.original.priceUsd.toFixed(0)}
-Dupe: ${pair.dupe.brand} ${pair.dupe.name} — $${pair.dupe.priceUsd.toFixed(0)}
-Match: ${pair.matchPct}%
-Savings: $${pair.savingsUsd.toFixed(0)}
+  const pairBlock = pairs
+    .map(
+      (p, i) =>
+        `Pair ${i + 1}:
+  Original: ${p.original.brand} ${p.original.name} — $${p.original.priceUsd.toFixed(0)}
+  Dupe: ${p.dupe.brand} ${p.dupe.name} — $${p.dupe.priceUsd.toFixed(0)}
+  Match: ${p.matchPct}%, Save $${p.savingsUsd.toFixed(0)}`,
+    )
+    .join("\n\n");
 
-Return ONLY a JSON object with keys: hook, scan, compare, cta.
-- hook: a SCROLL-STOPPING opener. Must do ONE of: call out the absurd price, ask a punchy question, or make a bold claim. Name the brand. Examples: "Stop paying $${pair.original.priceUsd.toFixed(0)} for ${pair.original.brand}.", "Why is ${pair.original.brand} ${pair.original.priceUsd.toFixed(0)} dollars?", "${pair.original.brand} fans, look away."
-- scan: tease that you scanned it for a dupe
-- compare: reveal the dupe brand and the savings number
-- cta: tell them to download Dupli
+  const prompt = `Write a 6-line TikTok voiceover script for a dupe-finder app called Dupli. Each line must be SHORT (5–10 words), conversational, no emojis, no hashtags, no quotes.
 
-Example shape: {"hook":"...", "scan":"...", "compare":"...", "cta":"..."}`;
+The video shows 4 luxury/viral beauty products and reveals a cheaper dupe for each one.
 
+${pairBlock}
+
+Total savings across all 4: $${totalSavings.toFixed(0)}
+
+Return ONLY a JSON object with keys: hook, reveal_1, reveal_2, reveal_3, reveal_4, cta.
+
+- hook: a SCROLL-STOPPING opener that tees up "4 dupes". Must name a number and make a bold promise. Examples: "I dupe'd 4 viral products you actually buy.", "4 overpriced products. 4 cheaper twins.", "You're overpaying for these 4 — here's the fix."
+- reveal_1: name the dupe brand for Pair 1 and the savings number (e.g. "${pairs[0].dupe.brand} dupes it for $${pairs[0].savingsUsd.toFixed(0)} less.")
+- reveal_2: same shape, for Pair 2 using ${pairs[1].dupe.brand} and $${pairs[1].savingsUsd.toFixed(0)} savings
+- reveal_3: same shape, for Pair 3 using ${pairs[2].dupe.brand} and $${pairs[2].savingsUsd.toFixed(0)} savings
+- reveal_4: same shape, for Pair 4 using ${pairs[3].dupe.brand} and $${pairs[3].savingsUsd.toFixed(0)} savings
+- cta: tell them to download Dupli to scan any product. Mention the total saved (~$${totalSavings.toFixed(0)}).
+
+Vary the phrasing across the 4 reveals so they don't sound identical.
+
+Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...","reveal_4":"...","cta":"..."}`;
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -66,12 +97,18 @@ Example shape: {"hook":"...", "scan":"...", "compare":"...", "cta":"..."}`;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    // Try to salvage if model wrapped in code fences
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) throw new Error("Script JSON parse failed");
     parsed = JSON.parse(m[0]);
   }
-  const need: ReelSegmentKey[] = ["hook", "scan", "compare", "cta"];
+  const need: ReelSegmentKey[] = [
+    "hook",
+    "reveal_1",
+    "reveal_2",
+    "reveal_3",
+    "reveal_4",
+    "cta",
+  ];
   for (const k of need) {
     if (!parsed[k] || typeof parsed[k] !== "string") {
       throw new Error(`Script missing key: ${k}`);
@@ -80,9 +117,10 @@ Example shape: {"hook":"...", "scan":"...", "compare":"...", "cta":"..."}`;
   return parsed as Record<ReelSegmentKey, string>;
 }
 
-// ElevenLabs TTS — returns base64 MP3 + estimated duration.
 const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Sarah
-async function tts(text: string): Promise<{ audioDataUrl: string; durationSec: number }> {
+async function tts(
+  text: string,
+): Promise<{ audioDataUrl: string; durationSec: number }> {
   const key = process.env.ELEVENLABS_API_KEY;
   if (!key) throw new Error("ELEVENLABS_API_KEY not configured");
 
@@ -122,15 +160,27 @@ async function tts(text: string): Promise<{ audioDataUrl: string; durationSec: n
 }
 
 export const generateReelScript = createServerFn({ method: "POST" })
-  .inputValidator((data: { pair: DupePair }) => data)
+  .inputValidator((data: { pairs: DupePair[] }) => {
+    if (!Array.isArray(data.pairs) || data.pairs.length !== 4) {
+      throw new Error("generateReelScript expects exactly 4 pairs");
+    }
+    return data;
+  })
   .handler(async ({ data }): Promise<ReelScript> => {
-    const lines = await writeScript(data.pair);
-    const keys: ReelSegmentKey[] = ["hook", "scan", "compare", "cta"];
+    const lines = await writeScript(data.pairs);
+    const keys: ReelSegmentKey[] = [
+      "hook",
+      "reveal_1",
+      "reveal_2",
+      "reveal_3",
+      "reveal_4",
+      "cta",
+    ];
     const segments = await Promise.all(
       keys.map(async (key) => {
         const { audioDataUrl, durationSec } = await tts(lines[key]);
         return { key, text: lines[key], audioDataUrl, durationSec };
       }),
     );
-    return { pair: data.pair, segments };
+    return { pairs: data.pairs, segments };
   });
