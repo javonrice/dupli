@@ -115,7 +115,7 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
       script,
       pairs,
       playerRef: hiddenPlayerRef,
-      captureEl: hiddenStageRef.current,
+      captureEl: hiddenStageRef.current!,
       saveRecord,
       onProgress: (p) => updateItem(item.id, { progress: p }),
       onDebug: (entry) => {
