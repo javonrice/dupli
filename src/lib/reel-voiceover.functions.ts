@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import type { DupePair } from "@/lib/dashboard.functions";
+import type { DupePair } from "@/lib/dupe-types";
 import {
   writeScript,
   tts,

@@ -15,7 +15,7 @@ import {
 import { slide } from "@remotion/transitions/slide";
 import { loadFont as loadOutfit } from "@remotion/google-fonts/Outfit";
 import { loadFont as loadFigtree } from "@remotion/google-fonts/Figtree";
-import type { DupePair } from "@/lib/dashboard.functions";
+import type { DupePair } from "@/lib/dupe-types";
 import type { ReelScript, ReelSegmentKey } from "@/lib/reel-voiceover.functions";
 
 

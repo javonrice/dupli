@@ -2,26 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHost } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { uploadProductImageDataUrl } from "@/lib/product-images.server";
+import type { DupePair, SlideResult } from "@/lib/dupe-types";
 
-export type DupePair = {
-  pairId: string;
-  matchPct: number;
-  original: {
-    id: string;
-    brand: string;
-    name: string;
-    imageUrl: string;
-    priceUsd: number;
-  };
-  dupe: {
-    id: string;
-    brand: string;
-    name: string;
-    imageUrl: string;
-    priceUsd: number;
-  };
-  savingsUsd: number;
-};
+
+
 
 // Pick a random high-match dupe pair where both products have images + prices
 // and the pair hasn't been generated in the last 30 days.
@@ -434,9 +418,8 @@ async function generateSlide(input: SlideInput): Promise<string> {
   return `data:image/png;base64,${b64}`;
 }
 
-export type SlideResult =
-  | { slide: 1 | 2 | 3 | 4; ok: true; dataUrl: string }
-  | { slide: 1 | 2 | 3 | 4; ok: false; error: string };
+
+
 
 export const generateCarouselSlides = createServerFn({ method: "POST" })
   .inputValidator((data: { pair: DupePair; slides?: Array<1 | 2 | 3 | 4> }) => data)
