@@ -243,7 +243,7 @@ function DashboardPage() {
         </div>
 
         <div className="mt-12 space-y-8">
-        <div className="mt-12 space-y-8">
+
           <UgcGenerator />
           <MyVideos />
         </div>
