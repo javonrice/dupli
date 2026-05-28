@@ -75,6 +75,9 @@ export function UgcGenerator() {
     }
   }
 
+  const totalFrames = script ? totalDurationInFrames(script) : 0;
+
+
   async function handleDownload() {
     if (!script || !pairs || pairs.length === 0) return;
     setError(null);
