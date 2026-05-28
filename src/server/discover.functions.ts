@@ -293,6 +293,7 @@ export const getCommunityDupe = createServerFn({ method: "GET" })
     z.object({ brandSlug: z.string().min(1), productSlug: z.string().min(1) }).parse(data),
   )
   .handler(async ({ data }): Promise<{ found: boolean; dupes: CommunityDupe[] }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: product } = await supabaseAdmin
       .from("products")
       .select("id")
@@ -356,6 +357,7 @@ export type ProductDetail = {
 export const getProductDetail = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ productId: z.string().uuid() }).parse(data))
   .handler(async ({ data }): Promise<{ found: boolean; product: ProductDetail | null }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: product, error: prodErr } = await supabaseAdmin
       .from("products")
       .select(
