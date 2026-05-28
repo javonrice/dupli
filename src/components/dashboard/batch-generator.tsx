@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
 import { generateReelScript } from "@/lib/reel-voiceover.functions";
 import { saveVideoRecord } from "@/lib/user-videos.functions";
+import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
 import { renderAndSaveReel } from "@/lib/reel-pipeline";
+
 import {
   DupeReel,
   FPS,
