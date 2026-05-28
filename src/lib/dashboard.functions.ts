@@ -154,6 +154,8 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<DupePair[]> => {
     const count = Math.max(1, Math.min(8, data.count ?? 4));
 
+    // Pull a wider candidate pool (no match-score ordering ceiling effect)
+    // so each call can sample from across the whole catalog.
     const { data: candidates, error: qErr } = await supabaseAdmin
       .from("dupes")
       .select(
@@ -162,8 +164,7 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
          dupe:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, image_url, cached_image_url, lowest_price_usd )`,
       )
       .gte("overall_match", 70)
-      .order("overall_match", { ascending: false })
-      .limit(500);
+      .limit(2000);
 
     if (qErr) throw new Error(`Failed to load dupe candidates: ${qErr.message}`);
     if (!candidates) throw new Error("No dupe candidates found");
@@ -190,21 +191,41 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
       throw new Error(`Need at least ${count} usable pairs, only found ${usable.length}`);
     }
 
-    // Shuffle and pick `count` with no duplicate original brands so the reel
-    // doesn't feel like the same product four times.
-    const shuffled = [...usable].sort(() => Math.random() - 0.5);
+    // Exclude pairs generated in the last 7 days so each click serves fresh ones.
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: recent } = await supabaseAdmin
+      .from("dashboard_generations")
+      .select("original_product_id, dupe_product_id")
+      .gte("created_at", since);
+    const recentSet = new Set(
+      (recent ?? []).map((r) => `${r.original_product_id}::${r.dupe_product_id}`),
+    );
+
+    const fresh = usable.filter((row) => {
+      const o = row.original as unknown as Prod;
+      const d = row.dupe as unknown as Prod;
+      return !recentSet.has(`${o.id}::${d.id}`);
+    });
+
+    // Shuffle. Prefer fresh pool; fall back to full usable pool if exhausted.
+    const shuffle = <T>(arr: T[]) => [...arr].sort(() => Math.random() - 0.5);
+    const primary = fresh.length >= count ? shuffle(fresh) : shuffle(usable);
+
     const picked: Row[] = [];
     const seenOriginals = new Set<string>();
-    for (const row of shuffled) {
+    const seenDupes = new Set<string>();
+    for (const row of primary) {
       const o = row.original as unknown as Prod;
-      if (seenOriginals.has(o.id)) continue;
+      const d = row.dupe as unknown as Prod;
+      if (seenOriginals.has(o.id) || seenDupes.has(d.id)) continue;
       picked.push(row);
       seenOriginals.add(o.id);
+      seenDupes.add(d.id);
       if (picked.length === count) break;
     }
+    // Fallback: allow reused originals/dupes if we couldn't fill from distinct.
     if (picked.length < count) {
-      // Fallback: allow dupes from same brand
-      for (const row of shuffled) {
+      for (const row of primary) {
         if (picked.includes(row)) continue;
         picked.push(row);
         if (picked.length === count) break;
@@ -212,7 +233,7 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
     }
 
     // Record so we don't repeat soon.
-    await supabaseAdmin
+    const { error: insErr } = await supabaseAdmin
       .from("dashboard_generations")
       .insert(
         picked.map((row) => {
@@ -221,6 +242,9 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
           return { original_product_id: o.id, dupe_product_id: d.id };
         }),
       );
+    if (insErr) {
+      throw new Error(`Failed to record generation: ${insErr.message}`);
+    }
 
     return picked.map((row) => {
       const o = row.original as unknown as Prod;
@@ -246,6 +270,7 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
       };
     });
   });
+
 
 
 async function pickLatestSavedScanPair(): Promise<DupePair | null> {
