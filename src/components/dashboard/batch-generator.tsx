@@ -137,8 +137,10 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
         if (stopRef.current) break;
         try {
           // Each iteration picks its own 4 fresh pairs.
-          const pairs = await pickPairs({ data: { count: 4 } });
+          const rawPairs = await pickPairs({ data: { count: 4 } });
+          const pairs = await inlinePairImages(rawPairs);
           await runOne(item, pairs);
+
         } catch (e) {
           updateItem(item.id, {
             status: "failed",
