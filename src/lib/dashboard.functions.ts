@@ -33,8 +33,8 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
       .from("dupes")
       .select(
         `id, overall_match,
-         original:products!dupes_original_product_id_fkey ( id, brand_name, product_name, image_url, lowest_price_usd ),
-         dupe:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, image_url, lowest_price_usd )`,
+         original:products!dupes_original_product_id_fkey ( id, brand_name, product_name, image_url, cached_image_url, lowest_price_usd ),
+         dupe:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, image_url, cached_image_url, lowest_price_usd )`,
       )
       .gte("overall_match", 70)
       .order("overall_match", { ascending: false })
@@ -53,6 +53,7 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
         brand_name: string;
         product_name: string;
         image_url: string | null;
+        cached_image_url: string | null;
         lowest_price_usd: number | null;
       } | null;
       const d = row.dupe as unknown as {
@@ -60,10 +61,11 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
         brand_name: string;
         product_name: string;
         image_url: string | null;
+        cached_image_url: string | null;
         lowest_price_usd: number | null;
       } | null;
       if (!o || !d) return false;
-      if (!o.image_url || !d.image_url) return false;
+      if (!(o.cached_image_url || o.image_url) || !(d.cached_image_url || d.image_url)) return false;
       if (o.lowest_price_usd == null || d.lowest_price_usd == null) return false;
       return Number(d.lowest_price_usd) < Number(o.lowest_price_usd);
     });
@@ -96,6 +98,7 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
       brand_name: string;
       product_name: string;
       image_url: string;
+      cached_image_url: string | null;
       lowest_price_usd: number;
     };
     const d = picked.dupe as unknown as {
@@ -103,6 +106,7 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
       brand_name: string;
       product_name: string;
       image_url: string;
+      cached_image_url: string | null;
       lowest_price_usd: number;
     };
     // Record this generation so we don't repeat soon.
@@ -114,8 +118,8 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
     // (fal.ai, Nano Banana, OG renderers, etc.) don't have to reach the
     // original source CDN — which sometimes 403s third-party clients.
     const [originalImageUrl, dupeImageUrl] = await Promise.all([
-      ensureCachedProductImage(o.id),
-      ensureCachedProductImage(d.id),
+      o.cached_image_url ?? ensureCachedProductImage(o.id),
+      d.cached_image_url ?? ensureCachedProductImage(d.id),
     ]);
 
     return {
