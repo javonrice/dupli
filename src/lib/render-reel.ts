@@ -229,10 +229,19 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
       imgs.map((img) => {
         if (img.complete && img.naturalWidth > 0) return Promise.resolve();
         return new Promise<void>((resolve) => {
-          const done = () => resolve();
-          img.addEventListener("load", done, { once: true });
-          img.addEventListener("error", done, { once: true });
-          setTimeout(done, 1500);
+          const done = (kind: "load" | "error" | "timeout") => {
+            if (kind !== "load") {
+              const src = (img.getAttribute("src") ?? "").slice(0, 200);
+              const reason =
+                kind === "error" ? "img error event" : "load timeout (1500ms)";
+              onDebug?.({ type: "image", src, reason });
+              console.warn("[render-reel] image broken", { src, reason });
+            }
+            resolve();
+          };
+          img.addEventListener("load", () => done("load"), { once: true });
+          img.addEventListener("error", () => done("error"), { once: true });
+          setTimeout(() => done("timeout"), 1500);
         });
       }),
     );
@@ -246,6 +255,7 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
   await nextFrame();
   await waitForImages();
   await new Promise((r) => setTimeout(r, 250));
+
 
 
   const captureOpts = {
