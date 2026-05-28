@@ -753,7 +753,8 @@ export type DupeReelProps = {
 export function DupeReel({ script }: DupeReelProps) {
   const [p0, p1, p2, p3] = script.pairs;
   const sceneOrder: Array<{
-    key: ReelSegment["key"];
+    key: ReelSegmentKey;
+
     render: (text: string) => React.ReactNode;
   }> = [
     { key: "hook", render: (t) => <HookScene pair={p0} text={t} /> },
