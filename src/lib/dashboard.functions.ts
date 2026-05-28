@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHost } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { ensureCachedProductImage } from "@/lib/product-images.server";
+import { ensureCachedProductImage, uploadProductImageDataUrl } from "@/lib/product-images.server";
 
 export type DupePair = {
   pairId: string;
@@ -27,6 +27,9 @@ export type DupePair = {
 // and the pair hasn't been generated in the last 30 days.
 export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
   async (): Promise<DupePair> => {
+    const scanPair = await pickLatestSavedScanPair();
+    if (scanPair) return scanPair;
+
     // Pull a candidate window and pick randomly.
 
     const { data: candidates, error: qErr } = await supabaseAdmin
@@ -143,6 +146,62 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
     };
   },
 );
+
+async function pickLatestSavedScanPair(): Promise<DupePair | null> {
+  const { data: scans, error } = await supabaseAdmin
+    .from("scans")
+    .select("id, original_brand, original_product_name, dupe_brand, dupe_product_name, match_score, thumbnail_data_url, analysis, created_at")
+    .not("thumbnail_data_url", "is", null)
+    .not("dupe_brand", "is", null)
+    .not("dupe_product_name", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(25);
+
+  if (error) {
+    console.warn("pickLatestSavedScanPair: scan lookup failed", error);
+    return null;
+  }
+
+  for (const scan of scans ?? []) {
+    const analysis = scan.analysis as {
+      original?: { estimatedPriceUsd?: number };
+      dupe?: { estimatedPriceUsd?: number };
+    } | null;
+    const originalPrice = Number(analysis?.original?.estimatedPriceUsd);
+    const dupePrice = Number(analysis?.dupe?.estimatedPriceUsd);
+    if (!scan.thumbnail_data_url || !Number.isFinite(originalPrice) || !Number.isFinite(dupePrice)) {
+      continue;
+    }
+
+    const imageUrl = await uploadProductImageDataUrl({
+      dataUrl: scan.thumbnail_data_url,
+      folder: `scan-${scan.id}`,
+      name: `${scan.original_brand}-${scan.original_product_name}`,
+    });
+
+    return {
+      pairId: `scan:${scan.id}`,
+      matchPct: scan.match_score ?? 70,
+      original: {
+        id: `scan:${scan.id}:original`,
+        brand: scan.original_brand,
+        name: scan.original_product_name,
+        imageUrl,
+        priceUsd: originalPrice,
+      },
+      dupe: {
+        id: `scan:${scan.id}:dupe`,
+        brand: scan.dupe_brand ?? "Dupe",
+        name: scan.dupe_product_name ?? "Recommended dupe",
+        imageUrl,
+        priceUsd: dupePrice,
+      },
+      savingsUsd: Math.max(originalPrice - dupePrice, 0),
+    };
+  }
+
+  return null;
+}
 
 // ---------- Image generation via Nano Banana ----------
 
