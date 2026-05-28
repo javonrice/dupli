@@ -37,11 +37,11 @@ const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
   encode: "Encoding MP4",
 };
 
+export function UgcGenerator() {
+  const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
 
-  const pickPairs = useServerFn(pickRandomDupePairs);
-  const writeScript = useServerFn(generateReelScript);
 
   const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
