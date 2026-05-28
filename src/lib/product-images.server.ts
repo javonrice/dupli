@@ -21,9 +21,8 @@ function extFromContentType(ct: string | null): string {
 /**
  * Ensures the given product's image is cached in our own storage bucket.
  * - If `cached_image_url` is already set on the row, returns it.
- * - Otherwise fetches the source image (with browser-like headers to get
- *   past CDNs that 403 generic clients), uploads to our bucket, stores the
- *   public URL on the product row, and returns it.
+ * - Otherwise fetches the source image once, uploads it to our bucket, stores
+ *   the public URL on the product row, and returns it.
  *
  * Idempotent and safe to call from any server flow.
  */
@@ -63,12 +62,12 @@ export async function ensureCachedProductImage(
     (await tryFetch(product.image_url)) ?? (await tryFetch(proxied));
 
   if (!srcRes) {
-    // Give up gracefully: return the original URL so callers don't crash.
-    // (fal.ai / other consumers may still fail, but we don't take down the flow.)
     console.error(
-      `[ensureCachedProductImage] all fetch attempts failed for product ${productId}, returning original URL`,
+      `[ensureCachedProductImage] all fetch attempts failed for product ${productId}`,
     );
-    return product.image_url;
+    throw new Error(
+      `Product image is not available in our storage yet and the source image could not be copied`,
+    );
   }
 
   const contentType = srcRes.headers.get("content-type") ?? "image/jpeg";
