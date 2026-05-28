@@ -1,7 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHost } from "@tanstack/react-start/server";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { uploadProductImageDataUrl } from "@/lib/product-images.server";
 import type { DupePair, SlideResult } from "@/lib/dupe-types";
 
 
@@ -11,6 +8,7 @@ import type { DupePair, SlideResult } from "@/lib/dupe-types";
 // and the pair hasn't been generated in the last 30 days.
 export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
   async (): Promise<DupePair> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // Pull a candidate window and pick randomly.
 
 
@@ -136,6 +134,7 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
 export const pickRandomDupePairs = createServerFn({ method: "POST" })
   .inputValidator((data: { count?: number } | undefined) => data ?? {})
   .handler(async ({ data }): Promise<DupePair[]> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const count = Math.max(1, Math.min(8, data.count ?? 4));
 
     // SkinSort already classified these as dupes — no match-score gating.
