@@ -96,6 +96,7 @@ async function tts(text: string): Promise<{ audioDataUrl: string; durationSec: n
       },
       body: JSON.stringify({
         text,
+        model_id: "eleven_turbo_v2_5",
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.8,
@@ -103,11 +104,10 @@ async function tts(text: string): Promise<{ audioDataUrl: string; durationSec: n
           use_speaker_boost: true,
           speed: 0.95,
         },
-
-        },
       }),
     },
   );
+
   if (!res.ok) {
     const t = await res.text().catch(() => "");
     throw new Error(`ElevenLabs failed (${res.status}): ${t.slice(0, 300)}`);
