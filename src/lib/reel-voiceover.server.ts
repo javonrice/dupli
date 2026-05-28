@@ -110,6 +110,8 @@ Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...",
   if (!parsed) {
     const m = cleaned.match(/\{[\s\S]*\}/);
     if (m) parsed = tryParse(m[0]);
+  }
+
 
   const valid =
     parsed && need.every((k) => typeof parsed![k] === "string" && parsed![k].length > 0);
