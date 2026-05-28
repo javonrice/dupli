@@ -26,7 +26,7 @@ async function writeScript(pair: DupePair): Promise<Record<ReelSegmentKey, strin
   const apiKey = process.env.LOVABLE_API_KEY;
   if (!apiKey) throw new Error("LOVABLE_API_KEY not configured");
 
-  const prompt = `Write a 4-line TikTok voiceover script for a dupe-finder app. Each line must be SHORT (5–10 words), conversational, no emojis, no hashtags, no quotes.
+  const prompt = `Write a 4-line TikTok voiceover script for a dupe-finder app. Each line must be SHORT (5–9 words), conversational, no emojis, no hashtags, no quotes.
 
 Original: ${pair.original.brand} ${pair.original.name} — $${pair.original.priceUsd.toFixed(0)}
 Dupe: ${pair.dupe.brand} ${pair.dupe.name} — $${pair.dupe.priceUsd.toFixed(0)}
@@ -34,12 +34,13 @@ Match: ${pair.matchPct}%
 Savings: $${pair.savingsUsd.toFixed(0)}
 
 Return ONLY a JSON object with keys: hook, scan, compare, cta.
-- hook: a stop-the-scroll line about the original being overpriced
+- hook: a SCROLL-STOPPING opener. Must do ONE of: call out the absurd price, ask a punchy question, or make a bold claim. Name the brand. Examples: "Stop paying $${pair.original.priceUsd.toFixed(0)} for ${pair.original.brand}.", "Why is ${pair.original.brand} ${pair.original.priceUsd.toFixed(0)} dollars?", "${pair.original.brand} fans, look away."
 - scan: tease that you scanned it for a dupe
 - compare: reveal the dupe brand and the savings number
 - cta: tell them to download Dupli
 
 Example shape: {"hook":"...", "scan":"...", "compare":"...", "cta":"..."}`;
+
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
