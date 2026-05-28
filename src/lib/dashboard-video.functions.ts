@@ -173,8 +173,6 @@ export const generateScanClip = createServerFn({ method: "POST" })
           image_url: imageForFal,
           resolution: "720p",
           duration: "5",
-          resolution: "720p",
-          duration: "5",
           aspect_ratio: "9:16",
           camera_fixed: false,
         }),
