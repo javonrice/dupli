@@ -1,7 +1,7 @@
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
-import { Loader2, RefreshCw, Video, AlertCircle } from "lucide-react";
-import { Player } from "@remotion/player";
+import { useRef, useState } from "react";
+import { Loader2, RefreshCw, Video, AlertCircle, Download } from "lucide-react";
+import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePair, type DupePair } from "@/lib/dashboard.functions";
 import {
@@ -14,7 +14,9 @@ import {
   WIDTH,
   HEIGHT,
   totalDurationInFrames,
+  audioStartFrames,
 } from "@/remotion/DupeReel";
+import { renderReelToMp4, type RenderProgress } from "@/lib/render-reel";
 
 type Stage = "idle" | "picking" | "scripting" | "voicing" | "done" | "failed";
 
@@ -27,6 +29,12 @@ const STAGE_LABEL: Record<Stage, string> = {
   failed: "",
 };
 
+const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
+  audio: "Mixing audio",
+  frames: "Capturing frames",
+  encode: "Encoding MP4",
+};
+
 export function UgcGenerator() {
   const pickPair = useServerFn(pickRandomDupePair);
   const writeScript = useServerFn(generateReelScript);
@@ -35,6 +43,11 @@ export function UgcGenerator() {
   const [script, setScript] = useState<ReelScript | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
+
+  const [exporting, setExporting] = useState(false);
+  const [progress, setProgress] = useState<RenderProgress | null>(null);
+  const hiddenPlayerRef = useRef<PlayerRef>(null);
+  const hiddenStageRef = useRef<HTMLDivElement>(null);
 
   const loading =
     stage === "picking" || stage === "scripting" || stage === "voicing";
@@ -47,10 +60,7 @@ export function UgcGenerator() {
       setStage("picking");
       const newPair = await pickPair();
       setPair(newPair);
-
       setStage("scripting");
-      // The same server fn writes the script AND renders TTS for all 4 lines;
-      // we briefly show "voicing" so the user knows the longer step is TTS.
       setStage("voicing");
       const s = await writeScript({ data: { pair: newPair } });
       setScript(s);
@@ -62,6 +72,54 @@ export function UgcGenerator() {
   }
 
   const totalFrames = script ? totalDurationInFrames(script) : 0;
+
+  async function handleDownload() {
+    if (!script || !pair) return;
+    setError(null);
+    setExporting(true);
+    setProgress({ stage: "audio", pct: 0 });
+    try {
+      // Wait for hidden player + stage to mount and refs to populate.
+      for (let i = 0; i < 60; i++) {
+        if (hiddenPlayerRef.current && hiddenStageRef.current) break;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      if (!hiddenPlayerRef.current || !hiddenStageRef.current) {
+        throw new Error("Renderer didn't mount in time");
+      }
+
+      const blob = await renderReelToMp4({
+        playerRef: hiddenPlayerRef,
+        captureEl: hiddenStageRef.current,
+        script,
+        totalFrames,
+        fps: FPS,
+        width: WIDTH,
+        height: HEIGHT,
+        segmentStartFrames: audioStartFrames(script),
+        onProgress: setProgress,
+      });
+
+      const slug = `${pair.original.brand}-${pair.dupe.brand}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "")
+        .slice(0, 60);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dupli-reel-${slug}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "MP4 export failed");
+    } finally {
+      setExporting(false);
+      setProgress(null);
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
@@ -76,10 +134,10 @@ export function UgcGenerator() {
           <p className="mt-1 text-sm text-muted-foreground">
             Picks a dupe pair, writes a 4-beat script, voices each line with
             ElevenLabs, and renders a vertical reel where every scene is timed
-            to its voiceover.
+            to its voiceover. Download as MP4 — rendered in your browser.
           </p>
         </div>
-        <Button onClick={run} disabled={loading} size="lg">
+        <Button onClick={run} disabled={loading || exporting} size="lg">
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -164,6 +222,76 @@ export function UgcGenerator() {
             Preview plays in-browser with voiceover. Total length{" "}
             {(totalFrames / FPS).toFixed(1)}s.
           </p>
+
+          <div className="mt-4 flex flex-col items-center gap-3">
+            <Button
+              onClick={handleDownload}
+              disabled={exporting}
+              size="lg"
+              variant="default"
+            >
+              {exporting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {progress
+                    ? `${PROGRESS_LABEL[progress.stage]} ${Math.round(
+                        progress.pct * 100,
+                      )}%`
+                    : "Preparing…"}
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download MP4
+                </>
+              )}
+            </Button>
+
+            {exporting && progress && (
+              <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-primary transition-[width] duration-200"
+                  style={{ width: `${Math.round(progress.pct * 100)}%` }}
+                />
+              </div>
+            )}
+
+            <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
+              Rendering happens entirely in your browser — no server, no API
+              keys. Expect roughly 1 frame/second on a modern laptop (a 15s reel
+              ≈ 8–10 minutes). Keep the tab focused while it runs.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Hidden full-resolution stage used only for capture. Mounted while
+          exporting so html-to-image can read the composition at native size. */}
+      {script && exporting && (
+        <div
+          aria-hidden
+          style={{
+            position: "fixed",
+            left: -99999,
+            top: 0,
+            width: WIDTH,
+            height: HEIGHT,
+            pointerEvents: "none",
+          }}
+        >
+          <div ref={hiddenStageRef} style={{ width: WIDTH, height: HEIGHT }}>
+            <Player
+              ref={hiddenPlayerRef}
+              component={DupeReel}
+              inputProps={{ script }}
+              durationInFrames={totalFrames}
+              fps={FPS}
+              compositionWidth={WIDTH}
+              compositionHeight={HEIGHT}
+              style={{ width: WIDTH, height: HEIGHT }}
+              acknowledgeRemotionLicense
+            />
+          </div>
         </div>
       )}
     </div>
