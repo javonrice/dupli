@@ -1,13 +1,17 @@
 // Lovable AI vision: identify a beauty product AND suggest a dupe in one call.
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { resolveProductLinks, type ProductLink } from "@/server/product-links.server";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { slugify } from "@/server/skinsort-slugs";
 
 const InputSchema = z.object({
   imageDataUrl: z.string().min(20),
 });
+
+type ProductLink = {
+  merchant: string;
+  url: string;
+  priceUsd: number | null;
+};
 
 export type ScannedProduct = {
   productName: string;
@@ -409,6 +413,7 @@ export const scanProduct = createServerFn({ method: "POST" })
       // Each call is best-effort and time-budgeted; failures never block the scan.
       const safeLinks = async (b?: string | null, n?: string | null) => {
         try {
+          const { resolveProductLinks } = await import("@/server/product-links.server");
           return await resolveProductLinks(b, n);
         } catch (err) {
           console.warn("[resolveProductLinks] threw, ignoring:", err);
@@ -930,6 +935,7 @@ async function fetchSkinsortDupes(
   productName: string | undefined,
   limit: number,
 ): Promise<DupeSuggestion[]> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   if (!brand || !productName) return [];
   const brandSlug = slugify(brand);
   const productSlug = slugify(productName);
