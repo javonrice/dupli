@@ -39,10 +39,12 @@ const STATUS_LABEL: Record<ItemStatus, string> = {
   failed: "Failed",
 };
 
+export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
   const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
   const proxyImage = useServerFn(fetchImageAsDataUrl);
+
 
   async function inlinePairImages(pairs: DupePair[]): Promise<DupePair[]> {
     const cache = new Map<string, string>();
