@@ -124,7 +124,7 @@ function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-7xl px-6 py-10">
         <div className="mb-8 flex items-end justify-between gap-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
