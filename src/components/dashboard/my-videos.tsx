@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import JSZip from "jszip";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 import {
   listMyVideos,
   deleteMyVideo,
@@ -23,14 +24,16 @@ export function MyVideos({ refreshKey }: { refreshKey?: number }) {
   const del = useServerFn(deleteMyVideo);
   const sign = useServerFn(getVideoSignedUrl);
   const qc = useQueryClient();
+  const { user, loading: authLoading } = useAuth();
 
   const { data: videos = [], isLoading } = useQuery({
-    queryKey: ["my-videos", refreshKey ?? 0],
+    queryKey: ["my-videos", user?.id ?? "anon", refreshKey ?? 0],
     queryFn: () => list(),
+    enabled: !!user,
     refetchInterval: 5000,
+    retry: false,
   });
 
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
