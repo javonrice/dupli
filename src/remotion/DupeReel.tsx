@@ -16,7 +16,8 @@ import { slide } from "@remotion/transitions/slide";
 import { loadFont as loadOutfit } from "@remotion/google-fonts/Outfit";
 import { loadFont as loadFigtree } from "@remotion/google-fonts/Figtree";
 import type { DupePair } from "@/lib/dashboard.functions";
-import type { ReelScript } from "@/lib/reel-voiceover.functions";
+import type { ReelScript, ReelSegmentKey } from "@/lib/reel-voiceover.functions";
+
 
 const { fontFamily: DISPLAY } = loadOutfit("normal", {
   weights: ["700", "900"],
