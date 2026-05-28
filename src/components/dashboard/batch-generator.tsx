@@ -122,8 +122,7 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
         if (stopRef.current) break;
         try {
           // Each iteration picks its own 4 fresh pairs.
-          const rawPairs = await pickPairs({ data: { count: 4 } });
-          const pairs = await inlinePairImages(rawPairs);
+          const pairs = await pickPairs({ data: { count: 4 } });
           await runOne(item, pairs);
 
         } catch (e) {
@@ -320,6 +319,7 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
       {/* Hidden capture stage — mounted only while a reel is rendering */}
       {activeScript && activeItem && totalFrames > 0 && (
         <div
+          key={activeItem.id}
           aria-hidden
           style={{
             position: "fixed",
