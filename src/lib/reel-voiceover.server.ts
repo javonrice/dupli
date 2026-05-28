@@ -111,22 +111,37 @@ Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...",
     const m = cleaned.match(/\{[\s\S]*\}/);
     if (m) parsed = tryParse(m[0]);
   }
+  // Strip TTS-unfriendly punctuation (em/en dashes, semicolons, mid-sentence colons)
+  // that make ElevenLabs sound robotic.
+  const sanitize = (s: string) =>
+    s
+      .replace(/[—–]/g, ",")
+      .replace(/\s-\s/g, ", ")
+      .replace(/;/g, ",")
+      .replace(/:\s/g, ", ")
+      .replace(/\s{2,}/g, " ")
+      .replace(/,+/g, ",")
+      .trim();
 
-  const valid =
-    parsed && need.every((k) => typeof parsed![k] === "string" && parsed![k].length > 0);
-
-  if (!valid) {
-    // Deterministic fallback so reel generation never crashes on bad AI output.
-    parsed = buildFallbackScript(pairs);
-  }
-
-  return parsed as Record<ReelSegmentKey, string>;
+  const out: Record<string, string> = {};
+  for (const k of need) out[k] = sanitize(parsed![k]);
+  return out as Record<ReelSegmentKey, string>;
 }
 
 function buildFallbackScript(pairs: DupePair[]): Record<ReelSegmentKey, string> {
   const total = pairs.reduce((a, p) => a + p.savingsUsd, 0).toFixed(0);
   const reveal = (p: DupePair) =>
-    `${p.dupe.brand} dupes ${p.original.brand} ${p.original.name} for $${p.dupe.priceUsd.toFixed(0)} — basically the same formula for $${p.savingsUsd.toFixed(0)} less.`;
+    `${p.dupe.brand} dupes ${p.original.brand} ${p.original.name} for ${p.dupe.priceUsd.toFixed(0)} dollars, basically the same formula for ${p.savingsUsd.toFixed(0)} dollars less.`;
+  return {
+    hook: "hey y'all I found 4 dupes for your viral beauty faves.",
+    reveal_1: "okay this one, " + reveal(pairs[0]),
+    reveal_2: "next up, " + reveal(pairs[1]),
+    reveal_3: "and this one, " + reveal(pairs[2]),
+    reveal_4: "oh and bestie, " + reveal(pairs[3]),
+    cta: `download Dupli, scan literally anything, save like ${total} dollars total.`,
+  };
+}
+
   return {
     hook: "Stop overpaying — I found 4 dupes for viral beauty buys.",
     reveal_1: reveal(pairs[0]),
