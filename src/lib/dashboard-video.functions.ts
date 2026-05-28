@@ -144,27 +144,9 @@ export const generateScanClip = createServerFn({ method: "POST" })
 
     const prompt = `A hand holding a smartphone scanning the ${data.brand} ${data.productName} product. The phone camera viewfinder shows the product with a glowing scanner bracket overlay sweeping across it. Cinematic beauty-aisle lighting, smooth camera motion, photorealistic, vertical 9:16.`;
 
-    // fal.ai can't reach some product image hosts (e.g. skinsort).
-    // Download the image ourselves and pass it as a data URI.
-    let imageForFal = data.imageUrl;
-    try {
-      const imgRes = await fetch(data.imageUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-          Referer: "https://www.skinsort.com/",
-        },
-      });
-      if (!imgRes.ok) throw new Error(`image fetch ${imgRes.status}`);
-      const buf = await imgRes.arrayBuffer();
-      const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
-      imageForFal = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
-    } catch (e) {
-      throw new Error(
-        `Could not fetch product image for fal.ai: ${e instanceof Error ? e.message : String(e)}`,
-      );
-    }
+    // imageUrl is already cached in our own bucket (see ensureCachedProductImage),
+    // so fal.ai can fetch it directly.
+    const imageForFal = data.imageUrl;
 
     // Submit job
     const submitRes = await fetch(
