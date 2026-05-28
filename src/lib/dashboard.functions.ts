@@ -27,8 +27,8 @@ export type DupePair = {
 // and the pair hasn't been generated in the last 30 days.
 export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
   async (): Promise<DupePair> => {
-    const scanPair = await pickLatestSavedScanPair();
-    if (scanPair) return scanPair;
+    // Pull a candidate window and pick randomly.
+
 
     // Pull a candidate window and pick randomly.
 
