@@ -1,7 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHost } from "@tanstack/react-start/server";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { uploadProductImageDataUrl } from "@/lib/product-images.server";
 import type { DupePair, SlideResult } from "@/lib/dupe-types";
 
 
@@ -11,6 +8,7 @@ import type { DupePair, SlideResult } from "@/lib/dupe-types";
 // and the pair hasn't been generated in the last 30 days.
 export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
   async (): Promise<DupePair> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // Pull a candidate window and pick randomly.
 
 
@@ -136,6 +134,7 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
 export const pickRandomDupePairs = createServerFn({ method: "POST" })
   .inputValidator((data: { count?: number } | undefined) => data ?? {})
   .handler(async ({ data }): Promise<DupePair[]> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const count = Math.max(1, Math.min(8, data.count ?? 4));
 
     // SkinSort already classified these as dupes — no match-score gating.
@@ -265,6 +264,10 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
 
 
 async function pickLatestSavedScanPair(): Promise<DupePair | null> {
+  const [{ supabaseAdmin }, { uploadProductImageDataUrl }] = await Promise.all([
+    import("@/integrations/supabase/client.server"),
+    import("@/lib/product-images.server"),
+  ]);
   const { data: scans, error } = await supabaseAdmin
     .from("scans")
     .select("id, original_brand, original_product_name, dupe_brand, dupe_product_name, match_score, thumbnail_data_url, analysis, created_at")
@@ -424,6 +427,7 @@ async function generateSlide(input: SlideInput): Promise<string> {
 export const generateCarouselSlides = createServerFn({ method: "POST" })
   .inputValidator((data: { pair: DupePair; slides?: Array<1 | 2 | 3 | 4> }) => data)
   .handler(async ({ data }): Promise<{ results: SlideResult[] }> => {
+    const { getRequestHost } = await import("@tanstack/react-start/server");
     const slides = data.slides ?? [1, 2, 3, 4];
     const host = getRequestHost();
     const wordmarkUrl = `https://${host}/dupli-wordmark.png`;
