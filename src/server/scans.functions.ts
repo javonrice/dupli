@@ -78,7 +78,7 @@ export const listScans = createServerFn({ method: "GET" })
     if (error) {
       return { scans: [], error: error.message };
     }
-    return { scans: (data ?? []) as ScanRow[], error: null };
+    return { scans: (data ?? []) as unknown as ScanRow[], error: null };
   });
 
 export const getScan = createServerFn({ method: "GET" })
@@ -96,7 +96,7 @@ export const getScan = createServerFn({ method: "GET" })
       ]);
       if (error) return { scan: null, isSaved: false, error: error.message };
       if (!row) return { scan: null, isSaved: false, error: "Scan not found" };
-      return { scan: row as ScanRow, isSaved: !!savedRow, error: null };
+      return { scan: row as unknown as ScanRow, isSaved: !!savedRow, error: null };
     },
   );
 

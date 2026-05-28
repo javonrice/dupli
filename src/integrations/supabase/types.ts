@@ -370,6 +370,11 @@ export type Database = {
           original_image_url: string | null
           original_product_name: string
           thumbnail_data_url: string | null
+          ugc_video_error: string | null
+          ugc_video_id: string | null
+          ugc_video_status: string
+          ugc_video_updated_at: string | null
+          ugc_video_url: string | null
           user_id: string
           verdict: string | null
         }
@@ -385,6 +390,11 @@ export type Database = {
           original_image_url?: string | null
           original_product_name: string
           thumbnail_data_url?: string | null
+          ugc_video_error?: string | null
+          ugc_video_id?: string | null
+          ugc_video_status?: string
+          ugc_video_updated_at?: string | null
+          ugc_video_url?: string | null
           user_id: string
           verdict?: string | null
         }
@@ -400,6 +410,11 @@ export type Database = {
           original_image_url?: string | null
           original_product_name?: string
           thumbnail_data_url?: string | null
+          ugc_video_error?: string | null
+          ugc_video_id?: string | null
+          ugc_video_status?: string
+          ugc_video_updated_at?: string | null
+          ugc_video_url?: string | null
           user_id?: string
           verdict?: string | null
         }
