@@ -30,10 +30,15 @@ const { fontFamily: BODY } = loadFigtree("normal", {
 export const FPS = 30;
 export const WIDTH = 1080;
 export const HEIGHT = 1920;
-const TAIL_FRAMES = 10;
-export const TRANSITION_FRAMES = 12;
+// Generous padding after the voiceover finishes so the next line never
+// steps on the previous one, and scenes have time to breathe.
+const TAIL_FRAMES = 30; // 1.0s
+export const TRANSITION_FRAMES = 14;
 
 export function segmentToFrames(durationSec: number): number {
+  return Math.max(75, Math.round(durationSec * FPS) + TAIL_FRAMES);
+}
+
   return Math.max(50, Math.round(durationSec * FPS) + TAIL_FRAMES);
 }
 
