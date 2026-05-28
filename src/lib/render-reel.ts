@@ -160,7 +160,9 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
       canvasHeight: height,
       pixelRatio: 1,
       cacheBust: false,
-      skipFonts: false,
+      skipFonts: true,
+      skipAutoScale: true,
+      fetchRequestInit: { cache: "force-cache" },
     });
     const blob: Blob = await new Promise((res, rej) =>
       canvas.toBlob(
