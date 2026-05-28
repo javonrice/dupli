@@ -419,7 +419,7 @@ async function generateSlide(input: SlideInput): Promise<string> {
 }
 
 
-  | { slide: 1 | 2 | 3 | 4; ok: false; error: string };
+
 
 export const generateCarouselSlides = createServerFn({ method: "POST" })
   .inputValidator((data: { pair: DupePair; slides?: Array<1 | 2 | 3 | 4> }) => data)
