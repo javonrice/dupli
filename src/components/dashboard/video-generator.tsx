@@ -132,9 +132,11 @@ export function VideoGenerator() {
       setVideoUrl(url);
       setStage("done");
     } catch (e) {
+      console.error("[VideoGenerator] generation failed:", e);
       setError(e instanceof Error ? e.message : "Generation failed");
       setStage("idle");
     }
+
   }
 
   function downloadVideo() {
