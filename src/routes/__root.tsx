@@ -72,8 +72,14 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  const [queryClient] = useState(() => new QueryClient());
   useEffect(() => {
     installSupabaseFetchAuth();
   }, []);
-  return <Outlet />;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Outlet />
+    </QueryClientProvider>
+  );
 }
+
