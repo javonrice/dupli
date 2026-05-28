@@ -148,6 +148,106 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
   },
 );
 
+// Pick N distinct random dupe pairs (default 4) for a multi-product reel.
+export const pickRandomDupePairs = createServerFn({ method: "POST" })
+  .inputValidator((data: { count?: number } | undefined) => data ?? {})
+  .handler(async ({ data }): Promise<DupePair[]> => {
+    const count = Math.max(1, Math.min(8, data.count ?? 4));
+
+    const { data: candidates, error: qErr } = await supabaseAdmin
+      .from("dupes")
+      .select(
+        `id, overall_match,
+         original:products!dupes_original_product_id_fkey ( id, brand_name, product_name, image_url, cached_image_url, lowest_price_usd ),
+         dupe:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, image_url, cached_image_url, lowest_price_usd )`,
+      )
+      .gte("overall_match", 70)
+      .order("overall_match", { ascending: false })
+      .limit(500);
+
+    if (qErr) throw new Error(`Failed to load dupe candidates: ${qErr.message}`);
+    if (!candidates) throw new Error("No dupe candidates found");
+
+    type Row = (typeof candidates)[number];
+    type Prod = {
+      id: string;
+      brand_name: string;
+      product_name: string;
+      image_url: string | null;
+      cached_image_url: string | null;
+      lowest_price_usd: number | null;
+    };
+    const usable = (candidates as Row[]).filter((row) => {
+      const o = row.original as unknown as Prod | null;
+      const d = row.dupe as unknown as Prod | null;
+      if (!o || !d) return false;
+      if (!o.cached_image_url || !d.cached_image_url) return false;
+      if (o.lowest_price_usd == null || d.lowest_price_usd == null) return false;
+      return Number(d.lowest_price_usd) < Number(o.lowest_price_usd);
+    });
+
+    if (usable.length < count) {
+      throw new Error(`Need at least ${count} usable pairs, only found ${usable.length}`);
+    }
+
+    // Shuffle and pick `count` with no duplicate original brands so the reel
+    // doesn't feel like the same product four times.
+    const shuffled = [...usable].sort(() => Math.random() - 0.5);
+    const picked: Row[] = [];
+    const seenOriginals = new Set<string>();
+    for (const row of shuffled) {
+      const o = row.original as unknown as Prod;
+      if (seenOriginals.has(o.id)) continue;
+      picked.push(row);
+      seenOriginals.add(o.id);
+      if (picked.length === count) break;
+    }
+    if (picked.length < count) {
+      // Fallback: allow dupes from same brand
+      for (const row of shuffled) {
+        if (picked.includes(row)) continue;
+        picked.push(row);
+        if (picked.length === count) break;
+      }
+    }
+
+    // Record so we don't repeat soon.
+    await supabaseAdmin
+      .from("dashboard_generations")
+      .insert(
+        picked.map((row) => {
+          const o = row.original as unknown as Prod;
+          const d = row.dupe as unknown as Prod;
+          return { original_product_id: o.id, dupe_product_id: d.id };
+        }),
+      );
+
+    return picked.map((row) => {
+      const o = row.original as unknown as Prod;
+      const d = row.dupe as unknown as Prod;
+      return {
+        pairId: row.id,
+        matchPct: row.overall_match,
+        original: {
+          id: o.id,
+          brand: o.brand_name,
+          name: o.product_name,
+          imageUrl: o.cached_image_url!,
+          priceUsd: Number(o.lowest_price_usd),
+        },
+        dupe: {
+          id: d.id,
+          brand: d.brand_name,
+          name: d.product_name,
+          imageUrl: d.cached_image_url!,
+          priceUsd: Number(d.lowest_price_usd),
+        },
+        savingsUsd: Number(o.lowest_price_usd) - Number(d.lowest_price_usd),
+      };
+    });
+  });
+
+
 async function pickLatestSavedScanPair(): Promise<DupePair | null> {
   const { data: scans, error } = await supabaseAdmin
     .from("scans")
