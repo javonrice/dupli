@@ -76,12 +76,11 @@ export function UgcGenerator() {
   const totalFrames = script ? totalDurationInFrames(script) : 0;
 
   async function handleDownload() {
-    if (!script || !pair) return;
+    if (!script || !pairs || pairs.length === 0) return;
     setError(null);
     setExporting(true);
     setProgress({ stage: "audio", pct: 0 });
     try {
-      // Wait for hidden player + stage to mount and refs to populate.
       for (let i = 0; i < 60; i++) {
         if (hiddenPlayerRef.current && hiddenStageRef.current) break;
         await new Promise((r) => setTimeout(r, 50));
@@ -102,7 +101,9 @@ export function UgcGenerator() {
         onProgress: setProgress,
       });
 
-      const slug = `${pair.original.brand}-${pair.dupe.brand}`
+      const slug = pairs
+        .map((p) => p.dupe.brand)
+        .join("-")
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "")
@@ -122,6 +123,7 @@ export function UgcGenerator() {
       setProgress(null);
     }
   }
+
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
