@@ -115,7 +115,6 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
     updateItem(item.id, { status: "saved", progress: null });
   }
 
-  }
 
   async function runBatch() {
     setError(null);
