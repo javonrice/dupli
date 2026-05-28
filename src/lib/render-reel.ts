@@ -268,6 +268,7 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
     fetchRequestInit: { cache: "force-cache" as RequestCache },
     imagePlaceholder:
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  };
   for (let f = 0; f < totalFrames; f++) {
     player.seekTo(f);
     await nextFrame();
