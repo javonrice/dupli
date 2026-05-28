@@ -1,117 +1,67 @@
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { Loader2, RefreshCw, Video, AlertCircle } from "lucide-react";
+import { Player } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePair, type DupePair } from "@/lib/dashboard.functions";
 import {
-  generateUgcScript,
-  submitUgcVideo,
-  pollUgcVideo,
-} from "@/lib/ugc-video.functions";
+  generateReelScript,
+  type ReelScript,
+} from "@/lib/reel-voiceover.functions";
+import {
+  DupeReel,
+  FPS,
+  WIDTH,
+  HEIGHT,
+  totalDurationInFrames,
+} from "@/remotion/DupeReel";
 
-type Stage =
-  | "idle"
-  | "picking"
-  | "scripting"
-  | "submitting"
-  | "rendering"
-  | "done"
-  | "failed";
+type Stage = "idle" | "picking" | "scripting" | "voicing" | "done" | "failed";
 
 const STAGE_LABEL: Record<Stage, string> = {
   idle: "",
   picking: "Picking dupe pair…",
-  scripting: "Writing UGC script…",
-  submitting: "Submitting to HeyGen…",
-  rendering: "Rendering talking-avatar video…",
+  scripting: "Writing voiceover script…",
+  voicing: "Recording voices with ElevenLabs…",
   done: "",
   failed: "",
 };
 
-function formatElapsed(ms: number) {
-  const s = Math.floor(ms / 1000);
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return `${m}:${r.toString().padStart(2, "0")}`;
-}
-
 export function UgcGenerator() {
   const pickPair = useServerFn(pickRandomDupePair);
-  const writeScript = useServerFn(generateUgcScript);
-  const submitVideo = useServerFn(submitUgcVideo);
-  const pollVideo = useServerFn(pollUgcVideo);
+  const writeScript = useServerFn(generateReelScript);
 
   const [pair, setPair] = useState<DupePair | null>(null);
-  const [script, setScript] = useState<string | null>(null);
+  const [script, setScript] = useState<ReelScript | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [now, setNow] = useState<number>(Date.now());
-  const cancelRef = useRef(false);
 
-  // Tick the elapsed counter while rendering.
-  useEffect(() => {
-    if (stage !== "rendering" && stage !== "submitting") return;
-    const id = setInterval(() => setNow(Date.now()), 500);
-    return () => clearInterval(id);
-  }, [stage]);
-
-  const loading = stage !== "idle" && stage !== "done" && stage !== "failed";
+  const loading =
+    stage === "picking" || stage === "scripting" || stage === "voicing";
 
   async function run() {
-    cancelRef.current = false;
     setError(null);
-    setVideoUrl(null);
     setScript(null);
     setPair(null);
-    setStartedAt(Date.now());
-    setNow(Date.now());
-
     try {
       setStage("picking");
       const newPair = await pickPair();
-      if (cancelRef.current) return;
       setPair(newPair);
 
       setStage("scripting");
-      const { script: s } = await writeScript({ data: { pair: newPair } });
-      if (cancelRef.current) return;
+      // The same server fn writes the script AND renders TTS for all 4 lines;
+      // we briefly show "voicing" so the user knows the longer step is TTS.
+      setStage("voicing");
+      const s = await writeScript({ data: { pair: newPair } });
       setScript(s);
-
-      setStage("submitting");
-      const { videoId } = await submitVideo({
-        data: { script: s, productImageUrl: newPair.dupe.imageUrl },
-      });
-      if (cancelRef.current) return;
-
-      setStage("rendering");
-      // Poll every 5s for up to 6 minutes
-      const deadline = Date.now() + 6 * 60 * 1000;
-      while (Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 5000));
-        if (cancelRef.current) return;
-        const result = await pollVideo({ data: { videoId } });
-        if (result.status === "completed") {
-          setVideoUrl(result.videoUrl);
-          setStage("done");
-          return;
-        }
-        if (result.status === "failed") {
-          setError(result.error);
-          setStage("failed");
-          return;
-        }
-      }
-      setError("Timed out after 6 minutes waiting for HeyGen.");
-      setStage("failed");
+      setStage("done");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed");
       setStage("failed");
     }
   }
 
-  const elapsed = startedAt ? now - startedAt : 0;
+  const totalFrames = script ? totalDurationInFrames(script) : 0;
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
@@ -121,11 +71,12 @@ export function UgcGenerator() {
             AI UGC
           </p>
           <h2 className="font-display text-2xl font-bold tracking-tight">
-            Talking-avatar review (HeyGen)
+            Dupe Reel (Remotion + ElevenLabs)
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Picks a dupe pair, writes a 2-sentence UGC script, renders a vertical
-            talking-avatar video via HeyGen.
+            Picks a dupe pair, writes a 4-beat script, voices each line with
+            ElevenLabs, and renders a vertical reel where every scene is timed
+            to its voiceover.
           </p>
         </div>
         <Button onClick={run} disabled={loading} size="lg">
@@ -137,7 +88,7 @@ export function UgcGenerator() {
           ) : (
             <>
               <Video className="mr-2 h-4 w-4" />
-              Generate UGC video
+              {script ? "Generate another" : "Generate reel"}
             </>
           )}
         </Button>
@@ -157,20 +108,24 @@ export function UgcGenerator() {
             </span>
           </div>
           {script && (
-            <p className="mt-3 border-l-2 border-primary/40 pl-3 text-sm italic text-foreground/90">
-              “{script}”
-            </p>
+            <ul className="mt-3 space-y-1.5 text-xs text-foreground/80">
+              {script.segments.map((s) => (
+                <li key={s.key} className="flex gap-3">
+                  <span className="w-16 shrink-0 font-mono uppercase text-muted-foreground">
+                    {s.key} · {s.durationSec.toFixed(1)}s
+                  </span>
+                  <span className="italic">"{s.text}"</span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
 
-      {(stage === "submitting" || stage === "rendering") && (
+      {loading && (
         <div className="mt-5 flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           <span className="font-medium">{STAGE_LABEL[stage]}</span>
-          <span className="ml-auto font-mono text-xs text-muted-foreground">
-            {formatElapsed(elapsed)} / ~2:00
-          </span>
         </div>
       )}
 
@@ -188,22 +143,27 @@ export function UgcGenerator() {
         </div>
       )}
 
-      {videoUrl && (
+      {script && totalFrames > 0 && (
         <div className="mt-5">
-          <video
-            src={videoUrl}
-            controls
-            className="mx-auto aspect-[9/16] max-h-[640px] w-auto rounded-xl border border-border bg-black"
-          />
-          <div className="mt-3 flex justify-center">
-            <a
-              href={videoUrl}
-              download
-              className="text-xs font-semibold text-primary hover:underline"
-            >
-              Download MP4
-            </a>
+          <div className="mx-auto aspect-[9/16] max-h-[640px] w-auto overflow-hidden rounded-xl border border-border bg-black">
+            <Player
+              component={DupeReel}
+              inputProps={{ script }}
+              durationInFrames={totalFrames}
+              fps={FPS}
+              compositionWidth={WIDTH}
+              compositionHeight={HEIGHT}
+              controls
+              autoPlay
+              loop
+              style={{ width: "100%", height: "100%" }}
+              acknowledgeRemotionLicense
+            />
           </div>
+          <p className="mt-3 text-center text-xs text-muted-foreground">
+            Preview plays in-browser with voiceover. Total length{" "}
+            {(totalFrames / FPS).toFixed(1)}s.
+          </p>
         </div>
       )}
     </div>
