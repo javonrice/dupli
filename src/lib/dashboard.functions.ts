@@ -151,35 +151,36 @@ function buildPrompt({ slide, pair }: SlideInput): string {
   switch (slide) {
     case 1:
       return `Create a viral Instagram carousel slide, 1:1 square, 1024x1024.
-Hero shot of the product "${orig.brand} ${orig.name}" (first reference image) on a clean, premium pastel pink studio backdrop with soft shadows. The product should be large and centered, taking up about 60% of the frame.
+Hero shot of the product "${orig.brand} ${orig.name}" (use the provided product reference image) on a clean, premium pastel pink studio backdrop with soft shadows. The product should be large and centered, taking up about 60% of the frame.
 Bold sans-serif overlay text at the top: "Still paying $${orig.priceUsd.toFixed(0)} for this?"
-Place the "dupli" wordmark (third reference image) small in the bottom-right corner with about 5% padding.
+Place the provided "dupli" wordmark image small in the bottom-right corner with about 5% padding — preserve its shape and the red dot.
 Style: glossy, premium, beauty editorial, attention-grabbing, very high contrast. No watermarks except the dupli wordmark.`;
 
     case 2:
       return `Create a viral Instagram carousel slide, 1:1 square, 1024x1024.
-Photorealistic scene: a hand holding a modern smartphone in a brightly lit drugstore beauty aisle. The phone camera is actively scanning a real product on the shelf — the product is "${orig.brand} ${orig.name}" (first reference image). The phone screen shows a live camera viewfinder with a glowing scanning bracket overlay around the product, suggesting AI detection.
+Photorealistic scene: a hand holding a modern smartphone in a brightly lit drugstore beauty aisle. The phone camera is actively scanning a real product on the shelf — the product is "${orig.brand} ${orig.name}" (use the provided product reference image). The phone screen shows a live camera viewfinder with a glowing scanning bracket overlay around the product, suggesting AI detection.
 Bold overlay text at the top: "Scan it. Find the dupe."
-Place the "dupli" wordmark (third reference image) small in the bottom-right corner.
+Place the provided "dupli" wordmark image small in the bottom-right corner — preserve its shape and the red dot.
 Style: photorealistic, real retail environment, candid feel, no fake mockup look.`;
 
     case 3:
       return `Create a viral Instagram carousel slide, 1:1 square, 1024x1024.
 Side-by-side product comparison on a clean off-white background.
-LEFT: "${orig.brand} ${orig.name}" (first reference image) labeled "ORIGINAL" with a price tag showing "$${orig.priceUsd.toFixed(0)}".
-RIGHT: "${dupe.brand} ${dupe.name}" (second reference image) labeled "DUPE" with a price tag showing "$${dupe.priceUsd.toFixed(0)}".
+LEFT: "${orig.brand} ${orig.name}" (first provided product image) labeled "ORIGINAL" with a price tag showing "$${orig.priceUsd.toFixed(0)}".
+RIGHT: "${dupe.brand} ${dupe.name}" (second provided product image) labeled "DUPE" with a price tag showing "$${dupe.priceUsd.toFixed(0)}".
 A bold circular badge between them reads "${matchPct}% MATCH" in a bright coral/red color (#ff5a5f).
 Below, large headline text: "Save $${savings}".
-Place the "dupli" wordmark (third reference image) small in the bottom-right corner.
+Place the provided "dupli" wordmark image small in the bottom-right corner — preserve its shape and the red dot.
 Style: clean, modern e-commerce comparison, high contrast, viral-share-ready.`;
 
     case 4:
       return `Create a viral Instagram carousel slide, 1:1 square, 1024x1024.
 Premium CTA slide on a deep gradient background (coral #ff5a5f to soft pink).
-Center-top: the "dupli" wordmark (third reference image) rendered LARGE (about 40% of frame width), crisp and centered.
+Center-top: render the provided "dupli" wordmark image LARGE (about 40% of frame width), crisp, centered, preserving its exact shape and the red dot on the "i".
 Below the wordmark, headline text: "Find your dupe."
 Below that, smaller subtext: "Scan any beauty product. Get the cheaper match in seconds."
 Near the bottom, render a realistic Apple "Download on the App Store" black badge button.
+You may ignore the product reference image for this slide — focus on the wordmark and CTA.
 Style: bold, polished, app-launch energy, clean negative space.`;
   }
 }
