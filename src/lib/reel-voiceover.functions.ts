@@ -117,8 +117,8 @@ Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...",
   }
   return parsed as Record<ReelSegmentKey, string>;
 }
-
-const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Sarah
+// Jessica — young, expressive, very TikTok-friendly read.
+const VOICE_ID = "cgSgspJ2msm6clMCkdW9";
 async function tts(
   text: string,
 ): Promise<{ audioDataUrl: string; durationSec: number }> {
@@ -137,14 +137,16 @@ async function tts(
         text,
         model_id: "eleven_turbo_v2_5",
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.8,
-          style: 0.3,
+          stability: 0.35,
+          similarity_boost: 0.85,
+          style: 0.55,
           use_speaker_boost: true,
-          speed: 0.95,
+          speed: 1.0,
         },
       }),
     },
+  );
+
   );
 
   if (!res.ok) {
