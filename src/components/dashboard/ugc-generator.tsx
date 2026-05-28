@@ -80,7 +80,9 @@ export function UgcGenerator() {
       setScript(s);
 
       setStage("submitting");
-      const { videoId } = await submitVideo({ data: { script: s } });
+      const { videoId } = await submitVideo({
+        data: { script: s, productImageUrl: newPair.dupe.imageUrl },
+      });
       if (cancelRef.current) return;
 
       setStage("rendering");

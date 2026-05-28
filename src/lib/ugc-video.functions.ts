@@ -1,11 +1,13 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { DupePair } from "@/lib/dashboard.functions";
 
-// Default HeyGen stock avatar + voice. These are widely-available defaults; if
-// they don't exist on a given HeyGen account the API error is surfaced verbatim
-// so the user can swap them in the UI later.
-const DEFAULT_AVATAR_ID = "Daisy-inskirt-20220818";
-const DEFAULT_VOICE_ID = "2d5b0e6cf36f460aa7fc47e3eee4ba54";
+// HeyGen Product Placement is driven via the Template API. The user creates a
+// "Product Placement" video once in the HeyGen UI, saves it as a Template
+// with two variables — `product_image` (image) and `script` (text) — and
+// pastes the template_id into HEYGEN_TEMPLATE_ID. Variable names below MUST
+// match the template's variable names exactly.
+const PRODUCT_IMAGE_VAR = "product_image";
+const SCRIPT_VAR = "script";
 
 // ---------- Script generation via Lovable AI ----------
 
@@ -16,15 +18,14 @@ export const generateUgcScript = createServerFn({ method: "POST" })
     if (!apiKey) throw new Error("LOVABLE_API_KEY is not configured");
 
     const { pair } = data;
-    const prompt = `Write a short, casual "honest UGC review" voiceover (2 sentences, max 35 words total, conversational tone like a TikTok creator, no hashtags, no emojis).
-The creator just discovered a cheaper dupe.
+    const prompt = `Write a short, casual UGC voiceover (2 sentences, max 35 words total, conversational TikTok-creator tone, no hashtags, no emojis). The creator is HOLDING UP the dupe product to the camera and showing it off as a cheaper alternative to a luxury original.
 
 Original: ${pair.original.brand} ${pair.original.name} — $${pair.original.priceUsd.toFixed(0)}
-Dupe: ${pair.dupe.brand} ${pair.dupe.name} — $${pair.dupe.priceUsd.toFixed(0)}
+Dupe being held: ${pair.dupe.brand} ${pair.dupe.name} — $${pair.dupe.priceUsd.toFixed(0)}
 Match: ${pair.matchPct}%
 Savings: $${pair.savingsUsd.toFixed(0)}
 
-Return ONLY the script text, nothing else.`;
+Open with a hook like "Ok I had to show you this" or "Stop sleeping on this". Mention the dupe by brand. Return ONLY the script text, nothing else.`;
 
     const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -50,49 +51,59 @@ Return ONLY the script text, nothing else.`;
     return { script };
   });
 
-// ---------- HeyGen submit ----------
+// ---------- HeyGen submit (Product Placement via Template API) ----------
 
 export type SubmitUgcResult = { videoId: string; script: string };
 
 export const submitUgcVideo = createServerFn({ method: "POST" })
   .inputValidator(
-    (data: { script: string; avatarId?: string; voiceId?: string }) => data,
+    (data: { script: string; productImageUrl: string }) => data,
   )
   .handler(async ({ data }): Promise<SubmitUgcResult> => {
     const heygenKey = process.env.HEYGEN_API_KEY;
     if (!heygenKey) throw new Error("HEYGEN_API_KEY is not configured");
+    const templateId = process.env.HEYGEN_TEMPLATE_ID;
+    if (!templateId) {
+      throw new Error(
+        "HEYGEN_TEMPLATE_ID is not configured. In HeyGen, build a Product Placement video, save it as a Template with two variables named `product_image` (image) and `script` (text), then paste the template ID into the HEYGEN_TEMPLATE_ID secret.",
+      );
+    }
 
     const body = {
-      video_inputs: [
-        {
-          character: {
-            type: "avatar",
-            avatar_id: data.avatarId ?? DEFAULT_AVATAR_ID,
-            avatar_style: "normal",
+      caption: false,
+      title: "Dupli UGC",
+      variables: {
+        [PRODUCT_IMAGE_VAR]: {
+          name: PRODUCT_IMAGE_VAR,
+          type: "image",
+          properties: {
+            url: data.productImageUrl,
+            fit: "contain",
           },
-          voice: {
-            type: "text",
-            input_text: data.script,
-            voice_id: data.voiceId ?? DEFAULT_VOICE_ID,
-          },
-          background: { type: "color", value: "#f5f5f5" },
         },
-      ],
-      dimension: { width: 720, height: 1280 },
+        [SCRIPT_VAR]: {
+          name: SCRIPT_VAR,
+          type: "text",
+          properties: { content: data.script },
+        },
+      },
     };
 
-    const res = await fetch("https://api.heygen.com/v2/video/generate", {
-      method: "POST",
-      headers: {
-        "X-Api-Key": heygenKey,
-        "Content-Type": "application/json",
+    const res = await fetch(
+      `https://api.heygen.com/v2/template/${encodeURIComponent(templateId)}/generate`,
+      {
+        method: "POST",
+        headers: {
+          "X-Api-Key": heygenKey,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    });
+    );
 
     const text = await res.text();
     if (!res.ok) {
-      throw new Error(`HeyGen submit failed (${res.status}): ${text.slice(0, 400)}`);
+      throw new Error(`HeyGen submit failed (${res.status}): ${text.slice(0, 500)}`);
     }
     let parsed: { data?: { video_id?: string }; error?: unknown };
     try {
@@ -129,7 +140,6 @@ export const pollUgcVideo = createServerFn({ method: "POST" })
 
     const text = await res.text();
     if (!res.ok) {
-      // Surface the real error instead of swallowing it.
       return {
         status: "failed",
         videoId: data.videoId,
