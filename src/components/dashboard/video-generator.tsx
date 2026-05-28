@@ -111,7 +111,6 @@ export function VideoGenerator() {
       );
 
 
-      const stillMap = new Map(stillsResult.stills.map((s) => [s.slide, s.imageBase64]));
       const hookPng = stillMap.get("hook");
       const resultsPng = stillMap.get("results");
       const ctaPng = stillMap.get("cta");
