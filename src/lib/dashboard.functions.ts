@@ -105,11 +105,18 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
       image_url: string;
       lowest_price_usd: number;
     };
-
     // Record this generation so we don't repeat soon.
     await supabaseAdmin
       .from("dashboard_generations")
       .insert({ original_product_id: o.id, dupe_product_id: d.id });
+
+    // Cache product images in our own storage so downstream services
+    // (fal.ai, Nano Banana, OG renderers, etc.) don't have to reach the
+    // original source CDN — which sometimes 403s third-party clients.
+    const [originalImageUrl, dupeImageUrl] = await Promise.all([
+      ensureCachedProductImage(o.id),
+      ensureCachedProductImage(d.id),
+    ]);
 
     return {
       pairId: picked.id,
@@ -118,18 +125,20 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
         id: o.id,
         brand: o.brand_name,
         name: o.product_name,
-        imageUrl: o.image_url,
+        imageUrl: originalImageUrl,
         priceUsd: Number(o.lowest_price_usd),
       },
       dupe: {
         id: d.id,
         brand: d.brand_name,
         name: d.product_name,
-        imageUrl: d.image_url,
+        imageUrl: dupeImageUrl,
         priceUsd: Number(d.lowest_price_usd),
       },
       savingsUsd: Number(o.lowest_price_usd) - Number(d.lowest_price_usd),
     };
+  },
+);
   },
 );
 
