@@ -147,7 +147,7 @@ async function tts(
     },
   );
 
-  );
+
 
   if (!res.ok) {
     const t = await res.text().catch(() => "");
