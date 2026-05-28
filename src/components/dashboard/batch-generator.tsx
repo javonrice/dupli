@@ -83,11 +83,19 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
       label: `${pairs[0].original.brand} → ${pairs[0].dupe.brand}`,
     });
 
+    // Wait for the keyed hidden stage + Player to actually mount before
+    // handing refs to the renderer. Without this, captureEl is null on the
+    // tick after setActiveScript and the pipeline silently hangs.
+    const ready = await waitForStage();
+    if (!ready || !hiddenStageRef.current || !hiddenPlayerRef.current) {
+      throw new Error("Hidden capture stage failed to mount");
+    }
+
     await renderAndSaveReel({
       script,
       pairs,
       playerRef: hiddenPlayerRef,
-      captureEl: hiddenStageRef.current!,
+      captureEl: hiddenStageRef.current,
       saveRecord,
       onProgress: (p) => updateItem(item.id, { progress: p }),
       onDebug: (entry) => {
@@ -106,6 +114,7 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
     });
     updateItem(item.id, { status: "saved", progress: null });
   }
+
 
   async function runBatch() {
     setError(null);
