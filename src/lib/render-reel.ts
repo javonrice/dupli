@@ -306,9 +306,8 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, width, height);
       }
+    }
 
-    const blob: Blob = await new Promise((res, rej) =>
-      canvas!.toBlob(
     const blob: Blob = await new Promise((res, rej) =>
       canvas!.toBlob(
         (b) => (b ? res(b) : rej(new Error("toBlob failed"))),
