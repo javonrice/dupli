@@ -10,6 +10,8 @@ import {
   type DupePair,
   type SlideResult,
 } from "@/lib/dashboard.functions";
+import { VideoGenerator } from "@/components/dashboard/video-generator";
+
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
