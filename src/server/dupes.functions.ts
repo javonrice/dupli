@@ -3,7 +3,6 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { slugify } from "./skinsort-slugs";
 
 export type LocalDupeHit = {
@@ -43,6 +42,7 @@ const InputSchema = z.object({
 export const lookupDupes = createServerFn({ method: "POST" })
   .inputValidator((data) => InputSchema.parse(data))
   .handler(async ({ data }): Promise<LookupDupesResult> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const brandSlug = slugify(data.brand);
     const productSlug = slugify(data.productName);
 
@@ -121,6 +121,7 @@ async function enqueueProduct(
   reason: "seed" | "user_scan_miss" | "refresh",
   priority: number,
 ) {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   // Best-effort. Conflict on (brand_slug, product_slug) where status='pending' is silent.
   await supabaseAdmin.from("ingestion_queue").insert({
     brand_slug: brandSlug,
