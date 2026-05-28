@@ -10,6 +10,8 @@ import {
   type DupePair,
   type SlideResult,
 } from "@/lib/dashboard.functions";
+import { VideoGenerator } from "@/components/dashboard/video-generator";
+
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardPage,
@@ -122,7 +124,7 @@ function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <div className="mx-auto max-w-6xl px-6 py-10">
+      <div className="mx-auto max-w-7xl px-6 py-10">
         <div className="mb-8 flex items-end justify-between gap-4">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
@@ -237,6 +239,10 @@ function DashboardPage() {
               </div>
             );
           })}
+        </div>
+
+        <div className="mt-12">
+          <VideoGenerator />
         </div>
       </div>
     </div>

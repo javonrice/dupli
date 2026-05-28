@@ -1,63 +1,61 @@
-# Video Social Generator (Dashboard v2)
+# Standalone Video Generator on /dashboard
 
-Add a second, **fully independent** generator on `/dashboard`, alongside the existing still carousel. Each generator picks its own product pair and runs its own pipeline — generating a video never triggers image generation and vice versa, so a user can run only what they need.
+A second, fully independent generator panel beside the existing still carousel. No shared state, no DB writes, no storage — just generate → preview → download.
 
 ## Layout
 
-`/dashboard` shows two side-by-side panels:
-1. **Still carousel** (existing, untouched).
-2. **Video reel** (new) — its own "Generate new video" button, its own pair, its own preview + download.
+`/dashboard` becomes a two-panel grid:
+- **Left:** existing still carousel (untouched)
+- **Right:** new "Video Reel" panel with its own random pair pick, generate button, `<video>` preview, Download .mp4, Regenerate
 
-## Video pipeline (self-contained)
+## Pipeline (per click)
 
-1. **Pick pair** — call `pickRandomDupePair` (server fn, already exists) — same selection rules, separate call from the still generator.
-2. **Write script** deterministically from product data (no LLM cost). 4 lines, one per scene:
-   - Hook: "Paying ${origPrice} for {origBrand} {origName}?"
-   - Scan: "Let Dupli scan it for you."
-   - Results: "{matchPct}% match — for just ${dupePrice}. You save ${savings}."
-   - CTA:  "Find your dupe. Download Dupli on the App Store."
-3. **Voiceover** — server fn calls ElevenLabs `text-to-speech/{voiceId}/with-timestamps` (voice **Jessica** `cgSgspJ2msm6clMCkdW9`, model `eleven_turbo_v2_5`). Returns base64 MP3 + per-character alignment → derive exact `[t1, t2, t3, t4]` scene durations from word offsets. Target total ≈ 15s.
-4. **Scan clip** — server fn calls fal.ai Seedance (image-to-video using the original product image URL, 5s, 9:16). Prompt: "first-person shot, hand holding iPhone over a drugstore beauty shelf, phone screen shows a pink Dupli scanning UI scanning {origBrand} {origName}, soft retail lighting, cinematic". Returns video URL.
-5. **Hook / Results / CTA stills** — generated *inside the video generator only* via Nano Banana (same prompts as the still carousel, but lives in this generator's own flow so it doesn't depend on the carousel panel having been run). 9:16 framing.
-6. **Compose in the browser** with `@ffmpeg/ffmpeg` (ffmpeg.wasm):
-   - 1080×1920, 30fps, h264
-   - Scene 1/3/4: still + Ken-Burns zoom for `t1/t3/t4`
-   - Scene 2: scan MP4 trimmed to `t2`
-   - Audio = ElevenLabs MP3 across the full timeline
-   - Subtle 200ms crossfade between scenes
-7. **Preview + download** — `<video>` element + "Download .mp4" + "Regenerate" buttons. No DB writes, no storage uploads.
+1. **Pick pair** — `pickRandomDupePair` server fn (separate call from the carousel's)
+2. **Build 4-line script** deterministically from pair data — no LLM cost
+   - Hook: "POV: you almost paid $X for {original}"
+   - Scan: "But the scanner found this..."
+   - Results: "{dupe} — {match}% match for $Y"
+   - CTA: "Scan anything. Save everything. Dupli."
+3. **Voiceover** — ElevenLabs `text-to-speech/{Jessica}/with-timestamps`, `eleven_turbo_v2_5`, returns base64 MP3 + per-character alignment. Derive scene boundaries `[t1,t2,t3,t4]` from alignment (≈12–16s total).
+4. **Scan clip** — fal.ai Seedance image-to-video (5s, 9:16) from the original product image URL, prompt describing a phone-style scan sweep
+5. **Hook / Results / CTA stills** — generated *inside this panel only* via Lovable AI Nano Banana (`google/gemini-2.5-flash-image`), same product-aware composition style as carousel
+6. **Compose in browser** with `@ffmpeg/ffmpeg` (ffmpeg.wasm), lazy-loaded:
+   - 1080×1920, 30fps, h264 + AAC
+   - Stills get Ken-Burns zoom for their derived duration
+   - Scan MP4 trimmed/sped to fit scene 2 duration
+   - Voiceover MP3 as single audio track
+   - 200ms crossfades between scenes
+7. **Preview + Download + Regenerate** — blob URL into `<video>`, download link to `dupli-reel-{ts}.mp4`
 
-## New files
+## Files
 
+**New**
 - `src/lib/dashboard-video.functions.ts` — server fns:
-  - `generateVoiceover({ script })` → `{ audioBase64, scenes: [{start,end,text}] }`
-  - `generateScanClip({ origBrand, origName, origImageUrl })` → `{ videoUrl }`
-  - `buildVideoScript(pair)` (pure helper)
-- `src/components/dashboard/video-generator.tsx` — standalone panel: pick pair → generate stills + VO + scan clip in parallel → compose → preview.
-- `src/lib/ffmpeg-compose.ts` — lazy-loads ffmpeg.wasm client-side, returns final MP4 Blob.
+  - `generateVoiceover({ script })` → `{ audioBase64, alignment, sceneDurations }`
+  - `generateScanClip({ imageUrl, prompt })` → `{ videoUrl }` (fal.ai Seedance queue + poll)
+  - `generateVideoStill({ prompt, refImageUrl })` → `{ imageBase64 }` (Lovable AI Nano Banana)
+- `src/components/dashboard/video-generator.tsx` — standalone panel UI + orchestration
+- `src/lib/ffmpeg-compose.ts` — client-only ffmpeg.wasm loader + compose function
 
-## Edits
+**Edited**
+- `src/routes/dashboard.tsx` — add right-side `<VideoGenerator />` panel
+- `package.json` — add `@ffmpeg/ffmpeg`, `@ffmpeg/util`
 
-- `src/routes/dashboard.tsx` — add the `<VideoGenerator />` panel beside the existing carousel panel. No shared state between them.
+**Untouched:** existing still carousel, `dashboard.functions.ts`, all auth/routing.
 
-## Dependencies
+## Cost controls
 
-- `bun add @ffmpeg/ffmpeg @ffmpeg/util` (browser-only video composition; no Worker filesystem or native binaries).
+- Video panel does **nothing** until user clicks Generate
+- Carousel and video panel are fully independent — generating one never triggers the other
+- Each click costs roughly: 1 ElevenLabs TTS (~15s), 1 fal.ai Seedance (5s 9:16), 3 Nano Banana images
+- No retries on success, no autoplay-triggered regen
 
 ## Secrets
 
-After approval I'll request via `add_secret`:
-- `ELEVENLABS_API_KEY`
-- `FAL_KEY` (fal.ai Seedance)
+`ELEVENLABS_API_KEY` and `FAL_KEY` — both confirmed added.
 
 ## Out of scope
 
-- Background music (VO only).
-- Burned-in captions (alignment data is fetched, can be added later).
-- Server-side ffmpeg / Workers rendering.
-- History / storage of generated videos.
-- Sharing state, pair, or assets between the still carousel and the video panel.
-
-## Open question
-
-OK to use **fal.ai Seedance** for the scan clip? If you'd rather use Runway or Replicate Kling, tell me before I request the API key.
+- Background music, burned-in captions, server-side ffmpeg
+- History / saved videos / shared state with carousel
+- Auth changes (still manual navigation to `/dashboard`)
