@@ -3,7 +3,6 @@ import { useState } from "react";
 import { Loader2, Download, RefreshCw, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePair, type DupePair } from "@/lib/dashboard.functions";
-import { pickRandomDupePair, type DupePair } from "@/lib/dashboard.functions";
 import {
   buildScript,
   generateVoiceover,
@@ -12,6 +11,7 @@ import {
   generateVideoStills,
   fetchScanClipBytes,
 } from "@/lib/dashboard-video.functions";
+
 
 
 type Stage =
