@@ -163,6 +163,8 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
       skipFonts: true,
       skipAutoScale: true,
       fetchRequestInit: { cache: "force-cache" },
+      imagePlaceholder:
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
     });
     const blob: Blob = await new Promise((res, rej) =>
       canvas.toBlob(
