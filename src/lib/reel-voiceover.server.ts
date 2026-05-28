@@ -1,4 +1,4 @@
-import type { DupePair } from "@/lib/dashboard.functions";
+import type { DupePair } from "@/lib/dupe-types";
 
 export type ReelSegmentKey =
   | "hook"
