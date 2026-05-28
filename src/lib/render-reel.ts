@@ -177,27 +177,48 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
   await new Promise((r) => setTimeout(r, 250));
 
 
+  const captureOpts = {
+    canvasWidth: width,
+    canvasHeight: height,
+    pixelRatio: 1,
+    cacheBust: false,
+    skipFonts: true,
+    skipAutoScale: true,
+    fetchRequestInit: { cache: "force-cache" as RequestCache },
+    imagePlaceholder:
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
+  };
   for (let f = 0; f < totalFrames; f++) {
     player.seekTo(f);
     await nextFrame();
-    const canvas = await toCanvas(captureEl, {
-      canvasWidth: width,
-      canvasHeight: height,
-      pixelRatio: 1,
-      cacheBust: false,
-      skipFonts: true,
-      skipAutoScale: true,
-      fetchRequestInit: { cache: "force-cache" },
-      imagePlaceholder:
-        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-    });
+    let canvas: HTMLCanvasElement | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        canvas = await toCanvas(captureEl, captureOpts);
+        break;
+      } catch {
+        await new Promise((r) => setTimeout(r, 120));
+      }
+    }
+    if (!canvas) {
+      // Last-ditch blank frame to keep the timeline aligned.
+      canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, width, height);
+      }
+    }
     const blob: Blob = await new Promise((res, rej) =>
-      canvas.toBlob(
+      canvas!.toBlob(
         (b) => (b ? res(b) : rej(new Error("toBlob failed"))),
         "image/jpeg",
         0.85,
       ),
     );
+
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const name = `f${String(f).padStart(5, "0")}.jpg`;
     await ff.writeFile(name, bytes);
