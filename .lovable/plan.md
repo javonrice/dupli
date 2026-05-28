@@ -1,30 +1,50 @@
-## Goal
-Stop depending on skinsort's CDN at video-generation time. Cache product images once into our own Supabase storage bucket and reuse that URL everywhere.
+# Fix "stuck on Generating scan clip…" hang
 
-## Steps
+## Root cause
 
-### 1. Migration
-- Create public storage bucket `product-images` (public read).
-- Add storage RLS: public SELECT on bucket; INSERT/UPDATE restricted to service_role (server-only writes).
-- Add column `products.cached_image_url text` for the resolved bucket URL.
+`generateScanClip` in `src/lib/dashboard-video.functions.ts` submits a fal.ai job then sits in a `while` loop polling for up to **180 seconds** inside one server function call.
 
-### 2. Server helper `ensureCachedProductImage(productId)`
-New file `src/lib/product-images.server.ts` + thin wrapper in `src/lib/product-images.functions.ts`.
-- If `products.cached_image_url` is set → return it.
-- Else fetch `image_url` server-side with browser-like headers (UA + Referer) → upload bytes to `product-images/{brand_slug}/{product_slug}.{ext}` via `supabaseAdmin.storage` → write public URL back into `products.cached_image_url` → return it.
-- Idempotent + safe to call from multiple flows.
+Cloudflare Workers (the runtime our TanStack server fns deploy to) terminate long-running requests. When that happens mid-poll:
+- fal.ai still bills you (the job was already submitted — that's the 10¢)
+- the server fn never returns
+- the browser fetch hangs until *its* timeout fires, which is why the UI sits on "Generating scan clip…" indefinitely
 
-### 3. Wire into video pipeline (`src/lib/dashboard-video.functions.ts`)
-- `generateScanClip`: replace the inline skinsort-fetch-and-base64 hack with a call to `ensureCachedProductImage`, then pass the resulting public URL as `image_url` to fal.ai. fal.ai can fetch our bucket fine.
-- `generateVideoStills`: same — resolve product images through the cache before sending to Nano Banana.
-- Remove the spoofed-headers fetch block.
+`generateVoiceover` and `generateVideoStills` finished fine in parallel — only the fal poll is the problem.
 
-### 4. (Optional but recommended) Carousel parity
-Also route `generateCarouselSlides` image URLs through `ensureCachedProductImage` so the carousel stops depending on skinsort too. One consistent code path.
+## Fix: client-side polling
+
+Split the scan-clip step into two small server functions and let the client poll.
+
+### 1. `src/lib/dashboard-video.functions.ts`
+
+Replace `generateScanClip` with:
+
+- **`submitScanClip`** — submits the fal.ai job, returns `{ requestId, statusUrl, responseUrl }`. Returns in ~1s.
+- **`pollScanClip`** — takes `{ statusUrl, responseUrl }`, does ONE status check, returns `{ status: 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED', videoUrl?: string }`. Returns in <1s.
+
+Each call stays well under any Worker timeout.
+
+### 2. `src/components/dashboard/video-generator.tsx`
+
+In `handleGenerate`, replace the single `scan({...})` call inside `Promise.all` with:
+
+1. Call `submitScanClip` to kick off fal.ai (parallel with voiceover + stills, same as today).
+2. After `Promise.all` resolves, run a client-side `while` loop that calls `pollScanClip` every 3s for up to ~3 minutes.
+3. Surface `IN_QUEUE` / `IN_PROGRESS` as the "Generating scan clip…" label (no behavior change for the user, but now it can't silently hang — every 3s we get a real response or a real error).
+4. On `COMPLETED`, continue to `fetchScanClipBytes` → stills → compose, as today.
+5. On `FAILED` or timeout, throw → existing `catch` shows the red error banner.
+
+### 3. Defensive: surface errors better
+
+Today if the catch fires the error banner appears above the phone frame, but the spinner overlay covers it visually if the user has scrolled. Tiny tweak: also `console.error(e)` in the catch so the next time you DM me a screenshot we have something in devtools to look at.
 
 ## Out of scope
-- Backfill job for every product in the DB — not needed; cache fills lazily on first use of each pair. (Easy to add later if we want to pre-warm.)
-- Image transformations / resizing.
 
-## Result
-First time a product pair is used → one skinsort fetch ever, from our server. After that, all consumers (fal.ai, Nano Banana, OG images, emails) pull from `product-images.lovable-cloud-cdn` and skinsort is out of the loop.
+- Persisting fal.ai jobs in Supabase so they survive page reloads (overkill for a standalone tool you trigger and watch).
+- Backgrounding the whole pipeline (would need a job table + worker).
+
+## Expected outcome
+
+- "Generating scan clip…" never lasts longer than 3s without either advancing or showing a real error.
+- A successful fal.ai job (~30–60s typical) flows through to compose and renders the mp4 just like before.
+- The 10¢ you already spent is sunk — fal.ai charges on submit, not on result delivery.

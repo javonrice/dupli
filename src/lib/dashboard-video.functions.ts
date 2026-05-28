@@ -129,26 +129,28 @@ export const generateVoiceover = createServerFn({ method: "POST" })
   });
 
 // ---------- fal.ai Seedance image-to-video (scan clip) ----------
+//
+// Polling fal.ai inside a single serverFn caused Cloudflare Workers to terminate
+// the request mid-poll (hanging the browser). We split this into:
+//   1) submitScanClip — kicks off the fal.ai job, returns immediately
+//   2) pollScanClip   — single status check, called repeatedly by the client
 
-export type ScanClipResult = {
-  videoUrl: string;
+export type SubmitScanClipResult = {
+  requestId: string;
+  statusUrl: string;
+  responseUrl: string;
 };
 
-export const generateScanClip = createServerFn({ method: "POST" })
+export const submitScanClip = createServerFn({ method: "POST" })
   .inputValidator(
     (data: { imageUrl: string; productName: string; brand: string }) => data,
   )
-  .handler(async ({ data }): Promise<ScanClipResult> => {
+  .handler(async ({ data }): Promise<SubmitScanClipResult> => {
     const falKey = process.env.FAL_KEY;
     if (!falKey) throw new Error("FAL_KEY not configured");
 
     const prompt = `A hand holding a smartphone scanning the ${data.brand} ${data.productName} product. The phone camera viewfinder shows the product with a glowing scanner bracket overlay sweeping across it. Cinematic beauty-aisle lighting, smooth camera motion, photorealistic, vertical 9:16.`;
 
-    // imageUrl is already cached in our own bucket (see ensureCachedProductImage),
-    // so fal.ai can fetch it directly.
-    const imageForFal = data.imageUrl;
-
-    // Submit job
     const submitRes = await fetch(
       "https://queue.fal.run/fal-ai/bytedance/seedance/v1/lite/image-to-video",
       {
@@ -159,7 +161,7 @@ export const generateScanClip = createServerFn({ method: "POST" })
         },
         body: JSON.stringify({
           prompt,
-          image_url: imageForFal,
+          image_url: data.imageUrl,
           resolution: "720p",
           duration: "5",
           aspect_ratio: "9:16",
@@ -179,41 +181,59 @@ export const generateScanClip = createServerFn({ method: "POST" })
       response_url?: string;
     };
 
-    const statusUrl =
-      submitted.status_url ??
-      `https://queue.fal.run/fal-ai/bytedance/seedance/requests/${submitted.request_id}/status`;
-    const responseUrl =
-      submitted.response_url ??
-      `https://queue.fal.run/fal-ai/bytedance/seedance/requests/${submitted.request_id}`;
+    return {
+      requestId: submitted.request_id,
+      statusUrl:
+        submitted.status_url ??
+        `https://queue.fal.run/fal-ai/bytedance/seedance/requests/${submitted.request_id}/status`,
+      responseUrl:
+        submitted.response_url ??
+        `https://queue.fal.run/fal-ai/bytedance/seedance/requests/${submitted.request_id}`,
+    };
+  });
 
-    // Poll up to ~3 minutes
-    const deadline = Date.now() + 180_000;
-    while (Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const sres = await fetch(statusUrl, {
+export type PollScanClipResult =
+  | { status: "IN_QUEUE" | "IN_PROGRESS" }
+  | { status: "COMPLETED"; videoUrl: string }
+  | { status: "FAILED"; error: string };
+
+export const pollScanClip = createServerFn({ method: "POST" })
+  .inputValidator(
+    (data: { statusUrl: string; responseUrl: string }) => data,
+  )
+  .handler(async ({ data }): Promise<PollScanClipResult> => {
+    const falKey = process.env.FAL_KEY;
+    if (!falKey) throw new Error("FAL_KEY not configured");
+
+    const sres = await fetch(data.statusUrl, {
+      headers: { Authorization: `Key ${falKey}` },
+    });
+    if (!sres.ok) {
+      // Transient — let client keep polling.
+      return { status: "IN_PROGRESS" };
+    }
+    const sjson = (await sres.json()) as { status: string };
+
+    if (sjson.status === "COMPLETED") {
+      const fres = await fetch(data.responseUrl, {
         headers: { Authorization: `Key ${falKey}` },
       });
-      if (!sres.ok) continue;
-      const sjson = (await sres.json()) as { status: string };
-      if (sjson.status === "COMPLETED") {
-        const fres = await fetch(responseUrl, {
-          headers: { Authorization: `Key ${falKey}` },
-        });
-        if (!fres.ok) {
-          const t = await fres.text().catch(() => "");
-          throw new Error(`fal.ai fetch result failed: ${t.slice(0, 300)}`);
-        }
-        const fjson = (await fres.json()) as { video?: { url?: string } };
-        const url = fjson.video?.url;
-        if (!url) throw new Error("fal.ai returned no video url");
-        return { videoUrl: url };
+      if (!fres.ok) {
+        const t = await fres.text().catch(() => "");
+        return { status: "FAILED", error: `fetch result failed: ${t.slice(0, 200)}` };
       }
-      if (sjson.status === "FAILED") {
-        throw new Error("fal.ai job failed");
-      }
+      const fjson = (await fres.json()) as { video?: { url?: string } };
+      const url = fjson.video?.url;
+      if (!url) return { status: "FAILED", error: "no video url returned" };
+      return { status: "COMPLETED", videoUrl: url };
     }
-    throw new Error("fal.ai job timed out");
+    if (sjson.status === "FAILED") {
+      return { status: "FAILED", error: "fal.ai reported FAILED" };
+    }
+    return { status: sjson.status === "IN_QUEUE" ? "IN_QUEUE" : "IN_PROGRESS" };
   });
+
+
 
 // ---------- Stills via Nano Banana ----------
 
