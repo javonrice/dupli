@@ -147,10 +147,35 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
   const player = playerRef.current;
   if (!player) throw new Error("Hidden player not mounted");
   player.pause();
+
+  // Pre-warm: scrub through every segment so each <Img> mounts + loads at
+  // least once before we start capturing frames. Otherwise html-to-image
+  // hits images that haven't decoded yet and throws "source image cannot
+  // be decoded" / "Failed to fetch".
+  async function waitForImages() {
+    const imgs = Array.from(captureEl.querySelectorAll("img"));
+    await Promise.all(
+      imgs.map((img) => {
+        if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+        return new Promise<void>((resolve) => {
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+          setTimeout(done, 1500);
+        });
+      }),
+    );
+  }
+  for (const sf of segmentStartFrames) {
+    player.seekTo(sf);
+    await nextFrame();
+    await waitForImages();
+  }
   player.seekTo(0);
   await nextFrame();
-  // Give images one extra beat to decode on first paint.
+  await waitForImages();
   await new Promise((r) => setTimeout(r, 250));
+
 
   for (let f = 0; f < totalFrames; f++) {
     player.seekTo(f);
