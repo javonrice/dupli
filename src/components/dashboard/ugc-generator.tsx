@@ -5,7 +5,9 @@ import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
 import { generateReelScript } from "@/lib/reel-voiceover.functions";
+import { saveVideoRecord } from "@/lib/user-videos.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
+import { renderAndSaveReel, downloadBlob, slugify } from "@/lib/reel-pipeline";
 
 
 import {
@@ -14,9 +16,9 @@ import {
   WIDTH,
   HEIGHT,
   totalDurationInFrames,
-  audioStartFrames,
 } from "@/remotion/DupeReel";
-import { renderReelToMp4, type RenderProgress } from "@/lib/render-reel";
+import type { RenderProgress } from "@/lib/render-reel";
+
 
 type Stage = "idle" | "picking" | "scripting" | "voicing" | "done" | "failed";
 
