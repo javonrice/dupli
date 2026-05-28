@@ -264,6 +264,10 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
 
 
 async function pickLatestSavedScanPair(): Promise<DupePair | null> {
+  const [{ supabaseAdmin }, { uploadProductImageDataUrl }] = await Promise.all([
+    import("@/integrations/supabase/client.server"),
+    import("@/lib/product-images.server"),
+  ]);
   const { data: scans, error } = await supabaseAdmin
     .from("scans")
     .select("id, original_brand, original_product_name, dupe_brand, dupe_product_name, match_score, thumbnail_data_url, analysis, created_at")
@@ -423,6 +427,7 @@ async function generateSlide(input: SlideInput): Promise<string> {
 export const generateCarouselSlides = createServerFn({ method: "POST" })
   .inputValidator((data: { pair: DupePair; slides?: Array<1 | 2 | 3 | 4> }) => data)
   .handler(async ({ data }): Promise<{ results: SlideResult[] }> => {
+    const { getRequestHost } = await import("@tanstack/react-start/server");
     const slides = data.slides ?? [1, 2, 3, 4];
     const host = getRequestHost();
     const wordmarkUrl = `https://${host}/dupli-wordmark.png`;
