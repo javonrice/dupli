@@ -75,9 +75,6 @@ const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
     }
   }
 
-
-  const totalFrames = script ? totalDurationInFrames(script) : 0;
-
   async function handleDownload() {
     if (!script || !pairs || pairs.length === 0) return;
     setError(null);
@@ -92,37 +89,25 @@ const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
         throw new Error("Renderer didn't mount in time");
       }
 
-      const blob = await renderReelToMp4({
+      const { blob } = await renderAndSaveReel({
+        script,
+        pairs,
         playerRef: hiddenPlayerRef,
         captureEl: hiddenStageRef.current,
-        script,
-        totalFrames,
-        fps: FPS,
-        width: WIDTH,
-        height: HEIGHT,
-        segmentStartFrames: audioStartFrames(script),
+        saveRecord,
         onProgress: setProgress,
       });
 
-      const slug = pairs
-        .map((p) => p.dupe.brand)
-        .join("-")
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "")
-        .slice(0, 60);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `dupli-reel-${slug}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
+      const slug = slugify(pairs.map((p) => p.dupe.brand).join("-"));
+      downloadBlob(blob, `dupli-reel-${slug}.mp4`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "MP4 export failed");
     } finally {
       setExporting(false);
+      setProgress(null);
+    }
+  }
+
       setProgress(null);
     }
   }
