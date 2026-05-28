@@ -268,20 +268,34 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
     fetchRequestInit: { cache: "force-cache" as RequestCache },
     imagePlaceholder:
       "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
-  };
   for (let f = 0; f < totalFrames; f++) {
     player.seekTo(f);
     await nextFrame();
     let canvas: HTMLCanvasElement | null = null;
+    let lastErr: unknown = null;
+    let attempts = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
+      attempts = attempt + 1;
       try {
         canvas = await toCanvas(captureEl, captureOpts);
         break;
-      } catch {
+      } catch (err) {
+        lastErr = err;
         await new Promise((r) => setTimeout(r, 120));
       }
     }
     if (!canvas) {
+      const info = classifyError(lastErr);
+      const failure: FrameFailure = {
+        frame: f,
+        segmentKey: segmentKeyFor(f),
+        cause: info.cause,
+        message: info.message,
+        attempts,
+        url: info.url,
+      };
+      onDebug?.(failure);
+      console.warn("[render-reel] frame capture failed", failure);
       // Last-ditch blank frame to keep the timeline aligned.
       canvas = document.createElement("canvas");
       canvas.width = width;
@@ -291,6 +305,8 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
         ctx.fillStyle = "#000";
         ctx.fillRect(0, 0, width, height);
       }
+    }
+
     }
     const blob: Blob = await new Promise((res, rej) =>
       canvas!.toBlob(
