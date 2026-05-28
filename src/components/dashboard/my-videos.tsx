@@ -34,7 +34,9 @@ export function MyVideos({ refreshKey }: { refreshKey?: number }) {
     retry: false,
   });
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copied, setCopied] = useState<string | null>(null);
+
   const [busy, setBusy] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ done: number; total: number } | null>(null);
 
