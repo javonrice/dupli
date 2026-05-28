@@ -2,7 +2,8 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHost } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { uploadProductImageDataUrl } from "@/lib/product-images.server";
-import type { DupePair } from "@/lib/dupe-types";
+import type { DupePair, SlideResult } from "@/lib/dupe-types";
+
 
 
 
