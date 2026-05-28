@@ -37,10 +37,10 @@ const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
 };
 
 export function UgcGenerator() {
-  const pickPair = useServerFn(pickRandomDupePair);
+  const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
 
-  const [pair, setPair] = useState<DupePair | null>(null);
+  const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
   const [stage, setStage] = useState<Stage>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -56,14 +56,14 @@ export function UgcGenerator() {
   async function run() {
     setError(null);
     setScript(null);
-    setPair(null);
+    setPairs(null);
     try {
       setStage("picking");
-      const newPair = await pickPair();
-      setPair(newPair);
+      const newPairs = await pickPairs({ data: { count: 4 } });
+      setPairs(newPairs);
       setStage("scripting");
       setStage("voicing");
-      const s = await writeScript({ data: { pair: newPair } });
+      const s = await writeScript({ data: { pairs: newPairs } });
       setScript(s);
       setStage("done");
     } catch (e) {
@@ -71,6 +71,7 @@ export function UgcGenerator() {
       setStage("failed");
     }
   }
+
 
   const totalFrames = script ? totalDurationInFrames(script) : 0;
 
