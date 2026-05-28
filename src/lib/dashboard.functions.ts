@@ -154,8 +154,8 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<DupePair[]> => {
     const count = Math.max(1, Math.min(8, data.count ?? 4));
 
-    // Pull a wider candidate pool (no match-score ordering ceiling effect)
-    // so each call can sample from across the whole catalog.
+    // SkinSort already classified these as dupes — no match-score gating.
+    // Pull a wide pool so each click can sample from across the catalog.
     const { data: candidates, error: qErr } = await supabaseAdmin
       .from("dupes")
       .select(
@@ -163,8 +163,7 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
          original:products!dupes_original_product_id_fkey ( id, brand_name, product_name, image_url, cached_image_url, lowest_price_usd ),
          dupe:products!dupes_dupe_product_id_fkey ( id, brand_name, product_name, image_url, cached_image_url, lowest_price_usd )`,
       )
-      .gte("overall_match", 70)
-      .limit(2000);
+      .limit(5000);
 
     if (qErr) throw new Error(`Failed to load dupe candidates: ${qErr.message}`);
     if (!candidates) throw new Error("No dupe candidates found");
@@ -178,38 +177,46 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
       cached_image_url: string | null;
       lowest_price_usd: number | null;
     };
+    const pickImage = (p: Prod) => p.cached_image_url ?? p.image_url ?? null;
+
     const usable = (candidates as Row[]).filter((row) => {
       const o = row.original as unknown as Prod | null;
       const d = row.dupe as unknown as Prod | null;
       if (!o || !d) return false;
-      if (!o.cached_image_url || !d.cached_image_url) return false;
+      if (!pickImage(o) || !pickImage(d)) return false;
       if (o.lowest_price_usd == null || d.lowest_price_usd == null) return false;
       return Number(d.lowest_price_usd) < Number(o.lowest_price_usd);
     });
 
     if (usable.length < count) {
-      throw new Error(`Need at least ${count} usable pairs, only found ${usable.length}`);
+      throw new Error(
+        `Need at least ${count} usable dupe pairs, only found ${usable.length}. Ingest more product prices/images.`,
+      );
     }
 
-    // Exclude pairs generated in the last 7 days so each click serves fresh ones.
-    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Exclude any PRODUCT (original or dupe) used in the last 30 days,
+    // not just exact pair combinations. Every click should serve fresh products.
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
     const { data: recent } = await supabaseAdmin
       .from("dashboard_generations")
       .select("original_product_id, dupe_product_id")
       .gte("created_at", since);
-    const recentSet = new Set(
-      (recent ?? []).map((r) => `${r.original_product_id}::${r.dupe_product_id}`),
-    );
+    const recentProducts = new Set<string>();
+    for (const r of recent ?? []) {
+      recentProducts.add(r.original_product_id);
+      recentProducts.add(r.dupe_product_id);
+    }
+
+    const shuffle = <T>(arr: T[]) => [...arr].sort(() => Math.random() - 0.5);
 
     const fresh = usable.filter((row) => {
       const o = row.original as unknown as Prod;
       const d = row.dupe as unknown as Prod;
-      return !recentSet.has(`${o.id}::${d.id}`);
+      return !recentProducts.has(o.id) && !recentProducts.has(d.id);
     });
 
-    // Shuffle. Prefer fresh pool; fall back to full usable pool if exhausted.
-    const shuffle = <T>(arr: T[]) => [...arr].sort(() => Math.random() - 0.5);
-    const primary = fresh.length >= count ? shuffle(fresh) : shuffle(usable);
+    const primary =
+      fresh.length >= count ? shuffle(fresh) : shuffle(usable);
 
     const picked: Row[] = [];
     const seenOriginals = new Set<string>();
@@ -223,7 +230,6 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
       seenDupes.add(d.id);
       if (picked.length === count) break;
     }
-    // Fallback: allow reused originals/dupes if we couldn't fill from distinct.
     if (picked.length < count) {
       for (const row of primary) {
         if (picked.includes(row)) continue;
@@ -232,7 +238,7 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
       }
     }
 
-    // Record so we don't repeat soon.
+    // Record immediately so failed downstream steps don't cause repeats.
     const { error: insErr } = await supabaseAdmin
       .from("dashboard_generations")
       .insert(
@@ -251,25 +257,26 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
       const d = row.dupe as unknown as Prod;
       return {
         pairId: row.id,
-        matchPct: row.overall_match,
+        matchPct: row.overall_match ?? 0,
         original: {
           id: o.id,
           brand: o.brand_name,
           name: o.product_name,
-          imageUrl: o.cached_image_url!,
+          imageUrl: pickImage(o)!,
           priceUsd: Number(o.lowest_price_usd),
         },
         dupe: {
           id: d.id,
           brand: d.brand_name,
           name: d.product_name,
-          imageUrl: d.cached_image_url!,
+          imageUrl: pickImage(d)!,
           priceUsd: Number(d.lowest_price_usd),
         },
         savingsUsd: Number(o.lowest_price_usd) - Number(d.lowest_price_usd),
       };
     });
   });
+
 
 
 
