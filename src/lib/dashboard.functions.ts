@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHost } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { ensureCachedProductImage, uploadProductImageDataUrl } from "@/lib/product-images.server";
+import { uploadProductImageDataUrl } from "@/lib/product-images.server";
 
 export type DupePair = {
   pairId: string;
@@ -68,13 +68,13 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
         lowest_price_usd: number | null;
       } | null;
       if (!o || !d) return false;
-      if (!(o.cached_image_url || o.image_url) || !(d.cached_image_url || d.image_url)) return false;
+      if (!o.cached_image_url || !d.cached_image_url) return false;
       if (o.lowest_price_usd == null || d.lowest_price_usd == null) return false;
       return Number(d.lowest_price_usd) < Number(o.lowest_price_usd);
     });
 
     if (usable.length === 0) {
-      throw new Error("No usable dupe pairs (need both images + prices, dupe cheaper)");
+      throw new Error("No locally stored product pairs found yet. Scan and save a product first.");
     }
 
     // Exclude pairs generated in the last 30 days.
@@ -120,10 +120,8 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
     // Cache product images in our own storage so downstream services
     // (fal.ai, Nano Banana, OG renderers, etc.) don't have to reach the
     // original source CDN — which sometimes 403s third-party clients.
-    const [originalImageUrl, dupeImageUrl] = await Promise.all([
-      o.cached_image_url ?? ensureCachedProductImage(o.id),
-      d.cached_image_url ?? ensureCachedProductImage(d.id),
-    ]);
+    const originalImageUrl = o.cached_image_url;
+    const dupeImageUrl = d.cached_image_url;
 
     return {
       pairId: picked.id,
