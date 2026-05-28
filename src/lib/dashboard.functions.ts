@@ -2,26 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHost } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { uploadProductImageDataUrl } from "@/lib/product-images.server";
+import type { DupePair } from "@/lib/dupe-types";
 
-export type DupePair = {
-  pairId: string;
-  matchPct: number;
-  original: {
-    id: string;
-    brand: string;
-    name: string;
-    imageUrl: string;
-    priceUsd: number;
-  };
-  dupe: {
-    id: string;
-    brand: string;
-    name: string;
-    imageUrl: string;
-    priceUsd: number;
-  };
-  savingsUsd: number;
-};
+export type { DupePair };
+
 
 // Pick a random high-match dupe pair where both products have images + prices
 // and the pair hasn't been generated in the last 30 days.
