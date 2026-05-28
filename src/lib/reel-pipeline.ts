@@ -4,7 +4,7 @@
 import type { PlayerRef } from "@remotion/player";
 import type { RefObject } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { renderReelToMp4, type RenderProgress } from "@/lib/render-reel";
+import { renderReelToMp4, type RenderProgress, type FrameFailure } from "@/lib/render-reel";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
 import {
   FPS,
