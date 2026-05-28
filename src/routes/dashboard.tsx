@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import {
   pickRandomDupePair,
   generateCarouselSlides,
-  type DupePair,
-  type SlideResult,
 } from "@/lib/dashboard.functions";
+import type { DupePair, SlideResult } from "@/lib/dupe-types";
+
 import { UgcGenerator } from "@/components/dashboard/ugc-generator";
 
 
