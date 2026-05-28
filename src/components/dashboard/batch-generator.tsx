@@ -39,10 +39,35 @@ const STATUS_LABEL: Record<ItemStatus, string> = {
   failed: "Failed",
 };
 
-export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
   const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
+  const proxyImage = useServerFn(fetchImageAsDataUrl);
+
+  async function inlinePairImages(pairs: DupePair[]): Promise<DupePair[]> {
+    const cache = new Map<string, string>();
+    async function toData(url: string): Promise<string> {
+      if (!url || url.startsWith("data:")) return url;
+      const hit = cache.get(url);
+      if (hit) return hit;
+      try {
+        const { dataUrl } = await proxyImage({ data: { url } });
+        const out = dataUrl ?? url;
+        cache.set(url, out);
+        return out;
+      } catch {
+        return url;
+      }
+    }
+    return Promise.all(
+      pairs.map(async (p) => ({
+        ...p,
+        original: { ...p.original, imageUrl: await toData(p.original.imageUrl) },
+        dupe: { ...p.dupe, imageUrl: await toData(p.dupe.imageUrl) },
+      })),
+    );
+  }
+
 
   const [size, setSize] = useState<BatchSize>(5);
   const [running, setRunning] = useState(false);
