@@ -17,7 +17,11 @@ import {
   HEIGHT,
   totalDurationInFrames,
 } from "@/remotion/DupeReel";
-import type { RenderProgress } from "@/lib/render-reel";
+import type { RenderProgress, FrameFailure } from "@/lib/render-reel";
+
+type DebugEntry =
+  | (FrameFailure & { kind: "frame" })
+  | { kind: "image"; src: string; reason: string };
 
 type ItemStatus = "queued" | "scripting" | "rendering" | "saved" | "failed";
 type Item = {
@@ -26,6 +30,7 @@ type Item = {
   label?: string;
   error?: string;
   progress?: RenderProgress | null;
+  debug?: DebugEntry[];
 };
 
 const BATCH_SIZES = [5, 10, 15, 30] as const;
