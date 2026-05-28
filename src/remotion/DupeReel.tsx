@@ -31,7 +31,7 @@ export const FPS = 30;
 export const WIDTH = 1080;
 export const HEIGHT = 1920;
 const TAIL_FRAMES = 10;
-const TRANSITION_FRAMES = 12;
+export const TRANSITION_FRAMES = 12;
 
 export function segmentToFrames(durationSec: number): number {
   return Math.max(50, Math.round(durationSec * FPS) + TAIL_FRAMES);
@@ -45,6 +45,20 @@ export function totalDurationInFrames(script: ReelScript): number {
   );
   return sum - TRANSITION_FRAMES * (script.segments.length - 1);
 }
+
+// Absolute start frame of each segment's audio, mirroring the TransitionSeries
+// layout (each transition overlaps the surrounding sequences).
+export function audioStartFrames(script: ReelScript): number[] {
+  const starts: number[] = [];
+  let cursor = 0;
+  script.segments.forEach((s, idx) => {
+    starts.push(cursor);
+    const dur = segmentToFrames(s.durationSec);
+    cursor += dur - (idx === script.segments.length - 1 ? 0 : TRANSITION_FRAMES);
+  });
+  return starts;
+}
+
 
 // ---------- Shared bits ----------
 
