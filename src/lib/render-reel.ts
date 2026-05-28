@@ -7,7 +7,7 @@ import { toBlobURL } from "@ffmpeg/util";
 import { toCanvas } from "html-to-image";
 import type { PlayerRef } from "@remotion/player";
 import type { RefObject } from "react";
-import type { ReelScript } from "./reel-voiceover.functions";
+import type { ReelScript } from "./dupe-types";
 
 let ffmpegInstance: FFmpeg | null = null;
 let loadPromise: Promise<FFmpeg> | null = null;

@@ -8,7 +8,7 @@ import type { DupePair } from "@/lib/dupe-types";
 import {
   generateReelScript,
   type ReelScript,
-} from "@/lib/reel-voiceover.functions";
+} from "@/lib/dupe-types";
 
 import {
   DupeReel,
