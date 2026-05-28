@@ -11,6 +11,8 @@ import {
 import type { DupePair, SlideResult } from "@/lib/dupe-types";
 
 import { UgcGenerator } from "@/components/dashboard/ugc-generator";
+import { BatchGenerator } from "@/components/dashboard/batch-generator";
+import { MyVideos } from "@/components/dashboard/my-videos";
 
 
 export const Route = createFileRoute("/dashboard")({
