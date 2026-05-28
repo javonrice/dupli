@@ -57,24 +57,27 @@ function sceneFrames(key: ReelSegmentKey, durationSec: number): number {
 export function totalDurationInFrames(script: ReelScript): number {
   // TransitionSeries overlaps each transition by TRANSITION_FRAMES.
   const sum = script.segments.reduce(
-    (acc, s) => acc + segmentToFrames(s.durationSec),
+    (acc, s) => acc + sceneFrames(s.key, s.durationSec),
     0,
   );
   return sum - TRANSITION_FRAMES * (script.segments.length - 1);
 }
 
 // Absolute start frame of each segment's audio, mirroring the TransitionSeries
-// layout (each transition overlaps the surrounding sequences).
+// layout. Reveal scenes delay the voiceover by SCAN_INTRO_FRAMES so the scan
+// animation plays before the dupe line drops.
 export function audioStartFrames(script: ReelScript): number[] {
   const starts: number[] = [];
   let cursor = 0;
   script.segments.forEach((s, idx) => {
-    starts.push(cursor);
-    const dur = segmentToFrames(s.durationSec);
+    const intro = isRevealKey(s.key) ? SCAN_INTRO_FRAMES : 0;
+    starts.push(cursor + intro);
+    const dur = sceneFrames(s.key, s.durationSec);
     cursor += dur - (idx === script.segments.length - 1 ? 0 : TRANSITION_FRAMES);
   });
   return starts;
 }
+
 
 
 // ---------- Shared bits ----------
