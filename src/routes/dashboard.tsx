@@ -243,9 +243,12 @@ function DashboardPage() {
           })}
         </div>
 
-        <div className="mt-12">
+        <div className="mt-12 space-y-8">
+          <BatchGenerator />
           <UgcGenerator />
+          <MyVideos />
         </div>
+
       </div>
     </div>
   );
