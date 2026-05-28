@@ -144,6 +144,21 @@ export const generateScanClip = createServerFn({ method: "POST" })
 
     const prompt = `A hand holding a smartphone scanning the ${data.brand} ${data.productName} product. The phone camera viewfinder shows the product with a glowing scanner bracket overlay sweeping across it. Cinematic beauty-aisle lighting, smooth camera motion, photorealistic, vertical 9:16.`;
 
+    // fal.ai can't reach some product image hosts (e.g. skinsort).
+    // Download the image ourselves and pass it as a data URI.
+    let imageForFal = data.imageUrl;
+    try {
+      const imgRes = await fetch(data.imageUrl);
+      if (!imgRes.ok) throw new Error(`image fetch ${imgRes.status}`);
+      const buf = await imgRes.arrayBuffer();
+      const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
+      imageForFal = `data:${contentType};base64,${Buffer.from(buf).toString("base64")}`;
+    } catch (e) {
+      throw new Error(
+        `Could not fetch product image for fal.ai: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+
     // Submit job
     const submitRes = await fetch(
       "https://queue.fal.run/fal-ai/bytedance/seedance/v1/lite/image-to-video",
@@ -155,7 +170,9 @@ export const generateScanClip = createServerFn({ method: "POST" })
         },
         body: JSON.stringify({
           prompt,
-          image_url: data.imageUrl,
+          image_url: imageForFal,
+          resolution: "720p",
+          duration: "5",
           resolution: "720p",
           duration: "5",
           aspect_ratio: "9:16",
