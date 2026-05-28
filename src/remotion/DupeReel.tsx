@@ -39,8 +39,7 @@ export function segmentToFrames(durationSec: number): number {
   return Math.max(75, Math.round(durationSec * FPS) + TAIL_FRAMES);
 }
 
-  return Math.max(50, Math.round(durationSec * FPS) + TAIL_FRAMES);
-}
+
 
 export function totalDurationInFrames(script: ReelScript): number {
   // TransitionSeries overlaps each transition by TRANSITION_FRAMES.
