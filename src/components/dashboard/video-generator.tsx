@@ -36,7 +36,9 @@ const STAGE_LABEL: Record<Stage, string> = {
 export function VideoGenerator() {
   const pickPair = useServerFn(pickRandomDupePair);
   const voice = useServerFn(generateVoiceover);
-  const scan = useServerFn(generateScanClip);
+  const submitScan = useServerFn(submitScanClip);
+  const pollScan = useServerFn(pollScanClip);
+
   const stills = useServerFn(generateVideoStills);
   const fetchScan = useServerFn(fetchScanClipBytes);
 
