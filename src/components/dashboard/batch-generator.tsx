@@ -17,7 +17,11 @@ import {
   HEIGHT,
   totalDurationInFrames,
 } from "@/remotion/DupeReel";
-import type { RenderProgress } from "@/lib/render-reel";
+import type { RenderProgress, FrameFailure } from "@/lib/render-reel";
+
+type DebugEntry =
+  | (FrameFailure & { kind: "frame" })
+  | { kind: "image"; src: string; reason: string };
 
 type ItemStatus = "queued" | "scripting" | "rendering" | "saved" | "failed";
 type Item = {
@@ -26,6 +30,7 @@ type Item = {
   label?: string;
   error?: string;
   progress?: RenderProgress | null;
+  debug?: DebugEntry[];
 };
 
 const BATCH_SIZES = [5, 10, 15, 30] as const;
@@ -106,18 +111,26 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
       label: `${pairs[0].original.brand} → ${pairs[0].dupe.brand}`,
     });
 
-    const ok = await waitForStage();
-    if (!ok || !hiddenPlayerRef.current || !hiddenStageRef.current) {
-      throw new Error("Renderer didn't mount");
-    }
-
     await renderAndSaveReel({
       script,
       pairs,
       playerRef: hiddenPlayerRef,
-      captureEl: hiddenStageRef.current,
+      captureEl: hiddenStageRef.current!,
       saveRecord,
       onProgress: (p) => updateItem(item.id, { progress: p }),
+      onDebug: (entry) => {
+        const tagged: DebugEntry =
+          "type" in entry && entry.type === "image"
+            ? { kind: "image", src: entry.src, reason: entry.reason }
+            : { kind: "frame", ...(entry as FrameFailure) };
+        setItems((prev) =>
+          prev.map((it) =>
+            it.id === item.id
+              ? { ...it, debug: [...(it.debug ?? []), tagged].slice(-50) }
+              : it,
+          ),
+        );
+      },
     });
     updateItem(item.id, { status: "saved", progress: null });
   }
@@ -243,31 +256,89 @@ export function BatchGenerator({ onComplete }: { onComplete?: () => void }) {
             {items.map((it) => (
               <li
                 key={it.id}
-                className="flex items-center gap-2 rounded-lg border border-border bg-background/40 px-3 py-2 text-xs"
+                className="rounded-lg border border-border bg-background/40 px-3 py-2 text-xs"
               >
-                <span className="w-6 font-mono text-muted-foreground">
-                  #{it.id + 1}
-                </span>
-                {it.status === "saved" ? (
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                ) : it.status === "failed" ? (
-                  <XCircle className="h-4 w-4 text-destructive" />
-                ) : it.status === "queued" ? (
-                  <span className="h-4 w-4" />
-                ) : (
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <div className="flex items-center gap-2">
+                  <span className="w-6 font-mono text-muted-foreground">
+                    #{it.id + 1}
+                  </span>
+                  {it.status === "saved" ? (
+                    <CheckCircle2 className="h-4 w-4 text-primary" />
+                  ) : it.status === "failed" ? (
+                    <XCircle className="h-4 w-4 text-destructive" />
+                  ) : it.status === "queued" ? (
+                    <span className="h-4 w-4" />
+                  ) : (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  )}
+                  <span className="flex-1 truncate">
+                    {it.label ?? STATUS_LABEL[it.status]}
+                    {it.status === "rendering" && it.progress && (
+                      <span className="ml-1 text-muted-foreground">
+                        · {Math.round(it.progress.pct * 100)}%
+                      </span>
+                    )}
+                    {it.status === "failed" && it.error && (
+                      <span className="ml-1 text-destructive">· {it.error}</span>
+                    )}
+                  </span>
+                </div>
+                {it.debug && it.debug.length > 0 && (
+                  <details className="mt-1.5 ml-8">
+                    <summary className="cursor-pointer text-[11px] text-muted-foreground hover:text-foreground">
+                      {it.debug.length} debug{" "}
+                      {it.debug.length === 1 ? "entry" : "entries"}
+                      {(() => {
+                        const counts = it.debug.reduce<Record<string, number>>(
+                          (a, d) => {
+                            const k = d.kind === "image" ? "image" : d.cause;
+                            a[k] = (a[k] ?? 0) + 1;
+                            return a;
+                          },
+                          {},
+                        );
+                        const summary = Object.entries(counts)
+                          .map(([k, v]) => `${v} ${k}`)
+                          .join(", ");
+                        return summary ? ` · ${summary}` : "";
+                      })()}
+                    </summary>
+                    <ul className="mt-1 space-y-0.5 font-mono text-[10.5px] leading-snug">
+                      {it.debug.map((d, idx) => (
+                        <li
+                          key={idx}
+                          className="rounded border border-border/60 bg-muted/40 px-2 py-1 text-muted-foreground"
+                        >
+                          {d.kind === "image" ? (
+                            <>
+                              <span className="text-destructive">image</span>{" "}
+                              · {d.reason} ·{" "}
+                              <span className="break-all">
+                                {d.src || "(empty src)"}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="text-destructive">
+                                frame {d.frame}
+                              </span>{" "}
+                              [{d.segmentKey}] · {d.cause} · attempts{" "}
+                              {d.attempts} ·{" "}
+                              <span className="break-all">{d.message}</span>
+                              {d.url && (
+                                <>
+                                  {" "}
+                                  ·{" "}
+                                  <span className="break-all">{d.url}</span>
+                                </>
+                              )}
+                            </>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
                 )}
-                <span className="flex-1 truncate">
-                  {it.label ?? STATUS_LABEL[it.status]}
-                  {it.status === "rendering" && it.progress && (
-                    <span className="ml-1 text-muted-foreground">
-                      · {Math.round(it.progress.pct * 100)}%
-                    </span>
-                  )}
-                  {it.status === "failed" && it.error && (
-                    <span className="ml-1 text-destructive">· {it.error}</span>
-                  )}
-                </span>
               </li>
             ))}
           </ul>

@@ -4,7 +4,7 @@
 import type { PlayerRef } from "@remotion/player";
 import type { RefObject } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { renderReelToMp4, type RenderProgress } from "@/lib/render-reel";
+import { renderReelToMp4, type RenderProgress, type FrameFailure } from "@/lib/render-reel";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
 import {
   FPS,
@@ -28,6 +28,9 @@ export type RenderAndSaveArgs = {
     };
   }) => Promise<unknown>;
   onProgress?: (p: RenderProgress) => void;
+  onDebug?: (
+    entry: FrameFailure | { type: "image"; src: string; reason: string },
+  ) => void;
 };
 
 export type RenderAndSaveResult = {
@@ -43,6 +46,7 @@ export async function renderAndSaveReel({
   captureEl,
   saveRecord,
   onProgress,
+  onDebug,
 }: RenderAndSaveArgs): Promise<RenderAndSaveResult> {
   const totalFrames = totalDurationInFrames(script);
 
@@ -56,6 +60,7 @@ export async function renderAndSaveReel({
     height: HEIGHT,
     segmentStartFrames: audioStartFrames(script),
     onProgress,
+    onDebug,
   });
 
   // Upload to user-videos bucket (RLS scoped by first folder = user_id).

@@ -84,6 +84,27 @@ export type RenderProgress = {
   pct: number;
 };
 
+export type FrameFailureCause =
+  | "image-decode"
+  | "network"
+  | "font"
+  | "audio-decode"
+  | "unknown";
+
+export type FrameFailure = {
+  frame: number;
+  segmentKey: string;
+  cause: FrameFailureCause;
+  message: string;
+  attempts: number;
+  url?: string;
+};
+
+export type RenderDebug = {
+  failures: FrameFailure[];
+  brokenImages: { src: string; reason: string }[];
+};
+
 export type RenderOpts = {
   playerRef: RefObject<PlayerRef | null>;
   captureEl: HTMLElement;
@@ -94,7 +115,30 @@ export type RenderOpts = {
   height: number;
   segmentStartFrames: number[];
   onProgress?: (p: RenderProgress) => void;
+  onDebug?: (entry: FrameFailure | { type: "image"; src: string; reason: string }) => void;
 };
+
+function classifyError(err: unknown): { cause: FrameFailureCause; message: string; url?: string } {
+  const msg = err instanceof Error ? err.message : String(err);
+  const name = err instanceof Error ? err.name : "";
+  const urlMatch = msg.match(/https?:\/\/[^\s"')]+/);
+  const url = urlMatch?.[0];
+
+  if (name === "EncodingError" || /decode/i.test(msg) || /source image/i.test(msg)) {
+    return { cause: "image-decode", message: msg, url };
+  }
+  if (/font|woff|otf|ttf|@font-face/i.test(msg)) {
+    return { cause: "font", message: msg, url };
+  }
+  if (
+    /failed to fetch|networkerror|load failed|err_/i.test(msg) ||
+    name === "TypeError"
+  ) {
+    return { cause: "network", message: msg, url };
+  }
+  return { cause: "unknown", message: msg, url };
+}
+
 
 export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
   const {
@@ -107,22 +151,49 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
     height,
     segmentStartFrames,
     onProgress,
+    onDebug,
   } = opts;
   const sampleRate = 44100;
   const totalSec = totalFrames / fps;
 
-  // 1. Decode + mix audio offline ------------------------------------------
+  // Frame index → segment key map for nicer debug output.
+  const segmentKeys = script.segments.map((s) => s.key);
+  const segmentKeyFor = (frame: number): string => {
+    let key = segmentKeys[0] ?? "?";
+    for (let i = 0; i < segmentStartFrames.length; i++) {
+      if (frame >= segmentStartFrames[i]) key = segmentKeys[i] ?? key;
+    }
+    return key;
+  };
+
   onProgress?.({ stage: "audio", pct: 0 });
   const decodeCtx = new AudioContext();
   const decoded: AudioBuffer[] = [];
-  for (const seg of script.segments) {
+  for (let i = 0; i < script.segments.length; i++) {
+    const seg = script.segments[i];
     const bytes = dataUrlToBytes(seg.audioDataUrl);
     const ab = bytes.buffer.slice(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength,
     ) as ArrayBuffer;
-    decoded.push(await decodeCtx.decodeAudioData(ab));
+    try {
+      decoded.push(await decodeCtx.decodeAudioData(ab));
+    } catch (err) {
+      const info = classifyError(err);
+      const failure: FrameFailure = {
+        frame: segmentStartFrames[i] ?? 0,
+        segmentKey: seg.key,
+        cause: "audio-decode",
+        message: info.message,
+        attempts: 1,
+      };
+      onDebug?.(failure);
+      console.warn("[render-reel] audio decode failed", failure);
+      throw err;
+    }
   }
+  await decodeCtx.close();
+
   await decodeCtx.close();
 
   const offline = new OfflineAudioContext(
@@ -158,10 +229,19 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
       imgs.map((img) => {
         if (img.complete && img.naturalWidth > 0) return Promise.resolve();
         return new Promise<void>((resolve) => {
-          const done = () => resolve();
-          img.addEventListener("load", done, { once: true });
-          img.addEventListener("error", done, { once: true });
-          setTimeout(done, 1500);
+          const done = (kind: "load" | "error" | "timeout") => {
+            if (kind !== "load") {
+              const src = (img.getAttribute("src") ?? "").slice(0, 200);
+              const reason =
+                kind === "error" ? "img error event" : "load timeout (1500ms)";
+              onDebug?.({ type: "image", src, reason });
+              console.warn("[render-reel] image broken", { src, reason });
+            }
+            resolve();
+          };
+          img.addEventListener("load", () => done("load"), { once: true });
+          img.addEventListener("error", () => done("error"), { once: true });
+          setTimeout(() => done("timeout"), 1500);
         });
       }),
     );
@@ -175,6 +255,7 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
   await nextFrame();
   await waitForImages();
   await new Promise((r) => setTimeout(r, 250));
+
 
 
   const captureOpts = {
@@ -192,15 +273,30 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
     player.seekTo(f);
     await nextFrame();
     let canvas: HTMLCanvasElement | null = null;
+    let lastErr: unknown = null;
+    let attempts = 0;
     for (let attempt = 0; attempt < 3; attempt++) {
+      attempts = attempt + 1;
       try {
         canvas = await toCanvas(captureEl, captureOpts);
         break;
-      } catch {
+      } catch (err) {
+        lastErr = err;
         await new Promise((r) => setTimeout(r, 120));
       }
     }
     if (!canvas) {
+      const info = classifyError(lastErr);
+      const failure: FrameFailure = {
+        frame: f,
+        segmentKey: segmentKeyFor(f),
+        cause: info.cause,
+        message: info.message,
+        attempts,
+        url: info.url,
+      };
+      onDebug?.(failure);
+      console.warn("[render-reel] frame capture failed", failure);
       // Last-ditch blank frame to keep the timeline aligned.
       canvas = document.createElement("canvas");
       canvas.width = width;
@@ -211,6 +307,7 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
         ctx.fillRect(0, 0, width, height);
       }
     }
+
     const blob: Blob = await new Promise((res, rej) =>
       canvas!.toBlob(
         (b) => (b ? res(b) : rej(new Error("toBlob failed"))),
