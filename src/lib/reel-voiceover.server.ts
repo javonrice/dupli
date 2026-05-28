@@ -73,14 +73,7 @@ Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...",
     choices?: Array<{ message?: { content?: string } }>;
   };
   const raw = json.choices?.[0]?.message?.content ?? "";
-  let parsed: Record<string, string>;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) throw new Error("Script JSON parse failed");
-    parsed = JSON.parse(m[0]);
-  }
+
   const need: ReelSegmentKey[] = [
     "hook",
     "reveal_1",
@@ -89,13 +82,52 @@ Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...",
     "reveal_4",
     "cta",
   ];
-  for (const k of need) {
-    if (!parsed[k] || typeof parsed[k] !== "string") {
-      throw new Error(`Script missing key: ${k}`);
+
+  const tryParse = (s: string): Record<string, string> | null => {
+    try {
+      const v = JSON.parse(s);
+      return v && typeof v === "object" ? (v as Record<string, string>) : null;
+    } catch {
+      return null;
     }
+  };
+
+  // Strip code fences, then try direct parse, then largest-brace match.
+  const cleaned = raw
+    .replace(/^\s*```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+  let parsed = tryParse(cleaned);
+  if (!parsed) {
+    const m = cleaned.match(/\{[\s\S]*\}/);
+    if (m) parsed = tryParse(m[0]);
   }
+
+  const valid =
+    parsed && need.every((k) => typeof parsed![k] === "string" && parsed![k].length > 0);
+
+  if (!valid) {
+    // Deterministic fallback so reel generation never crashes on bad AI output.
+    parsed = buildFallbackScript(pairs);
+  }
+
   return parsed as Record<ReelSegmentKey, string>;
 }
+
+function buildFallbackScript(pairs: DupePair[]): Record<ReelSegmentKey, string> {
+  const total = pairs.reduce((a, p) => a + p.savingsUsd, 0).toFixed(0);
+  const reveal = (p: DupePair) =>
+    `${p.dupe.brand} dupes ${p.original.brand} ${p.original.name} for $${p.dupe.priceUsd.toFixed(0)} — basically the same formula for $${p.savingsUsd.toFixed(0)} less.`;
+  return {
+    hook: "Stop overpaying — I found 4 dupes for viral beauty buys.",
+    reveal_1: reveal(pairs[0]),
+    reveal_2: reveal(pairs[1]),
+    reveal_3: reveal(pairs[2]),
+    reveal_4: reveal(pairs[3]),
+    cta: `Download Dupli, scan anything, save about $${total} total.`,
+  };
+}
+
 
 // Jessica — young, expressive, very TikTok-friendly read.
 const VOICE_ID = "cgSgspJ2msm6clMCkdW9";
