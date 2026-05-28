@@ -573,55 +573,52 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
               fontWeight: 900,
               fontSize: 220,
               letterSpacing: "-0.05em",
-              color: "#0d0d0d",
-              lineHeight: 0.95,
-            }}
-          >
-            ${animatedSavings}
-          </div>
-        </div>
+  return (
+    <AbsoluteFill style={{ background: "#0d0d0d" }}>
+      <TransitionSeries>
+        {placed.flatMap((p, idx) => {
+          const nodes = [
+            <TransitionSeries.Sequence
+              key={`s-${p.key}`}
+              durationInFrames={p.dur}
+            >
+              {p.render(p.seg.text)}
+            </TransitionSeries.Sequence>,
+          ];
+          if (idx < placed.length - 1) {
+            nodes.push(
+              <TransitionSeries.Transition
+                key={`t-${p.key}`}
+                presentation={slide()}
+                timing={springTiming({
+                  config: { damping: 200 },
+                  durationInFrames: 12,
+                })}
+              />,
+            );
+          }
+          return nodes;
+        })}
+      </TransitionSeries>
 
-        <div style={{ marginTop: 40, maxWidth: 900, alignSelf: "center" }}>
-          <KineticWords
-            text={text}
-            startFrame={36}
-            fontSize={56}
-            color="#0d0d0d"
-            weight={700}
-          />
-        </div>
-      </div>
+      {/* Audio layer — absolute positions, accounting for transition overlap */}
+      {placed.map((p, idx) => {
+        // Transitions overlap by 12 frames; shift audio start back by 12*idx
+        const audioFrom = Math.max(0, p.from - idx * 12);
+        return (
+          <Sequence
+            key={`a-${p.key}`}
+            from={audioFrom}
+            durationInFrames={p.dur}
+          >
+            <Audio src={p.seg.audioDataUrl} />
+          </Sequence>
+        );
+      })}
     </AbsoluteFill>
   );
 }
 
-function ProductCard({
-  label,
-  brand,
-  imageUrl,
-  price,
-  tint,
-  bg,
-  opacity,
-  translateX,
-  dimmed,
-}: {
-  label: string;
-  brand: string;
-  imageUrl: string;
-  price: number;
-  tint: string;
-  bg: string;
-  opacity: number;
-  translateX: number;
-  dimmed?: boolean;
-}) {
-  const textColor = bg === "#0d0d0d" ? "#f5f3ee" : "#0d0d0d";
-  return (
-    <div
-      style={{
-        flex: 1,
-        background: bg,
         borderRadius: 36,
         padding: 28,
         opacity,
