@@ -3,11 +3,12 @@ import { useRef, useState } from "react";
 import { Loader2, RefreshCw, Video, AlertCircle, Download } from "lucide-react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
-import { pickRandomDupePair, type DupePair } from "@/lib/dashboard.functions";
+import { pickRandomDupePairs, type DupePair } from "@/lib/dashboard.functions";
 import {
   generateReelScript,
   type ReelScript,
 } from "@/lib/reel-voiceover.functions";
+
 import {
   DupeReel,
   FPS,
