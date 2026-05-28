@@ -281,7 +281,7 @@ export const getRecentScans = createServerFn({ method: "GET" })
       console.warn("getRecentScans failed", error);
       return { scans: [] };
     }
-    return { scans: (rows ?? []) as ScanRow[] };
+    return { scans: (rows ?? []) as unknown as ScanRow[] };
   });
 
 /** Look up a single community dupe pair by original brand+product slugs.
