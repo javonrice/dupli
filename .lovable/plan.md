@@ -1,40 +1,63 @@
-# Switch from fal.ai to HeyGen talking-avatar UGC
+# Remotion UGC reel with timed voiceover
 
-## What we're doing
-Delete the entire broken fal.ai scan-clip flow and replace it with a HeyGen-based talking-avatar UGC generator. User picks/triggers a scan → we generate a short script with Lovable AI → HeyGen renders a vertical talking-avatar video reviewing the dupe → we save the MP4 URL and play it inline.
+## Goal
+Kill HeyGen and ship a Remotion-driven 9:16 dupe-reveal video where every scene is timed to a real ElevenLabs voiceover track (no guesswork, no "best effort" timing).
+
+## Runtime reality (important)
+Remotion's CLI renderer needs Node + Chromium and cannot run in our Cloudflare Worker backend. So:
+- **Source of truth**: Remotion composition (`@remotion/player`, `@remotion/transitions`) — real React scenes, frame-based animation.
+- **Preview**: `<Player>` inline in the dashboard, instantly scrubbable.
+- **Export to MP4**: in-browser capture of the `<Player>` canvas via `MediaRecorder` + the audio track, muxed to a single `.webm`/`.mp4` blob the user can download. No server render farm, no extra infra.
+
+This is the standard "Remotion in the browser" pattern when you can't host a renderer. We keep the door open to later move export to a Remotion Lambda / Cloud Run worker without changing the composition.
 
 ## What gets deleted
-- `src/lib/dashboard-video.functions.ts` (fal.ai submit/poll/stills logic)
-- `src/components/dashboard/video-generator.tsx` (current UI tied to fal flow)
-- Image-caching-for-video helpers added to `src/lib/product-images.server.ts` (`uploadProductImageDataUrl`, `assertStoredImageUrl`) — keep only what other features still need
-- All references in `src/routes/dashboard.tsx`
+- `src/lib/ugc-video.functions.ts` (HeyGen submit/poll/script)
+- HeyGen UI bits inside `src/components/dashboard/ugc-generator.tsx`
+- The `HEYGEN_API_KEY` / `HEYGEN_TEMPLATE_ID` secrets become unused (we'll tell the user they can delete them)
 
 ## What gets added
-1. **Secret**: `HEYGEN_API_KEY` (user grabs from HeyGen → Settings → API → Subscriptions tab)
-2. **DB migration**: add `ugc_video_url`, `ugc_video_status` ('idle'|'pending'|'ready'|'failed'), `ugc_video_id`, `ugc_video_error` columns to `scans` table
-3. **Server functions** in `src/lib/ugc-video.functions.ts`:
-   - `generateUgcScript(scanId)` — uses Lovable AI (`google/gemini-3-flash-preview`) to write a 2-sentence "honest UGC review" script comparing the original vs the dupe
-   - `submitHeyGenVideo(scanId)` — calls `POST https://api.heygen.com/v2/video/generate` with a default stock avatar + voice, the generated script, vertical 720×1280, saves the returned `video_id` and sets status='pending'
-   - `pollHeyGenVideo(scanId)` — calls `GET https://api.heygen.com/v1/video_status.get?video_id=...`, on `completed` saves `video_url` and status='ready'; on `failed` saves the real error message (no more hiding behind IN_PROGRESS)
-4. **UI** in `src/components/dashboard/ugc-generator.tsx`:
-   - Button: "Generate UGC review"
-   - While pending: spinner + live elapsed-time counter ("0:42 / ~2:00") + the actual HeyGen status, polling every 5s
-   - On ready: inline `<video controls>` playing the MP4
-   - On failed: show the real error message + retry button
 
-## Avatar/voice defaults
-We'll hard-code a single HeyGen stock avatar + voice ID to start (cheapest path, no per-user picker). Easy to expose a picker later.
+### 1. Voiceover server function — `src/lib/reel-voiceover.functions.ts`
+- Input: a `DupePair`.
+- Calls Lovable AI to write a **4-segment script** (hook / scan / compare / CTA), one short line each (~6–10 words), tuned for TikTok pacing.
+- For each segment, calls ElevenLabs TTS (`eleven_turbo_v2_5`, voice `EXAVITQu4vr4xnSDxMaL` Sarah by default) — returns base64 MP3.
+- Probes each MP3 duration in-browser (decode via `AudioContext.decodeAudioData`) — server returns base64 + a server-side duration estimate using the MP3 frame header as a fallback.
+- Returns `{ segments: [{ text, audioBase64, durationSec }] }`.
+- Secret needed: `ELEVENLABS_API_KEY` (request via `add_secret` before coding).
 
-## Cost
-~$0.30–0.50 per ~30s video on HeyGen's API plan. User needs an active HeyGen API subscription ($99/mo entry tier as of late 2024) — confirm they have one before we wire the key.
+### 2. Remotion composition — `src/remotion/DupeReel.tsx` + scenes
+- 1080×1920, 30fps.
+- 4 scenes inside a `<TransitionSeries>`, each `durationInFrames = round(segment.durationSec * 30) + 6` (small tail so audio doesn't clip).
+- Per-scene `<Audio src={dataUrl}>` aligned to scene start — voiceover is *part of the composition*, so timing is exact by construction.
+- Scenes:
+  1. **Hook** — original product photo zooms in on coral gradient bg, kinetic type ("Still paying $X for this?") springs in word-by-word.
+  2. **Scan** — phone-frame mockup with scanning bracket SVG sweeping over the original product, subtle parallax.
+  3. **Compare** — split screen: original (left, dimmed) vs dupe (right, highlighted), animated `$X → $Y` price counter, big `XX% MATCH` badge spring.
+  4. **CTA** — dupli wordmark scales in, "Find your dupe" headline, App Store badge slide-up.
+- Shared motion system: spring `{ damping: 18, stiffness: 180 }`, `clockWipe` between scenes, Inter Display + Inter from `@remotion/google-fonts`.
+- Brand palette pulled from existing `src/styles.css` (coral primary, off-white, deep ink).
+
+### 3. UI — rewrite `src/components/dashboard/ugc-generator.tsx`
+- Button → pick pair → generate script + voiceovers (server) → mount `<Player>` with inputProps `{ pair, segments }`.
+- Live in-browser preview (`<Player controls loop>`), 9:16 aspect, fits dashboard card.
+- "Download MP4" button → uses a small `src/lib/record-player.ts` helper that:
+  - Drives the `<Player>` ref frame-by-frame at 30fps via `playerRef.current.play()` while capturing the underlying `<canvas>` with `MediaRecorder` + a `MediaStreamAudioDestinationNode` mixing the four audio elements.
+  - Outputs a `video/webm;codecs=vp9,opus` blob (broadly supported; we label the download `.webm` and note MP4 conversion is one click in any tool — or we transcode with the existing `ffmpeg.wasm` in `src/lib/ffmpeg-compose.ts` to true `.mp4`).
+- Loading states: "Writing script…", "Recording voiceover…", "Rendering preview…".
+
+### 4. Deps to add
+- `remotion`, `@remotion/player`, `@remotion/transitions`, `@remotion/google-fonts`
+- (Already present: `@ffmpeg/ffmpeg`, `@ffmpeg/util` — reused for optional webm→mp4 transcode.)
 
 ## Order of execution
-1. Confirm plan + user confirms they have a HeyGen API subscription
-2. DB migration for the new `scans` columns
-3. Request `HEYGEN_API_KEY` secret
-4. Write server functions + new UI component
-5. Delete old fal.ai files + clean up `dashboard.tsx`
-6. Test end-to-end with one scan
+1. Request `ELEVENLABS_API_KEY` secret (block until set).
+2. Install Remotion player deps.
+3. Build voiceover server function + script prompt.
+4. Build Remotion composition + 4 scenes.
+5. Rewrite `ugc-generator.tsx` around `<Player>` + record helper.
+6. Delete `src/lib/ugc-video.functions.ts` and HeyGen references.
+7. Manual smoke test from the dashboard.
 
-## Open question for you
-HeyGen API requires a **paid** API subscription (not the free web tier). Do you already have one active? If not, that's the blocker before we touch code.
+## Open question
+Voice: default to Sarah (`EXAVITQu4vr4xnSDxMaL`) or do you want a male voice (e.g. Liam) / pick a specific one from ElevenLabs? I'll default to Sarah if you don't specify.
