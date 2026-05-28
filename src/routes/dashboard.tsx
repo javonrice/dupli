@@ -11,7 +11,6 @@ import {
 import type { DupePair, SlideResult } from "@/lib/dupe-types";
 
 import { UgcGenerator } from "@/components/dashboard/ugc-generator";
-import { BatchGenerator } from "@/components/dashboard/batch-generator";
 import { MyVideos } from "@/components/dashboard/my-videos";
 
 
@@ -244,7 +243,7 @@ function DashboardPage() {
         </div>
 
         <div className="mt-12 space-y-8">
-          <BatchGenerator />
+
           <UgcGenerator />
           <MyVideos />
         </div>
