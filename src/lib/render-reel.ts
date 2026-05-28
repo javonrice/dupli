@@ -84,6 +84,27 @@ export type RenderProgress = {
   pct: number;
 };
 
+export type FrameFailureCause =
+  | "image-decode"
+  | "network"
+  | "font"
+  | "audio-decode"
+  | "unknown";
+
+export type FrameFailure = {
+  frame: number;
+  segmentKey: string;
+  cause: FrameFailureCause;
+  message: string;
+  attempts: number;
+  url?: string;
+};
+
+export type RenderDebug = {
+  failures: FrameFailure[];
+  brokenImages: { src: string; reason: string }[];
+};
+
 export type RenderOpts = {
   playerRef: RefObject<PlayerRef | null>;
   captureEl: HTMLElement;
@@ -94,7 +115,30 @@ export type RenderOpts = {
   height: number;
   segmentStartFrames: number[];
   onProgress?: (p: RenderProgress) => void;
+  onDebug?: (entry: FrameFailure | { type: "image"; src: string; reason: string }) => void;
 };
+
+function classifyError(err: unknown): { cause: FrameFailureCause; message: string; url?: string } {
+  const msg = err instanceof Error ? err.message : String(err);
+  const name = err instanceof Error ? err.name : "";
+  const urlMatch = msg.match(/https?:\/\/[^\s"')]+/);
+  const url = urlMatch?.[0];
+
+  if (name === "EncodingError" || /decode/i.test(msg) || /source image/i.test(msg)) {
+    return { cause: "image-decode", message: msg, url };
+  }
+  if (/font|woff|otf|ttf|@font-face/i.test(msg)) {
+    return { cause: "font", message: msg, url };
+  }
+  if (
+    /failed to fetch|networkerror|load failed|err_/i.test(msg) ||
+    name === "TypeError"
+  ) {
+    return { cause: "network", message: msg, url };
+  }
+  return { cause: "unknown", message: msg, url };
+}
+
 
 export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
   const {
