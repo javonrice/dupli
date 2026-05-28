@@ -148,7 +148,14 @@ export const generateScanClip = createServerFn({ method: "POST" })
     // Download the image ourselves and pass it as a data URI.
     let imageForFal = data.imageUrl;
     try {
-      const imgRes = await fetch(data.imageUrl);
+      const imgRes = await fetch(data.imageUrl, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+          Referer: "https://www.skinsort.com/",
+        },
+      });
       if (!imgRes.ok) throw new Error(`image fetch ${imgRes.status}`);
       const buf = await imgRes.arrayBuffer();
       const contentType = imgRes.headers.get("content-type") ?? "image/jpeg";
