@@ -529,8 +529,156 @@ function ProductCard({
   );
 }
 
-function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
+function ScanIntroOverlay({ pair, intro }: { pair: DupePair; intro: number }) {
   const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Phone pops in, scan sweeps top→bottom, then everything fades out.
+  const phoneSpring = spring({ frame, fps, config: { damping: 18, stiffness: 160 } });
+  const phoneScale = interpolate(phoneSpring, [0, 1], [0.7, 1]);
+
+  const scanProgress = interpolate(frame, [4, intro - 6], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const scanY = interpolate(scanProgress, [0, 1], [0, 520]);
+
+  // Fade out the whole viewfinder in the last 6 frames of the intro.
+  const fade = interpolate(frame, [intro - 6, intro], [1, 0], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+
+  // "MATCH FOUND" flash at the end of the scan.
+  const flashSpring = spring({
+    frame: frame - (intro - 10),
+    fps,
+    config: { damping: 10, stiffness: 220 },
+  });
+
+  return (
+    <AbsoluteFill
+      style={{
+        background: "linear-gradient(180deg, rgba(13,13,13,0.92) 0%, rgba(26,26,46,0.92) 100%)",
+        opacity: fade,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: 620,
+          height: 760,
+          background: "#0d0d0d",
+          borderRadius: 60,
+          padding: 16,
+          border: "3px solid #2a2a3a",
+          boxShadow: "0 40px 80px rgba(0,0,0,0.6)",
+          transform: `scale(${phoneScale})`,
+        }}
+      >
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            borderRadius: 48,
+            background: "#1a1a2e",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          <Img
+            src={pair.original.imageUrl}
+            style={{
+              width: "100%",
+              height: "100%",
+              objectFit: "contain",
+              padding: 36,
+            }}
+          />
+          <Brackets />
+          <div
+            style={{
+              position: "absolute",
+              left: 32,
+              right: 32,
+              top: 70 + scanY,
+              height: 4,
+              background: "linear-gradient(90deg, transparent, #4ade80, transparent)",
+              boxShadow: "0 0 30px #4ade80, 0 0 60px #4ade80",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              left: 32,
+              right: 32,
+              top: 70,
+              height: scanY,
+              background: "linear-gradient(180deg, transparent, rgba(74,222,128,0.18))",
+            }}
+          />
+          <div
+            style={{
+              position: "absolute",
+              bottom: 26,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(13,13,13,0.85)",
+              color: scanProgress < 1 ? "#4ade80" : "#ffffff",
+              padding: "12px 26px",
+              borderRadius: 999,
+              fontFamily: BODY,
+              fontWeight: 700,
+              fontSize: 24,
+              letterSpacing: "0.08em",
+              border: scanProgress >= 1 ? "2px solid #4ade80" : "none",
+            }}
+          >
+            {scanProgress < 1 ? "SCANNING…" : "MATCH FOUND"}
+          </div>
+        </div>
+      </div>
+
+      {/* MATCH FOUND burst */}
+      {scanProgress >= 1 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: `translate(-50%, -50%) scale(${flashSpring})`,
+            background: "#ff3b30",
+            color: "white",
+            padding: "20px 44px",
+            borderRadius: 999,
+            fontFamily: DISPLAY,
+            fontWeight: 900,
+            fontSize: 48,
+            letterSpacing: "-0.02em",
+            boxShadow: "0 20px 50px rgba(255,59,48,0.5)",
+          }}
+        >
+          {pair.matchPct}% MATCH
+        </div>
+      )}
+    </AbsoluteFill>
+  );
+}
+
+function CompareScene({
+  pair,
+  text,
+  intro = 0,
+}: {
+  pair: DupePair;
+  text: string;
+  intro?: number;
+}) {
+  const rawFrame = useCurrentFrame();
+  // Shift all compare animations until AFTER the scan intro finishes.
+  const frame = rawFrame - intro;
   const { fps } = useVideoConfig();
 
   const leftSpring = spring({ frame, fps, config: { damping: 16, stiffness: 140 } });
@@ -681,9 +829,18 @@ function CompareScene({ pair, text }: { pair: DupePair; text: string }) {
           />
         </div>
       </div>
+
+      {/* Scan-in intro plays on top of (and hides) the compare layout for the
+          first SCAN_INTRO_FRAMES of the scene. Mirrors the in-app scanner. */}
+      {intro > 0 && rawFrame < intro && (
+        <Sequence from={0} durationInFrames={intro}>
+          <ScanIntroOverlay pair={pair} intro={intro} />
+        </Sequence>
+      )}
     </AbsoluteFill>
   );
 }
+
 
 function CtaScene({ text }: { text: string }) {
   const frame = useCurrentFrame();
