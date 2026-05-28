@@ -151,9 +151,21 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
     height,
     segmentStartFrames,
     onProgress,
+    onDebug,
   } = opts;
   const sampleRate = 44100;
   const totalSec = totalFrames / fps;
+
+  // Frame index → segment key map for nicer debug output.
+  const segmentKeys = script.segments.map((s) => s.key);
+  const segmentKeyFor = (frame: number): string => {
+    let key = segmentKeys[0] ?? "?";
+    for (let i = 0; i < segmentStartFrames.length; i++) {
+      if (frame >= segmentStartFrames[i]) key = segmentKeys[i] ?? key;
+    }
+    return key;
+  };
+
 
   // 1. Decode + mix audio offline ------------------------------------------
   onProgress?.({ stage: "audio", pct: 0 });
