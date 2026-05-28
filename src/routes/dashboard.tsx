@@ -10,7 +10,7 @@ import {
   type DupePair,
   type SlideResult,
 } from "@/lib/dashboard.functions";
-import { VideoGenerator } from "@/components/dashboard/video-generator";
+import { UgcGenerator } from "@/components/dashboard/ugc-generator";
 
 
 export const Route = createFileRoute("/dashboard")({
@@ -242,7 +242,7 @@ function DashboardPage() {
         </div>
 
         <div className="mt-12">
-          <VideoGenerator />
+          <UgcGenerator />
         </div>
       </div>
     </div>
