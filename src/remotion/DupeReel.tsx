@@ -35,12 +35,21 @@ export const HEIGHT = 1920;
 // steps on the previous one, and scenes have time to breathe.
 const TAIL_FRAMES = 30; // 1.0s breathing room at the end of each segment
 export const TRANSITION_FRAMES = 14;
-// Scan-in intro at the head of each reveal scene (phone viewfinder sweep).
+// Scan-in intro shown at the head of each reveal scene before the voiceover.
 export const SCAN_INTRO_FRAMES = 28; // ~0.93s
 
 export function segmentToFrames(durationSec: number): number {
-  return Math.max(90, Math.round(durationSec * FPS) + TAIL_FRAMES + SCAN_INTRO_FRAMES);
+  return Math.max(75, Math.round(durationSec * FPS) + TAIL_FRAMES);
 }
+
+function isRevealKey(key: ReelSegmentKey): boolean {
+  return key === "reveal_1" || key === "reveal_2" || key === "reveal_3" || key === "reveal_4";
+}
+
+function sceneFrames(key: ReelSegmentKey, durationSec: number): number {
+  return segmentToFrames(durationSec) + (isRevealKey(key) ? SCAN_INTRO_FRAMES : 0);
+}
+
 
 
 
