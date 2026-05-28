@@ -108,9 +108,7 @@ const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
     }
   }
 
-      setProgress(null);
-    }
-  }
+
 
 
   return (
