@@ -134,11 +134,12 @@ export function UgcGenerator() {
           </p>
           <h2 className="font-display text-2xl font-bold tracking-tight">
             Dupe Reel (Remotion + ElevenLabs)
-          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Picks a dupe pair, writes a 4-beat script, voices each line with
-            ElevenLabs, and renders a vertical reel where every scene is timed
-            to its voiceover. Download as MP4 — rendered in your browser.
+            Picks 4 random dupe pairs, writes a hook + 4 reveals + CTA,
+            voices each line with ElevenLabs, and renders a vertical reel
+            timed to the voiceover. Download as MP4 — rendered in your browser.
+          </p>
+
           </p>
         </div>
         <Button onClick={run} disabled={loading || exporting} size="lg">
