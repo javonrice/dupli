@@ -110,7 +110,13 @@ Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...",
   if (!parsed) {
     const m = cleaned.match(/\{[\s\S]*\}/);
     if (m) parsed = tryParse(m[0]);
+
+  const valid =
+    parsed && need.every((k) => typeof parsed![k] === "string" && parsed![k].length > 0);
+  if (!valid) {
+    parsed = buildFallbackScript(pairs);
   }
+
   // Strip TTS-unfriendly punctuation (em/en dashes, semicolons, mid-sentence colons)
   // that make ElevenLabs sound robotic.
   const sanitize = (s: string) =>
@@ -142,15 +148,6 @@ function buildFallbackScript(pairs: DupePair[]): Record<ReelSegmentKey, string> 
   };
 }
 
-  return {
-    hook: "Stop overpaying — I found 4 dupes for viral beauty buys.",
-    reveal_1: reveal(pairs[0]),
-    reveal_2: reveal(pairs[1]),
-    reveal_3: reveal(pairs[2]),
-    reveal_4: reveal(pairs[3]),
-    cta: `Download Dupli, scan anything, save about $${total} total.`,
-  };
-}
 
 
 // Jessica — young, expressive, very TikTok-friendly read.
