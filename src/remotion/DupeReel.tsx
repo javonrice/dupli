@@ -924,31 +924,29 @@ export type DupeReelProps = {
 
 export function DupeReel({ script }: DupeReelProps) {
   const [p0, p1, p2, p3] = script.pairs;
+  const INTRO = SCAN_INTRO_FRAMES;
   const sceneOrder: Array<{
     key: ReelSegmentKey;
-
     render: (text: string) => React.ReactNode;
   }> = [
     { key: "hook", render: (t) => <HookScene pair={p0} text={t} /> },
-    { key: "reveal_1", render: (t) => <CompareScene pair={p0} text={t} /> },
-    { key: "reveal_2", render: (t) => <CompareScene pair={p1} text={t} /> },
-    { key: "reveal_3", render: (t) => <CompareScene pair={p2} text={t} /> },
-    { key: "reveal_4", render: (t) => <CompareScene pair={p3} text={t} /> },
+    { key: "reveal_1", render: (t) => <CompareScene pair={p0} text={t} intro={INTRO} /> },
+    { key: "reveal_2", render: (t) => <CompareScene pair={p1} text={t} intro={INTRO} /> },
+    { key: "reveal_3", render: (t) => <CompareScene pair={p2} text={t} intro={INTRO} /> },
+    { key: "reveal_4", render: (t) => <CompareScene pair={p3} text={t} intro={INTRO} /> },
     { key: "cta", render: (t) => <CtaScene text={t} /> },
   ];
 
-
   // Build sequence durations + absolute audio start positions accounting for
-  // transition overlap inside TransitionSeries (each transition overlaps the
-  // surrounding sequences by TRANSITION_FRAMES).
+  // transition overlap (each transition overlaps surrounding sequences by
+  // TRANSITION_FRAMES) and the scan intro that delays reveal voiceovers.
   let audioCursor = 0;
   const placed = sceneOrder.map(({ key, render }, idx) => {
     const seg = script.segments.find((s) => s.key === key);
     if (!seg) throw new Error(`Missing segment ${key}`);
-    const dur = segmentToFrames(seg.durationSec);
-    const audioFrom = audioCursor;
-    // Next scene starts (dur - TRANSITION_FRAMES) later, since the transition
-    // overlaps the tail of this scene and the head of the next.
+    const dur = sceneFrames(key, seg.durationSec);
+    const introOffset = isRevealKey(key) ? INTRO : 0;
+    const audioFrom = audioCursor + introOffset;
     audioCursor += dur - (idx === sceneOrder.length - 1 ? 0 : TRANSITION_FRAMES);
     return { key, render, seg, dur, audioFrom };
   });
@@ -993,3 +991,4 @@ export function DupeReel({ script }: DupeReelProps) {
     </AbsoluteFill>
   );
 }
+
