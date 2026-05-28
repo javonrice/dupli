@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHost } from "@tanstack/react-start/server";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { ensureCachedProductImage } from "@/lib/product-images.server";
 
 export type DupePair = {
   pairId: string;
