@@ -2,6 +2,13 @@ import { createServerFn } from "@tanstack/react-start";
 import { getRequestHost } from "@tanstack/react-start/server";
 import type { DupePair } from "@/lib/dashboard.functions";
 
+function assertStoredImageUrl(imageUrl: string, label: string) {
+  const isStored = imageUrl.includes("/storage/v1/object/public/product-images/");
+  if (!isStored) {
+    throw new Error(`${label} image is not copied into our storage yet. Try another pair or recache the product image.`);
+  }
+}
+
 // ---------- Script ----------
 
 export type VideoScript = {
@@ -148,6 +155,7 @@ export const submitScanClip = createServerFn({ method: "POST" })
   .handler(async ({ data }): Promise<SubmitScanClipResult> => {
     const falKey = process.env.FAL_KEY;
     if (!falKey) throw new Error("FAL_KEY not configured");
+    assertStoredImageUrl(data.imageUrl, "Original product");
 
     const prompt = `A hand holding a smartphone scanning the ${data.brand} ${data.productName} product. The phone camera viewfinder shows the product with a glowing scanner bracket overlay sweeping across it. Cinematic beauty-aisle lighting, smooth camera motion, photorealistic, vertical 9:16.`;
 
@@ -308,6 +316,8 @@ async function generateOneStill(
 export const generateVideoStills = createServerFn({ method: "POST" })
   .inputValidator((data: { pair: DupePair }) => data)
   .handler(async ({ data }): Promise<{ stills: StillResult[] }> => {
+    assertStoredImageUrl(data.pair.original.imageUrl, "Original product");
+    assertStoredImageUrl(data.pair.dupe.imageUrl, "Dupe product");
     const host = getRequestHost();
     const wordmarkUrl = `https://${host}/dupli-wordmark.png`;
     const slides: StillSlide[] = ["hook", "results", "cta"];
