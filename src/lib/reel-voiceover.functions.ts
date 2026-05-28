@@ -52,9 +52,9 @@ async function writeScript(
     )
     .join("\n\n");
 
-  const prompt = `Write a 6-line TikTok voiceover script for a dupe-finder app called Dupli. Each line must be SHORT (5–10 words), conversational, no emojis, no hashtags, no quotes.
+  const prompt = `Write a TikTok voiceover script for a dupe-finder app called Dupli. Tone: trendy Gen-Z girl, casual, conversational, slightly hyped — like a beauty TikToker doing a "stop overpaying" video. No emojis, no hashtags, no quotes, no stage directions.
 
-The video shows 4 luxury/viral beauty products and reveals a cheaper dupe for each one.
+The video shows 4 viral/luxury beauty products and reveals a cheaper dupe for each one. For each reveal you must briefly explain WHY it's a dupe — infer from the product names (same active ingredient, same finish, same formula type, same shade range, same packaging, etc.). Sound informed, not generic. Never say "similar product" or "great alternative."
 
 ${pairBlock}
 
@@ -62,16 +62,17 @@ Total savings across all 4: $${totalSavings.toFixed(0)}
 
 Return ONLY a JSON object with keys: hook, reveal_1, reveal_2, reveal_3, reveal_4, cta.
 
-- hook: a SCROLL-STOPPING opener that tees up "4 dupes". Must name a number and make a bold promise. Examples: "I dupe'd 4 viral products you actually buy.", "4 overpriced products. 4 cheaper twins.", "You're overpaying for these 4 — here's the fix."
-- reveal_1: name the dupe brand for Pair 1 and the savings number (e.g. "${pairs[0].dupe.brand} dupes it for $${pairs[0].savingsUsd.toFixed(0)} less.")
-- reveal_2: same shape, for Pair 2 using ${pairs[1].dupe.brand} and $${pairs[1].savingsUsd.toFixed(0)} savings
-- reveal_3: same shape, for Pair 3 using ${pairs[2].dupe.brand} and $${pairs[2].savingsUsd.toFixed(0)} savings
-- reveal_4: same shape, for Pair 4 using ${pairs[3].dupe.brand} and $${pairs[3].savingsUsd.toFixed(0)} savings
-- cta: tell them to download Dupli to scan any product. Mention the total saved (~$${totalSavings.toFixed(0)}).
+- hook: 5–9 words. SCROLL-STOPPING opener that tees up "4 dupes". Name the number, make a bold promise. Examples: "I dupe'd 4 viral products you actually buy.", "4 overpriced beauty buys. 4 cheaper twins.", "Stop overpaying for these 4 — I found dupes."
+- reveal_1: 12–20 words. Shape: "[${pairs[0].dupe.brand}] dupes it for $${pairs[0].savingsUsd.toFixed(0)} less — [one short reason it works]." Reason must reference a concrete shared trait (ingredient, finish, formula, shade, packaging) inferred from "${pairs[0].original.name}" vs "${pairs[0].dupe.name}".
+- reveal_2: same shape for Pair 2 — ${pairs[1].dupe.brand}, $${pairs[1].savingsUsd.toFixed(0)} savings, reason from "${pairs[1].original.name}" vs "${pairs[1].dupe.name}".
+- reveal_3: same shape for Pair 3 — ${pairs[2].dupe.brand}, $${pairs[2].savingsUsd.toFixed(0)} savings, reason from "${pairs[2].original.name}" vs "${pairs[2].dupe.name}".
+- reveal_4: same shape for Pair 4 — ${pairs[3].dupe.brand}, $${pairs[3].savingsUsd.toFixed(0)} savings, reason from "${pairs[3].original.name}" vs "${pairs[3].dupe.name}".
+- cta: 6–10 words. Tell viewers to download Dupli and scan anything. Mention total saved ~$${totalSavings.toFixed(0)}.
 
-Vary the phrasing across the 4 reveals so they don't sound identical.
+Vary the phrasing — don't start every reveal the same way. Mix in casual connectors like "literally", "basically", "same vibe", "same formula", "for real".
 
 Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...","reveal_4":"...","cta":"..."}`;
+
 
   const res = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
     method: "POST",
@@ -116,8 +117,8 @@ Example shape: {"hook":"...","reveal_1":"...","reveal_2":"...","reveal_3":"...",
   }
   return parsed as Record<ReelSegmentKey, string>;
 }
-
-const VOICE_ID = "EXAVITQu4vr4xnSDxMaL"; // Sarah
+// Jessica — young, expressive, very TikTok-friendly read.
+const VOICE_ID = "cgSgspJ2msm6clMCkdW9";
 async function tts(
   text: string,
 ): Promise<{ audioDataUrl: string; durationSec: number }> {
@@ -136,15 +137,17 @@ async function tts(
         text,
         model_id: "eleven_turbo_v2_5",
         voice_settings: {
-          stability: 0.5,
-          similarity_boost: 0.8,
-          style: 0.3,
+          stability: 0.35,
+          similarity_boost: 0.85,
+          style: 0.55,
           use_speaker_boost: true,
-          speed: 0.95,
+          speed: 1.0,
         },
       }),
     },
   );
+
+
 
   if (!res.ok) {
     const t = await res.text().catch(() => "");
