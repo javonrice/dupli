@@ -7,7 +7,6 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import {
   getDupeOfTheDay,
   getTrendingDupes,
@@ -85,6 +84,7 @@ function adaptSavedRow(row: SavedDupeRow): CommunityDupe | null {
 }
 
 async function fetchSavedTrending(limit: number): Promise<CommunityDupe[]> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin.rpc("trending_saved_dupes", {
     p_limit: limit,
     p_min_saves: MIN_SAVES,
