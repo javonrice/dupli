@@ -122,6 +122,9 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
     // original source CDN — which sometimes 403s third-party clients.
     const originalImageUrl = o.cached_image_url;
     const dupeImageUrl = d.cached_image_url;
+    if (!originalImageUrl || !dupeImageUrl) {
+      throw new Error("Selected pair is missing locally stored images");
+    }
 
     return {
       pairId: picked.id,
