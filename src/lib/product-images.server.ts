@@ -44,12 +44,33 @@ export async function ensureCachedProductImage(
     throw new Error(`Product ${productId} has no image_url to cache`);
   }
 
-  const srcRes = await fetch(product.image_url, { headers: BROWSER_HEADERS });
-  if (!srcRes.ok) {
-    throw new Error(
-      `Failed to fetch source image ${product.image_url}: ${srcRes.status}`,
-    );
+  async function tryFetch(url: string) {
+    try {
+      const r = await fetch(url, { headers: BROWSER_HEADERS });
+      if (r.ok) return r;
+      console.warn(`[ensureCachedProductImage] ${r.status} for ${url}`);
+      return null;
+    } catch (e) {
+      console.warn(`[ensureCachedProductImage] fetch threw for ${url}`, e);
+      return null;
+    }
   }
+
+  // Some CDNs (e.g. skinsort storage) 403 our server IP regardless of headers.
+  // Fall back to the wsrv.nl image proxy, which fetches from a different edge.
+  const proxied = `https://wsrv.nl/?url=${encodeURIComponent(product.image_url)}&n=-1`;
+  const srcRes =
+    (await tryFetch(product.image_url)) ?? (await tryFetch(proxied));
+
+  if (!srcRes) {
+    // Give up gracefully: return the original URL so callers don't crash.
+    // (fal.ai / other consumers may still fail, but we don't take down the flow.)
+    console.error(
+      `[ensureCachedProductImage] all fetch attempts failed for product ${productId}, returning original URL`,
+    );
+    return product.image_url;
+  }
+
   const contentType = srcRes.headers.get("content-type") ?? "image/jpeg";
   const ext = extFromContentType(contentType);
   const buf = await srcRes.arrayBuffer();
