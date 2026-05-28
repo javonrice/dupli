@@ -17,3 +17,7 @@ export type DupePair = {
   };
   savingsUsd: number;
 };
+
+export type SlideResult =
+  | { slide: 1 | 2 | 3 | 4; ok: true; dataUrl: string }
+  | { slide: 1 | 2 | 3 | 4; ok: false; error: string };
