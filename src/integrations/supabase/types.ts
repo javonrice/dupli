@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      dashboard_generations: {
+        Row: {
+          created_at: string
+          dupe_product_id: string
+          id: string
+          original_product_id: string
+        }
+        Insert: {
+          created_at?: string
+          dupe_product_id: string
+          id?: string
+          original_product_id: string
+        }
+        Update: {
+          created_at?: string
+          dupe_product_id?: string
+          id?: string
+          original_product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_generations_dupe_product_id_fkey"
+            columns: ["dupe_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "dashboard_generations_original_product_id_fkey"
+            columns: ["original_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dupes: {
         Row: {
           attribute_match: number | null
