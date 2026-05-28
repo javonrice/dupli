@@ -236,13 +236,13 @@ function DashboardPage() {
                     </button>
                   ) : null}
                 </div>
+              </div>
+            );
+          })}
         </div>
 
         <div className="mt-12">
           <VideoGenerator />
-        </div>
-            );
-          })}
         </div>
       </div>
     </div>
