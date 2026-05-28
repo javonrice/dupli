@@ -33,12 +33,15 @@ export const WIDTH = 1080;
 export const HEIGHT = 1920;
 // Generous padding after the voiceover finishes so the next line never
 // steps on the previous one, and scenes have time to breathe.
-const TAIL_FRAMES = 30; // 1.0s
+const TAIL_FRAMES = 30; // 1.0s breathing room at the end of each segment
 export const TRANSITION_FRAMES = 14;
+// Scan-in intro at the head of each reveal scene (phone viewfinder sweep).
+export const SCAN_INTRO_FRAMES = 28; // ~0.93s
 
 export function segmentToFrames(durationSec: number): number {
-  return Math.max(75, Math.round(durationSec * FPS) + TAIL_FRAMES);
+  return Math.max(90, Math.round(durationSec * FPS) + TAIL_FRAMES + SCAN_INTRO_FRAMES);
 }
+
 
 
 
