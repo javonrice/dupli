@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import type { DupePair, ReelScript, ReelSegmentKey } from "@/lib/dupe-types";
-import { writeScript, tts } from "@/lib/reel-voiceover.server";
 
 export const generateReelScript = createServerFn({ method: "POST" })
   .inputValidator((data: { pairs: DupePair[] }) => {
@@ -10,6 +9,7 @@ export const generateReelScript = createServerFn({ method: "POST" })
     return data;
   })
   .handler(async ({ data }): Promise<ReelScript> => {
+    const { writeScript, tts } = await import("@/lib/reel-voiceover.server");
     const lines = await writeScript(data.pairs);
     const keys: ReelSegmentKey[] = [
       "hook",
