@@ -418,8 +418,7 @@ async function generateSlide(input: SlideInput): Promise<string> {
   return `data:image/png;base64,${b64}`;
 }
 
-export type SlideResult =
-  | { slide: 1 | 2 | 3 | 4; ok: true; dataUrl: string }
+
   | { slide: 1 | 2 | 3 | 4; ok: false; error: string };
 
 export const generateCarouselSlides = createServerFn({ method: "POST" })
