@@ -5,7 +5,6 @@
 
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { ScanRow } from "@/server/scans.functions";
 
@@ -119,6 +118,7 @@ function mapRow(row: DupeJoinRow): CommunityDupe | null {
  */
 export const getDupeOfTheDay = createServerFn({ method: "GET" }).handler(
   async (): Promise<{ dupe: CommunityDupe | null }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // Window the candidates to keep things performant + high quality.
     const { data, error } = await supabaseAdmin
       .from("dupes")
@@ -153,6 +153,7 @@ export const getDupeOfTheDay = createServerFn({ method: "GET" }).handler(
 export const getTrendingDupes = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ limit: z.number().min(1).max(50).optional() }).parse(data))
   .handler(async ({ data }): Promise<{ dupes: CommunityDupe[] }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const limit = data.limit ?? 12;
     // Pull a wider window so we can de-dupe by original product (avoid showing
     // 6 dupes for the same Drunk Elephant cream).
@@ -204,6 +205,7 @@ export type TrendingOriginal = {
 export const getTrendingOriginals = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ limit: z.number().min(1).max(50).optional() }).parse(data))
   .handler(async ({ data }): Promise<{ originals: TrendingOriginal[] }> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const limit = data.limit ?? 12;
     const { data: rows, error } = await supabaseAdmin
       .from("dupes")
