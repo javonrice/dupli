@@ -1,50 +1,40 @@
-# Fix "stuck on Generating scan clip…" hang
+# Switch from fal.ai to HeyGen talking-avatar UGC
 
-## Root cause
+## What we're doing
+Delete the entire broken fal.ai scan-clip flow and replace it with a HeyGen-based talking-avatar UGC generator. User picks/triggers a scan → we generate a short script with Lovable AI → HeyGen renders a vertical talking-avatar video reviewing the dupe → we save the MP4 URL and play it inline.
 
-`generateScanClip` in `src/lib/dashboard-video.functions.ts` submits a fal.ai job then sits in a `while` loop polling for up to **180 seconds** inside one server function call.
+## What gets deleted
+- `src/lib/dashboard-video.functions.ts` (fal.ai submit/poll/stills logic)
+- `src/components/dashboard/video-generator.tsx` (current UI tied to fal flow)
+- Image-caching-for-video helpers added to `src/lib/product-images.server.ts` (`uploadProductImageDataUrl`, `assertStoredImageUrl`) — keep only what other features still need
+- All references in `src/routes/dashboard.tsx`
 
-Cloudflare Workers (the runtime our TanStack server fns deploy to) terminate long-running requests. When that happens mid-poll:
-- fal.ai still bills you (the job was already submitted — that's the 10¢)
-- the server fn never returns
-- the browser fetch hangs until *its* timeout fires, which is why the UI sits on "Generating scan clip…" indefinitely
+## What gets added
+1. **Secret**: `HEYGEN_API_KEY` (user grabs from HeyGen → Settings → API → Subscriptions tab)
+2. **DB migration**: add `ugc_video_url`, `ugc_video_status` ('idle'|'pending'|'ready'|'failed'), `ugc_video_id`, `ugc_video_error` columns to `scans` table
+3. **Server functions** in `src/lib/ugc-video.functions.ts`:
+   - `generateUgcScript(scanId)` — uses Lovable AI (`google/gemini-3-flash-preview`) to write a 2-sentence "honest UGC review" script comparing the original vs the dupe
+   - `submitHeyGenVideo(scanId)` — calls `POST https://api.heygen.com/v2/video/generate` with a default stock avatar + voice, the generated script, vertical 720×1280, saves the returned `video_id` and sets status='pending'
+   - `pollHeyGenVideo(scanId)` — calls `GET https://api.heygen.com/v1/video_status.get?video_id=...`, on `completed` saves `video_url` and status='ready'; on `failed` saves the real error message (no more hiding behind IN_PROGRESS)
+4. **UI** in `src/components/dashboard/ugc-generator.tsx`:
+   - Button: "Generate UGC review"
+   - While pending: spinner + live elapsed-time counter ("0:42 / ~2:00") + the actual HeyGen status, polling every 5s
+   - On ready: inline `<video controls>` playing the MP4
+   - On failed: show the real error message + retry button
 
-`generateVoiceover` and `generateVideoStills` finished fine in parallel — only the fal poll is the problem.
+## Avatar/voice defaults
+We'll hard-code a single HeyGen stock avatar + voice ID to start (cheapest path, no per-user picker). Easy to expose a picker later.
 
-## Fix: client-side polling
+## Cost
+~$0.30–0.50 per ~30s video on HeyGen's API plan. User needs an active HeyGen API subscription ($99/mo entry tier as of late 2024) — confirm they have one before we wire the key.
 
-Split the scan-clip step into two small server functions and let the client poll.
+## Order of execution
+1. Confirm plan + user confirms they have a HeyGen API subscription
+2. DB migration for the new `scans` columns
+3. Request `HEYGEN_API_KEY` secret
+4. Write server functions + new UI component
+5. Delete old fal.ai files + clean up `dashboard.tsx`
+6. Test end-to-end with one scan
 
-### 1. `src/lib/dashboard-video.functions.ts`
-
-Replace `generateScanClip` with:
-
-- **`submitScanClip`** — submits the fal.ai job, returns `{ requestId, statusUrl, responseUrl }`. Returns in ~1s.
-- **`pollScanClip`** — takes `{ statusUrl, responseUrl }`, does ONE status check, returns `{ status: 'IN_QUEUE' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED', videoUrl?: string }`. Returns in <1s.
-
-Each call stays well under any Worker timeout.
-
-### 2. `src/components/dashboard/video-generator.tsx`
-
-In `handleGenerate`, replace the single `scan({...})` call inside `Promise.all` with:
-
-1. Call `submitScanClip` to kick off fal.ai (parallel with voiceover + stills, same as today).
-2. After `Promise.all` resolves, run a client-side `while` loop that calls `pollScanClip` every 3s for up to ~3 minutes.
-3. Surface `IN_QUEUE` / `IN_PROGRESS` as the "Generating scan clip…" label (no behavior change for the user, but now it can't silently hang — every 3s we get a real response or a real error).
-4. On `COMPLETED`, continue to `fetchScanClipBytes` → stills → compose, as today.
-5. On `FAILED` or timeout, throw → existing `catch` shows the red error banner.
-
-### 3. Defensive: surface errors better
-
-Today if the catch fires the error banner appears above the phone frame, but the spinner overlay covers it visually if the user has scrolled. Tiny tweak: also `console.error(e)` in the catch so the next time you DM me a screenshot we have something in devtools to look at.
-
-## Out of scope
-
-- Persisting fal.ai jobs in Supabase so they survive page reloads (overkill for a standalone tool you trigger and watch).
-- Backgrounding the whole pipeline (would need a job table + worker).
-
-## Expected outcome
-
-- "Generating scan clip…" never lasts longer than 3s without either advancing or showing a real error.
-- A successful fal.ai job (~30–60s typical) flows through to compose and renders the mp4 just like before.
-- The 10¢ you already spent is sunk — fal.ai charges on submit, not on result delivery.
+## Open question for you
+HeyGen API requires a **paid** API subscription (not the free web tier). Do you already have one active? If not, that's the blocker before we touch code.
