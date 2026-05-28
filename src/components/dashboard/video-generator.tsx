@@ -6,10 +6,13 @@ import { pickRandomDupePair, type DupePair } from "@/lib/dashboard.functions";
 import {
   buildScript,
   generateVoiceover,
-  generateScanClip,
+  submitScanClip,
+  pollScanClip,
   generateVideoStills,
   fetchScanClipBytes,
 } from "@/lib/dashboard-video.functions";
+
+
 
 type Stage =
   | "idle"
@@ -33,7 +36,9 @@ const STAGE_LABEL: Record<Stage, string> = {
 export function VideoGenerator() {
   const pickPair = useServerFn(pickRandomDupePair);
   const voice = useServerFn(generateVoiceover);
-  const scan = useServerFn(generateScanClip);
+  const submitScan = useServerFn(submitScanClip);
+  const pollScan = useServerFn(pollScanClip);
+
   const stills = useServerFn(generateVideoStills);
   const fetchScan = useServerFn(fetchScanClipBytes);
 
@@ -56,14 +61,13 @@ export function VideoGenerator() {
       setPair(newPair);
 
       const script = buildScript(newPair);
-
-      // Parallel: voiceover + scan clip + stills
+      // Parallel: voiceover + scan submit + stills
       setStage("voiceover");
-      const [voiceResult, scanResult, stillsResult] = await Promise.all([
+      const [voiceResult, scanSubmitted, stillsResult] = await Promise.all([
         voice({ data: { script } }),
         (async () => {
           setStage((s) => (s === "voiceover" ? "scan" : s));
-          return scan({
+          return submitScan({
             data: {
               imageUrl: newPair.original.imageUrl,
               productName: newPair.original.name,
@@ -76,11 +80,37 @@ export function VideoGenerator() {
         })(),
       ]);
 
+      // Client-side poll fal.ai (avoids Worker timeout on long jobs)
+      setStage("scan");
+      let scanVideoUrl: string | null = null;
+      const pollDeadline = Date.now() + 180_000;
+      while (Date.now() < pollDeadline) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const status = await pollScan({
+          data: {
+            statusUrl: scanSubmitted.statusUrl,
+            responseUrl: scanSubmitted.responseUrl,
+          },
+        });
+        if (status.status === "COMPLETED") {
+          scanVideoUrl = status.videoUrl;
+          break;
+        }
+        if (status.status === "FAILED") {
+          throw new Error(`Scan clip failed: ${status.error}`);
+        }
+      }
+      if (!scanVideoUrl) throw new Error("Scan clip timed out");
+
       // Fetch fal.ai mp4 bytes via server proxy (avoid CORS)
       setStage("stills");
-      const scanBytes = await fetchScan({ data: { videoUrl: scanResult.videoUrl } });
+      const scanBytes = await fetchScan({ data: { videoUrl: scanVideoUrl } });
 
-      const stillMap = new Map(stillsResult.stills.map((s) => [s.slide, s.imageBase64]));
+      const stillMap = new Map<string, string>(
+        stillsResult.stills.map((s) => [s.slide, s.imageBase64]),
+      );
+
+
       const hookPng = stillMap.get("hook");
       const resultsPng = stillMap.get("results");
       const ctaPng = stillMap.get("cta");
@@ -102,9 +132,11 @@ export function VideoGenerator() {
       setVideoUrl(url);
       setStage("done");
     } catch (e) {
+      console.error("[VideoGenerator] generation failed:", e);
       setError(e instanceof Error ? e.message : "Generation failed");
       setStage("idle");
     }
+
   }
 
   function downloadVideo() {
