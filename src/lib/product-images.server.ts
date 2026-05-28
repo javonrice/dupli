@@ -18,6 +18,42 @@ function extFromContentType(ct: string | null): string {
   return "jpg";
 }
 
+function safePathPart(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "image";
+}
+
+export async function uploadProductImageDataUrl({
+  dataUrl,
+  folder,
+  name,
+}: {
+  dataUrl: string;
+  folder: string;
+  name: string;
+}): Promise<string> {
+  const match = dataUrl.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/);
+  if (!match) throw new Error("Uploaded product image is not a valid image data URL");
+
+  const contentType = match[1];
+  const ext = extFromContentType(contentType);
+  const path = `${safePathPart(folder)}/${safePathPart(name)}.${ext}`;
+  const bytes = Buffer.from(match[2], "base64");
+
+  const { error } = await supabaseAdmin.storage.from(BUCKET).upload(path, bytes, {
+    contentType,
+    upsert: true,
+    cacheControl: "31536000",
+  });
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+
+  const { data: pub } = supabaseAdmin.storage.from(BUCKET).getPublicUrl(path);
+  return pub.publicUrl;
+}
+
 /**
  * Ensures the given product's image is cached in our own storage bucket.
  * - If `cached_image_url` is already set on the row, returns it.
