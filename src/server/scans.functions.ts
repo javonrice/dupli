@@ -2,7 +2,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import type { Database, Json } from "@/integrations/supabase/types";
 import type { DupeAnalysis } from "@/server/scan.functions";
 
@@ -108,6 +107,7 @@ export const getPublicScan = createServerFn({ method: "GET" })
   .inputValidator((data) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(
     async ({ data }): Promise<{ scan: PublicScanRow | null; error: string | null }> => {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
       const { data: row, error } = await supabaseAdmin
         .from("scans")
         .select(
