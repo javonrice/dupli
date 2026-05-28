@@ -139,8 +139,6 @@ export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
     };
   },
 );
-  },
-);
 
 // ---------- Image generation via Nano Banana ----------
 
