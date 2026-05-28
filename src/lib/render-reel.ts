@@ -166,19 +166,34 @@ export async function renderReelToMp4(opts: RenderOpts): Promise<Blob> {
     return key;
   };
 
-
-  // 1. Decode + mix audio offline ------------------------------------------
   onProgress?.({ stage: "audio", pct: 0 });
   const decodeCtx = new AudioContext();
   const decoded: AudioBuffer[] = [];
-  for (const seg of script.segments) {
+  for (let i = 0; i < script.segments.length; i++) {
+    const seg = script.segments[i];
     const bytes = dataUrlToBytes(seg.audioDataUrl);
     const ab = bytes.buffer.slice(
       bytes.byteOffset,
       bytes.byteOffset + bytes.byteLength,
     ) as ArrayBuffer;
-    decoded.push(await decodeCtx.decodeAudioData(ab));
+    try {
+      decoded.push(await decodeCtx.decodeAudioData(ab));
+    } catch (err) {
+      const info = classifyError(err);
+      const failure: FrameFailure = {
+        frame: segmentStartFrames[i] ?? 0,
+        segmentKey: seg.key,
+        cause: "audio-decode",
+        message: info.message,
+        attempts: 1,
+      };
+      onDebug?.(failure);
+      console.warn("[render-reel] audio decode failed", failure);
+      throw err;
+    }
   }
+  await decodeCtx.close();
+
   await decodeCtx.close();
 
   const offline = new OfflineAudioContext(
