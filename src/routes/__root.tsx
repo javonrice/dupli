@@ -1,5 +1,6 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { installSupabaseFetchAuth } from "@/integrations/supabase/install-fetch-auth";
 
 import appCss from "../styles.css?url";
