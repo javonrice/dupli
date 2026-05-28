@@ -26,14 +26,8 @@ export type DupePair = {
 // and the pair hasn't been generated in the last 30 days.
 export const pickRandomDupePair = createServerFn({ method: "POST" }).handler(
   async (): Promise<DupePair> => {
-    const { data, error } = await supabaseAdmin.rpc("exec" as never, {} as never).then(
-      () => ({ data: null, error: null }),
-      () => ({ data: null, error: null }),
-    );
-    void data;
-    void error;
+    // Pull a candidate window and pick randomly.
 
-    // Use a raw query via from() — pull a candidate window and pick randomly client-side.
     const { data: candidates, error: qErr } = await supabaseAdmin
       .from("dupes")
       .select(
