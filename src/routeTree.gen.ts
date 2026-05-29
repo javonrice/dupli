@@ -15,6 +15,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiDownloadVideoRouteImport } from './routes/api/download-video'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
@@ -52,6 +53,11 @@ const AppRoute = AppRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDownloadVideoRoute = ApiDownloadVideoRouteImport.update({
+  id: '/api/download-video',
+  path: '/api/download-video',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppSavedRoute = AppSavedRouteImport.update({
@@ -111,6 +117,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
+  '/api/download-video': typeof ApiDownloadVideoRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -127,6 +134,7 @@ export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
+  '/api/download-video': typeof ApiDownloadVideoRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
   '/scan/$id/share': typeof AppScanIdShareRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/_app/history': typeof AppHistoryRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
+  '/api/download-video': typeof ApiDownloadVideoRoute
   '/_app/p/$productId': typeof AppPProductIdRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
   '/_app/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -162,6 +171,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
+    | '/api/download-video'
     | '/p/$productId'
     | '/scan/$id'
     | '/community/$brand/$product'
@@ -178,6 +188,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
+    | '/api/download-video'
     | '/p/$productId'
     | '/community/$brand/$product'
     | '/scan/$id/share'
@@ -194,6 +205,7 @@ export interface FileRouteTypes {
     | '/_app/history'
     | '/_app/profile'
     | '/_app/saved'
+    | '/api/download-video'
     | '/_app/p/$productId'
     | '/_app/scan/$id'
     | '/_app/community/$brand/$product'
@@ -208,6 +220,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
   TermsRoute: typeof TermsRoute
+  ApiDownloadVideoRoute: typeof ApiDownloadVideoRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -252,6 +265,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/download-video': {
+      id: '/api/download-video'
+      path: '/api/download-video'
+      fullPath: '/api/download-video'
+      preLoaderRoute: typeof ApiDownloadVideoRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/saved': {
@@ -363,7 +383,17 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,
   TermsRoute: TermsRoute,
+  ApiDownloadVideoRoute: ApiDownloadVideoRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
