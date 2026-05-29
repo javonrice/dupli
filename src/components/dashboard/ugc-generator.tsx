@@ -35,7 +35,9 @@ const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
   audio: "Mixing audio",
   frames: "Capturing frames",
   encode: "Encoding MP4",
+  finalize: "Finalizing MP4",
 };
+
 
 export function UgcGenerator() {
   const pickPairs = useServerFn(pickRandomDupePairs);
