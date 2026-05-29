@@ -160,7 +160,7 @@ export const pickRandomDupePairs = createServerFn({ method: "POST" })
       cached_image_url: string | null;
       lowest_price_usd: number | null;
     };
-    const pickImage = (p: Prod) => p.cached_image_url ?? null;
+    const pickImage = (p: Prod) => p.cached_image_url ?? p.image_url ?? null;
 
     const usable = (candidates as Row[]).filter((row) => {
       const o = row.original as unknown as Prod | null;
