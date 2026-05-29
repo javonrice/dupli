@@ -37,7 +37,8 @@ export function UgcGenerator() {
   const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
-
+  const startRender = useServerFn(startLambdaRender);
+  const getProgress = useServerFn(getLambdaRenderProgress);
 
   const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
@@ -45,16 +46,15 @@ export function UgcGenerator() {
   const [error, setError] = useState<string | null>(null);
 
   const [exporting, setExporting] = useState(false);
-  const [progress, setProgress] = useState<RenderProgress | null>(null);
-  const [renderedBlob, setRenderedBlob] = useState<Blob | null>(null);
+  const [renderPct, setRenderPct] = useState(0);
+  const [renderedUrl, setRenderedUrl] = useState<string | null>(null);
   const [renderedName, setRenderedName] = useState<string>("");
-  const hiddenPlayerRef = useRef<PlayerRef>(null);
-  const hiddenStageRef = useRef<HTMLDivElement>(null);
 
-  // Clear cached blob when the script changes (new generation)
+  // Clear cached url when the script changes (new generation)
   useEffect(() => {
-    setRenderedBlob(null);
+    setRenderedUrl(null);
     setRenderedName("");
+    setRenderPct(0);
   }, [script]);
 
   const loading =
@@ -81,58 +81,88 @@ export function UgcGenerator() {
 
   const totalFrames = script ? totalDurationInFrames(script) : 0;
 
+  function buildFilename() {
+    const slug = pairs
+      ? slugify(pairs.map((p) => p.dupe.brand).join("-"))
+      : "reel";
+    const ts = new Date()
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\..+/, "")
+      .replace("T", "-");
+    return `dupli-${slug}-${ts}.mp4`;
+  }
+
+  async function downloadFromUrl(url: string, filename: string) {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(objectUrl);
+  }
 
   async function handleRender() {
     if (!script || !pairs || pairs.length === 0) return;
     setError(null);
     setExporting(true);
-    setProgress({ stage: "audio", pct: 0 });
+    setRenderPct(0);
     try {
-      for (let i = 0; i < 60; i++) {
-        if (hiddenPlayerRef.current && hiddenStageRef.current) break;
-        await new Promise((r) => setTimeout(r, 50));
-      }
-      if (!hiddenPlayerRef.current || !hiddenStageRef.current) {
-        throw new Error("Renderer didn't mount in time");
-      }
-
-      const { blob } = await renderAndSaveReel({
-        script,
-        pairs,
-        playerRef: hiddenPlayerRef,
-        captureEl: hiddenStageRef.current,
-        saveRecord,
-        onProgress: setProgress,
+      const { renderId, bucketName } = await startRender({
+        data: { script },
       });
 
-      const slug = slugify(pairs.map((p) => p.dupe.brand).join("-"));
-      const ts = new Date()
-        .toISOString()
-        .replace(/[-:]/g, "")
-        .replace(/\..+/, "")
-        .replace("T", "-");
-      const filename = `dupli-${slug}-${ts}.mp4`;
-      setRenderedBlob(blob);
+      // Poll progress every 2s
+      let outputFile: string | null = null;
+      while (true) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const p = await getProgress({
+          data: { renderId, bucketName },
+        });
+        setRenderPct(p.overallProgress);
+        if (p.fatalErrorEncountered) {
+          throw new Error(p.errors[0] ?? "Lambda render failed");
+        }
+        if (p.done && p.outputFile) {
+          outputFile = p.outputFile;
+          break;
+        }
+      }
+
+      const filename = buildFilename();
+      setRenderedUrl(outputFile);
       setRenderedName(filename);
-      // Auto-trigger first download
-      downloadBlob(blob, filename);
+      await downloadFromUrl(outputFile, filename);
+
+      // Best-effort save to library (store S3 URL as storage_path)
+      try {
+        await saveRecord({
+          data: {
+            storagePath: outputFile,
+            thumbnailUrl: pairs[0]?.original.imageUrl ?? null,
+            pairs,
+            durationSec: totalFrames / FPS,
+          },
+        });
+      } catch (e) {
+        console.warn("save record failed", e);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "MP4 export failed");
     } finally {
       setExporting(false);
-      setProgress(null);
     }
   }
 
-  function handleRedownload() {
-    if (renderedBlob && renderedName) {
-      downloadBlob(renderedBlob, renderedName);
+  async function handleRedownload() {
+    if (renderedUrl && renderedName) {
+      await downloadFromUrl(renderedUrl, renderedName);
     }
   }
-
-
-
-
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
@@ -147,9 +177,8 @@ export function UgcGenerator() {
           <p className="mt-1 text-sm text-muted-foreground">
             Picks 4 random dupe pairs, writes a hook + 4 reveals + CTA,
             voices each line with ElevenLabs, and renders a vertical reel
-            timed to the voiceover. Download as MP4 — rendered in your browser.
+            timed to the voiceover — rendered on AWS Lambda in seconds.
           </p>
-
         </div>
         <Button onClick={run} disabled={loading || exporting} size="lg">
           {loading ? (
@@ -199,8 +228,6 @@ export function UgcGenerator() {
         </div>
       )}
 
-
-
       {loading && (
         <div className="mt-5 flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -245,7 +272,7 @@ export function UgcGenerator() {
           </p>
 
           <div className="mt-4 flex flex-col items-center gap-3">
-            {!renderedBlob ? (
+            {!renderedUrl ? (
               <Button
                 onClick={handleRender}
                 disabled={exporting}
@@ -255,11 +282,7 @@ export function UgcGenerator() {
                 {exporting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {progress
-                      ? `${PROGRESS_LABEL[progress.stage]} ${Math.round(
-                          progress.pct * 100,
-                        )}%`
-                      : "Preparing…"}
+                    Rendering on Lambda… {Math.round(renderPct * 100)}%
                   </>
                 ) : (
                   <>
@@ -278,60 +301,25 @@ export function UgcGenerator() {
                   <Download className="mr-2 h-4 w-4" />
                   Download again
                 </Button>
-                <p className="text-[11px] text-muted-foreground">
-                  {(renderedBlob.size / (1024 * 1024)).toFixed(1)} MB · stays available until you generate a new reel
-                </p>
               </div>
             )}
 
-            {exporting && progress && (
+            {exporting && (
               <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full bg-primary transition-[width] duration-200"
-                  style={{ width: `${Math.round(progress.pct * 100)}%` }}
+                  style={{ width: `${Math.round(renderPct * 100)}%` }}
                 />
               </div>
             )}
 
-
             <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
-              Rendering happens entirely in your browser — no server, no API
-              keys. Expect roughly 1 frame/second on a modern laptop (a 15s reel
-              ≈ 8–10 minutes). Keep the tab focused while it runs.
+              Rendered on AWS Lambda — typically 20-60s for a full reel.
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* Hidden full-resolution stage used only for capture. Mounted while
-          exporting so html-to-image can read the composition at native size. */}
-      {script && exporting && (
-        <div
-          aria-hidden
-          style={{
-            position: "fixed",
-            left: -99999,
-            top: 0,
-            width: WIDTH,
-            height: HEIGHT,
-            pointerEvents: "none",
-          }}
-        >
-          <div ref={hiddenStageRef} style={{ width: WIDTH, height: HEIGHT }}>
-            <Player
-              ref={hiddenPlayerRef}
-              component={DupeReel}
-              inputProps={{ script }}
-              durationInFrames={totalFrames}
-              fps={FPS}
-              compositionWidth={WIDTH}
-              compositionHeight={HEIGHT}
-              style={{ width: WIDTH, height: HEIGHT }}
-              acknowledgeRemotionLicense
-            />
           </div>
         </div>
       )}
     </div>
   );
 }
+
