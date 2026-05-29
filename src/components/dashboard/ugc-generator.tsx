@@ -251,28 +251,44 @@ export function UgcGenerator() {
           </p>
 
           <div className="mt-4 flex flex-col items-center gap-3">
-            <Button
-              onClick={handleDownload}
-              disabled={exporting}
-              size="lg"
-              variant="default"
-            >
-              {exporting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {progress
-                    ? `${PROGRESS_LABEL[progress.stage]} ${Math.round(
-                        progress.pct * 100,
-                      )}%`
-                    : "Preparing…"}
-                </>
-              ) : (
-                <>
+            {!renderedBlob ? (
+              <Button
+                onClick={handleRender}
+                disabled={exporting}
+                size="lg"
+                variant="default"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {progress
+                      ? `${PROGRESS_LABEL[progress.stage]} ${Math.round(
+                          progress.pct * 100,
+                        )}%`
+                      : "Preparing…"}
+                  </>
+                ) : (
+                  <>
+                    <Video className="mr-2 h-4 w-4" />
+                    Render & Download MP4
+                  </>
+                )}
+              </Button>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Downloaded {renderedName}
+                </div>
+                <Button onClick={handleRedownload} size="lg" variant="default">
                   <Download className="mr-2 h-4 w-4" />
-                  Download MP4
-                </>
-              )}
-            </Button>
+                  Download again
+                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  {(renderedBlob.size / (1024 * 1024)).toFixed(1)} MB · stays available until you generate a new reel
+                </p>
+              </div>
+            )}
 
             {exporting && progress && (
               <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-muted">
@@ -282,6 +298,7 @@ export function UgcGenerator() {
                 />
               </div>
             )}
+
 
             <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
               Rendering happens entirely in your browser — no server, no API
