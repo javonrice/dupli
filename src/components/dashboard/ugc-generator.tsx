@@ -52,8 +52,16 @@ export function UgcGenerator() {
 
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<RenderProgress | null>(null);
+  const [renderedBlob, setRenderedBlob] = useState<Blob | null>(null);
+  const [renderedName, setRenderedName] = useState<string>("");
   const hiddenPlayerRef = useRef<PlayerRef>(null);
   const hiddenStageRef = useRef<HTMLDivElement>(null);
+
+  // Clear cached blob when the script changes (new generation)
+  useEffect(() => {
+    setRenderedBlob(null);
+    setRenderedName("");
+  }, [script]);
 
   const loading =
     stage === "picking" || stage === "scripting" || stage === "voicing";
