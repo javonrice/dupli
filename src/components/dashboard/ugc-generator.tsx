@@ -1,14 +1,17 @@
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, RefreshCw, Video, AlertCircle, Download, CheckCircle2 } from "lucide-react";
-import { Player, type PlayerRef } from "@remotion/player";
+import { Player } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
 import { generateReelScript } from "@/lib/reel-voiceover.functions";
 import { saveVideoRecord } from "@/lib/user-videos.functions";
+import {
+  startLambdaRender,
+  getLambdaRenderProgress,
+} from "@/lib/lambda-render.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
-import { renderAndSaveReel, downloadBlob, slugify } from "@/lib/reel-pipeline";
-
+import { slugify } from "@/lib/reel-pipeline";
 
 import {
   DupeReel,
@@ -17,8 +20,6 @@ import {
   HEIGHT,
   totalDurationInFrames,
 } from "@/remotion/DupeReel";
-import type { RenderProgress } from "@/lib/render-reel";
-
 
 type Stage = "idle" | "picking" | "scripting" | "voicing" | "done" | "failed";
 
@@ -29,13 +30,6 @@ const STAGE_LABEL: Record<Stage, string> = {
   voicing: "Recording voices with ElevenLabs…",
   done: "",
   failed: "",
-};
-
-const PROGRESS_LABEL: Record<RenderProgress["stage"], string> = {
-  audio: "Mixing audio",
-  frames: "Capturing frames",
-  encode: "Encoding MP4",
-  finalize: "Finalizing MP4",
 };
 
 
