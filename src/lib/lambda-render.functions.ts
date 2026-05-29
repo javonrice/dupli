@@ -34,17 +34,38 @@ export const getLambdaRenderProgress = createServerFn({ method: "POST" })
     const { getRenderProgress } = await import("@remotion/lambda-client");
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
     if (!functionName) throw new Error("Lambda env vars not configured");
-    const progress = await getRenderProgress({
-      renderId: data.renderId,
-      bucketName: data.bucketName,
-      functionName,
-      region: REGION as "us-east-2",
-    });
-    return {
-      done: progress.done,
-      overallProgress: progress.overallProgress,
-      outputFile: progress.outputFile ?? null,
-      errors: progress.errors?.map((e) => e.message) ?? [],
-      fatalErrorEncountered: progress.fatalErrorEncountered,
-    };
+
+    // Retry on AWS throttling with exponential backoff + jitter
+    let lastErr: unknown;
+    let delay = 800;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const progress = await getRenderProgress({
+          renderId: data.renderId,
+          bucketName: data.bucketName,
+          functionName,
+          region: REGION as "us-east-2",
+        });
+        return {
+          done: progress.done,
+          overallProgress: progress.overallProgress,
+          outputFile: progress.outputFile ?? null,
+          errors: progress.errors?.map((e) => e.message) ?? [],
+          fatalErrorEncountered: progress.fatalErrorEncountered,
+        };
+      } catch (e) {
+        lastErr = e;
+        const name = e instanceof Error ? e.name : "";
+        const msg = e instanceof Error ? e.message : String(e);
+        const throttled =
+          name === "TooManyRequestsException" ||
+          /rate exceeded|throttl/i.test(msg);
+        if (!throttled) throw e;
+        const jitter = Math.random() * delay * 0.5;
+        await new Promise((r) => setTimeout(r, delay + jitter));
+        delay *= 2;
+      }
+    }
+    throw lastErr instanceof Error ? lastErr : new Error("Throttled");
   });
+
