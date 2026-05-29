@@ -1,13 +1,13 @@
 import {
   AbsoluteFill,
   Audio,
-  Img,
   Sequence,
   interpolate,
   spring,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { useState } from "react";
 import {
   TransitionSeries,
   springTiming,
@@ -212,6 +212,39 @@ function Wordmark({ scale = 1 }: { scale?: number }) {
       />
     </div>
   );
+}
+
+function SafeProductImage({
+  src,
+  style,
+}: {
+  src: string;
+  style?: React.CSSProperties;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div
+        style={{
+          ...style,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #f5f3ee, #ffe0dc)",
+          color: "#0d0d0d",
+          fontFamily: DISPLAY,
+          fontSize: 56,
+          fontWeight: 900,
+          textAlign: "center",
+        }}
+      >
+        dupli
+      </div>
+    );
+  }
+
+  return <img src={src} style={style} onError={() => setFailed(true)} />;
 }
 
 // ---------- Scenes ----------
