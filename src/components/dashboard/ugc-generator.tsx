@@ -1,6 +1,6 @@
 import { useServerFn } from "@tanstack/react-start";
-import { useRef, useState } from "react";
-import { Loader2, RefreshCw, Video, AlertCircle, Download } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, RefreshCw, Video, AlertCircle, Download, CheckCircle2 } from "lucide-react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
@@ -52,8 +52,16 @@ export function UgcGenerator() {
 
   const [exporting, setExporting] = useState(false);
   const [progress, setProgress] = useState<RenderProgress | null>(null);
+  const [renderedBlob, setRenderedBlob] = useState<Blob | null>(null);
+  const [renderedName, setRenderedName] = useState<string>("");
   const hiddenPlayerRef = useRef<PlayerRef>(null);
   const hiddenStageRef = useRef<HTMLDivElement>(null);
+
+  // Clear cached blob when the script changes (new generation)
+  useEffect(() => {
+    setRenderedBlob(null);
+    setRenderedName("");
+  }, [script]);
 
   const loading =
     stage === "picking" || stage === "scripting" || stage === "voicing";
@@ -80,7 +88,7 @@ export function UgcGenerator() {
   const totalFrames = script ? totalDurationInFrames(script) : 0;
 
 
-  async function handleDownload() {
+  async function handleRender() {
     if (!script || !pairs || pairs.length === 0) return;
     setError(null);
     setExporting(true);
@@ -104,7 +112,16 @@ export function UgcGenerator() {
       });
 
       const slug = slugify(pairs.map((p) => p.dupe.brand).join("-"));
-      downloadBlob(blob, `dupli-reel-${slug}.mp4`);
+      const ts = new Date()
+        .toISOString()
+        .replace(/[-:]/g, "")
+        .replace(/\..+/, "")
+        .replace("T", "-");
+      const filename = `dupli-${slug}-${ts}.mp4`;
+      setRenderedBlob(blob);
+      setRenderedName(filename);
+      // Auto-trigger first download
+      downloadBlob(blob, filename);
     } catch (e) {
       setError(e instanceof Error ? e.message : "MP4 export failed");
     } finally {
@@ -112,6 +129,13 @@ export function UgcGenerator() {
       setProgress(null);
     }
   }
+
+  function handleRedownload() {
+    if (renderedBlob && renderedName) {
+      downloadBlob(renderedBlob, renderedName);
+    }
+  }
+
 
 
 
@@ -227,28 +251,44 @@ export function UgcGenerator() {
           </p>
 
           <div className="mt-4 flex flex-col items-center gap-3">
-            <Button
-              onClick={handleDownload}
-              disabled={exporting}
-              size="lg"
-              variant="default"
-            >
-              {exporting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {progress
-                    ? `${PROGRESS_LABEL[progress.stage]} ${Math.round(
-                        progress.pct * 100,
-                      )}%`
-                    : "Preparing…"}
-                </>
-              ) : (
-                <>
+            {!renderedBlob ? (
+              <Button
+                onClick={handleRender}
+                disabled={exporting}
+                size="lg"
+                variant="default"
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    {progress
+                      ? `${PROGRESS_LABEL[progress.stage]} ${Math.round(
+                          progress.pct * 100,
+                        )}%`
+                      : "Preparing…"}
+                  </>
+                ) : (
+                  <>
+                    <Video className="mr-2 h-4 w-4" />
+                    Render & Download MP4
+                  </>
+                )}
+              </Button>
+            ) : (
+              <div className="flex flex-col items-center gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-primary">
+                  <CheckCircle2 className="h-4 w-4" />
+                  Downloaded {renderedName}
+                </div>
+                <Button onClick={handleRedownload} size="lg" variant="default">
                   <Download className="mr-2 h-4 w-4" />
-                  Download MP4
-                </>
-              )}
-            </Button>
+                  Download again
+                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  {(renderedBlob.size / (1024 * 1024)).toFixed(1)} MB · stays available until you generate a new reel
+                </p>
+              </div>
+            )}
 
             {exporting && progress && (
               <div className="h-1.5 w-full max-w-md overflow-hidden rounded-full bg-muted">
@@ -258,6 +298,7 @@ export function UgcGenerator() {
                 />
               </div>
             )}
+
 
             <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
               Rendering happens entirely in your browser — no server, no API
