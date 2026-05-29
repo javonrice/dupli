@@ -15,7 +15,7 @@ console.log('\n2/3 Deploying Lambda function (this takes ~2-3 min)...');
 const fn = await deployFunction({
   region,
   timeoutInSeconds: 240,
-  memorySizeInMb: 3009,
+  memorySizeInMb: 3008,
   diskSizeInMb: 10240,
   createCloudWatchLogGroup: true,
 });
