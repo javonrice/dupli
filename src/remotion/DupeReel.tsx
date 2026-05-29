@@ -1,13 +1,13 @@
 import {
   AbsoluteFill,
   Audio,
-  Img,
   Sequence,
   interpolate,
   spring,
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { useState, type CSSProperties } from "react";
 import {
   TransitionSeries,
   springTiming,
@@ -214,6 +214,39 @@ function Wordmark({ scale = 1 }: { scale?: number }) {
   );
 }
 
+function SafeProductImage({
+  src,
+  style,
+}: {
+  src: string;
+  style?: CSSProperties;
+}) {
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div
+        style={{
+          ...style,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(135deg, #f5f3ee, #ffe0dc)",
+          color: "#0d0d0d",
+          fontFamily: DISPLAY,
+          fontSize: 56,
+          fontWeight: 900,
+          textAlign: "center",
+        }}
+      >
+        dupli
+      </div>
+    );
+  }
+
+  return <img src={src} style={style} onError={() => setFailed(true)} />;
+}
+
 // ---------- Scenes ----------
 
 function HookScene({ pair, text }: { pair: DupePair; text: string }) {
@@ -257,7 +290,7 @@ function HookScene({ pair, text }: { pair: DupePair; text: string }) {
         }}
       >
         <div style={{ position: "relative", marginBottom: 60 }}>
-          <Img
+          <SafeProductImage
             src={pair.original.imageUrl}
             style={{
               width: 620,
@@ -374,7 +407,7 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
               overflow: "hidden",
             }}
           >
-            <Img
+            <SafeProductImage
               src={pair.original.imageUrl}
               style={{
                 width: "100%",
@@ -494,7 +527,7 @@ function ProductCard({
           filter: dimmed ? "grayscale(0.5)" : "none",
         }}
       >
-        <Img
+        <SafeProductImage
           src={imageUrl}
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
@@ -588,7 +621,7 @@ function ScanIntroOverlay({ pair, intro }: { pair: DupePair; intro: number }) {
             overflow: "hidden",
           }}
         >
-          <Img
+          <SafeProductImage
             src={pair.original.imageUrl}
             style={{
               width: "100%",

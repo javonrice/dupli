@@ -94,16 +94,12 @@ export function UgcGenerator() {
   }
 
   async function downloadFromUrl(url: string, filename: string) {
-    const res = await fetch(url);
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
+    const downloadUrl = `/api/download-video?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
     const a = document.createElement("a");
-    a.href = objectUrl;
-    a.download = filename;
+    a.href = downloadUrl;
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(objectUrl);
   }
 
   async function handleRender() {
@@ -116,7 +112,7 @@ export function UgcGenerator() {
         data: { script },
       });
 
-      // Poll progress every 2s
+      // Poll progress without hammering the Lambda progress endpoint.
       let outputFile: string | null = null;
       while (true) {
         await new Promise((r) => setTimeout(r, 4000));
