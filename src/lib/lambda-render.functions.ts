@@ -22,8 +22,9 @@ export const startLambdaRender = createServerFn({ method: "POST" })
       imageFormat: "jpeg",
       jpegQuality: 90,
       privacy: "public",
-      maxRetries: 1,
-      framesPerLambda: 30,
+      maxRetries: 3,
+      framesPerLambda: 200,
+      concurrencyPerLambda: 1,
     });
     return { renderId, bucketName };
   });
