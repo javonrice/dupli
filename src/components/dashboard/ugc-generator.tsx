@@ -1,6 +1,6 @@
 import { useServerFn } from "@tanstack/react-start";
-import { useRef, useState } from "react";
-import { Loader2, RefreshCw, Video, AlertCircle, Download } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, RefreshCw, Video, AlertCircle, Download, CheckCircle2 } from "lucide-react";
 import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
