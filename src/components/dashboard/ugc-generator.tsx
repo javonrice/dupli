@@ -88,7 +88,7 @@ export function UgcGenerator() {
   const totalFrames = script ? totalDurationInFrames(script) : 0;
 
 
-  async function handleDownload() {
+  async function handleRender() {
     if (!script || !pairs || pairs.length === 0) return;
     setError(null);
     setExporting(true);
@@ -112,7 +112,16 @@ export function UgcGenerator() {
       });
 
       const slug = slugify(pairs.map((p) => p.dupe.brand).join("-"));
-      downloadBlob(blob, `dupli-reel-${slug}.mp4`);
+      const ts = new Date()
+        .toISOString()
+        .replace(/[-:]/g, "")
+        .replace(/\..+/, "")
+        .replace("T", "-");
+      const filename = `dupli-${slug}-${ts}.mp4`;
+      setRenderedBlob(blob);
+      setRenderedName(filename);
+      // Auto-trigger first download
+      downloadBlob(blob, filename);
     } catch (e) {
       setError(e instanceof Error ? e.message : "MP4 export failed");
     } finally {
@@ -120,6 +129,13 @@ export function UgcGenerator() {
       setProgress(null);
     }
   }
+
+  function handleRedownload() {
+    if (renderedBlob && renderedName) {
+      downloadBlob(renderedBlob, renderedName);
+    }
+  }
+
 
 
 
