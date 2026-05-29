@@ -21,32 +21,53 @@ function estimateTotalFrames(script: ReelScript): number {
 export const startLambdaRender = createServerFn({ method: "POST" })
   .inputValidator((data: { script: ReelScript }) => data)
   .handler(async ({ data }) => {
-    const { renderMediaOnLambda } = await import("@remotion/lambda-client");
     const functionName = process.env.REMOTION_LAMBDA_FUNCTION_NAME;
     const serveUrl = process.env.REMOTION_SERVE_URL;
+    console.log("[lambda-render] env", {
+      functionNameSet: !!functionName,
+      serveUrlSet: !!serveUrl,
+      serveUrl,
+      hasAccessKey: !!process.env.AWS_ACCESS_KEY_ID,
+      hasSecret: !!process.env.AWS_SECRET_ACCESS_KEY,
+      region: process.env.REMOTION_AWS_REGION,
+    });
     if (!functionName || !serveUrl) {
-      throw new Error("Lambda env vars not configured");
+      throw new Error(
+        `Lambda env vars not configured (fn=${!!functionName}, serveUrl=${!!serveUrl})`,
+      );
+    }
+    let renderMediaOnLambda: typeof import("@remotion/lambda-client").renderMediaOnLambda;
+    try {
+      ({ renderMediaOnLambda } = await import("@remotion/lambda-client"));
+    } catch (e) {
+      console.error("[lambda-render] import failed", e);
+      throw new Error(
+        `Failed to load @remotion/lambda-client: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
     const totalFrames = estimateTotalFrames(data.script);
-    // Keep renderer concurrency tiny for low-quota AWS accounts:
-    // renderer Lambdas = ceil(totalFrames / framesPerLambda), plus 1 orchestrator.
     const framesPerLambda = Math.max(1000, Math.ceil(totalFrames / 2));
 
-    const { renderId, bucketName } = await renderMediaOnLambda({
-      region: REGION as "us-east-2",
-      functionName,
-      serveUrl,
-      composition: "DupeReel",
-      inputProps: { script: data.script },
-      codec: "h264",
-      imageFormat: "jpeg",
-      jpegQuality: 90,
-      privacy: "public",
-      maxRetries: 1,
-      framesPerLambda,
-      concurrencyPerLambda: 1,
-    });
-    return { renderId, bucketName };
+    try {
+      const { renderId, bucketName } = await renderMediaOnLambda({
+        region: REGION as "us-east-2",
+        functionName,
+        serveUrl,
+        composition: "DupeReel",
+        inputProps: { script: data.script },
+        codec: "h264",
+        imageFormat: "jpeg",
+        jpegQuality: 90,
+        privacy: "public",
+        maxRetries: 1,
+        framesPerLambda,
+        concurrencyPerLambda: 1,
+      });
+      return { renderId, bucketName };
+    } catch (e) {
+      console.error("[lambda-render] renderMediaOnLambda threw", e);
+      throw e;
+    }
   });
 
 export const getLambdaRenderProgress = createServerFn({ method: "POST" })
