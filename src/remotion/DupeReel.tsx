@@ -290,7 +290,7 @@ function HookScene({ pair, text }: { pair: DupePair; text: string }) {
         }}
       >
         <div style={{ position: "relative", marginBottom: 60 }}>
-          <Img
+          <SafeProductImage
             src={pair.original.imageUrl}
             style={{
               width: 620,
@@ -407,7 +407,7 @@ function ScanScene({ pair, text }: { pair: DupePair; text: string }) {
               overflow: "hidden",
             }}
           >
-            <Img
+            <SafeProductImage
               src={pair.original.imageUrl}
               style={{
                 width: "100%",
@@ -527,7 +527,7 @@ function ProductCard({
           filter: dimmed ? "grayscale(0.5)" : "none",
         }}
       >
-        <Img
+        <SafeProductImage
           src={imageUrl}
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
         />
@@ -621,7 +621,7 @@ function ScanIntroOverlay({ pair, intro }: { pair: DupePair; intro: number }) {
             overflow: "hidden",
           }}
         >
-          <Img
+          <SafeProductImage
             src={pair.original.imageUrl}
             style={{
               width: "100%",
