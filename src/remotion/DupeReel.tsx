@@ -7,7 +7,7 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import {
   TransitionSeries,
   springTiming,
@@ -219,7 +219,7 @@ function SafeProductImage({
   style,
 }: {
   src: string;
-  style?: React.CSSProperties;
+  style?: CSSProperties;
 }) {
   const [failed, setFailed] = useState(false);
 
