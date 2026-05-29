@@ -119,7 +119,7 @@ export function UgcGenerator() {
       // Poll progress every 2s
       let outputFile: string | null = null;
       while (true) {
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 4000));
         const p = await getProgress({
           data: { renderId, bucketName },
         });
