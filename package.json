@@ -12,6 +12,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@aws-sdk/client-lambda": "^3.1057.0",
     "@cloudflare/vite-plugin": "^1.25.5",
     "@ffmpeg/core": "^0.12.10",
     "@ffmpeg/ffmpeg": "^0.12.15",
