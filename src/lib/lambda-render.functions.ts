@@ -24,12 +24,13 @@ function getEnv() {
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
   const region = process.env.REMOTION_AWS_REGION || REGION;
+  const bucketName = process.env.REMOTION_LAMBDA_BUCKET ?? null;
   if (!functionName || !serveUrl || !accessKeyId || !secretAccessKey) {
     throw new Error(
       `Lambda env not configured (fn=${!!functionName}, serveUrl=${!!serveUrl}, key=${!!accessKeyId}, secret=${!!secretAccessKey})`,
     );
   }
-  return { functionName, serveUrl, accessKeyId, secretAccessKey, region };
+  return { functionName, serveUrl, accessKeyId, secretAccessKey, region, bucketName };
 }
 
 // AWS Signature V4 using Web Crypto — works in Cloudflare Workers (no Node.js SDK needed).
@@ -60,13 +61,14 @@ async function signedLambdaRequest(
   accessKeyId: string,
   secretAccessKey: string,
   body: string,
+  invocationType: "RequestResponse" | "Event" = "RequestResponse",
 ): Promise<Response> {
   const host = `lambda.${region}.amazonaws.com`;
-  const url = `https://${host}/2015-03-31/functions/${encodeURIComponent(functionName)}/invocations?InvocationType=RequestResponse`;
+  const url = `https://${host}/2015-03-31/functions/${encodeURIComponent(functionName)}/invocations`;
 
   const now = new Date();
-  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 15) + "Z"; // 20240101T120000Z
-  const dateStamp = amzDate.slice(0, 8); // 20240101
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 15) + "Z";
+  const dateStamp = amzDate.slice(0, 8);
 
   const payloadHash = await sha256Hex(body);
 
@@ -74,14 +76,14 @@ async function signedLambdaRequest(
     `content-type:application/json\n` +
     `host:${host}\n` +
     `x-amz-date:${amzDate}\n` +
-    `x-amz-invocation-type:RequestResponse\n`;
+    `x-amz-invocation-type:${invocationType}\n`;
 
   const signedHeaders = "content-type;host;x-amz-date;x-amz-invocation-type";
 
   const canonicalRequest = [
     "POST",
     `/2015-03-31/functions/${encodeURIComponent(functionName)}/invocations`,
-    "InvocationType=RequestResponse",
+    "",
     canonicalHeaders,
     signedHeaders,
     payloadHash,
@@ -111,13 +113,30 @@ async function signedLambdaRequest(
       "Content-Type": "application/json",
       "Host": host,
       "X-Amz-Date": amzDate,
-      "X-Amz-Invocation-Type": "RequestResponse",
+      "X-Amz-Invocation-Type": invocationType,
       "Authorization": authHeader,
     },
     body,
   });
 }
 
+// Fire-and-forget: dispatches to Lambda asynchronously, returns 202 immediately.
+async function fireLambdaAsync(
+  functionName: string,
+  region: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  payload: unknown,
+): Promise<void> {
+  const body = JSON.stringify(payload);
+  const res = await signedLambdaRequest(functionName, region, accessKeyId, secretAccessKey, body, "Event");
+  if (!res.ok && res.status !== 202) {
+    const text = await res.text();
+    throw new Error(`Lambda async dispatch failed HTTP ${res.status}: ${text.slice(0, 500)}`);
+  }
+}
+
+// Synchronous invoke: waits for Lambda to return (use only for fast calls like status checks).
 async function invokeLambda<T>(
   functionName: string,
   region: string,
@@ -126,7 +145,7 @@ async function invokeLambda<T>(
   payload: unknown,
 ): Promise<T> {
   const body = JSON.stringify(payload);
-  const res = await signedLambdaRequest(functionName, region, accessKeyId, secretAccessKey, body);
+  const res = await signedLambdaRequest(functionName, region, accessKeyId, secretAccessKey, body, "RequestResponse");
 
   const functionError = res.headers.get("X-Amz-Function-Error");
   const decoded = await res.text();
@@ -151,11 +170,18 @@ async function invokeLambda<T>(
   return parsed as T;
 }
 
-function buildStartPayload(serveUrl: string, script: ReelScript, totalFrames: number) {
+function buildStartPayload(
+  serveUrl: string,
+  script: ReelScript,
+  totalFrames: number,
+  renderId: string,
+  bucketName: string | null,
+) {
   const framesPerLambda = Math.max(1000, Math.ceil(totalFrames / 2));
   const stringifiedInputProps = JSON.stringify({ script });
   return {
     type: "start",
+    renderId,
     serveUrl,
     composition: "DupeReel",
     inputProps: { type: "payload", payload: stringifiedInputProps },
@@ -192,7 +218,7 @@ function buildStartPayload(serveUrl: string, script: ReelScript, totalFrames: nu
     forceWidth: null,
     forceFps: null,
     forceDurationInFrames: null,
-    bucketName: null,
+    bucketName,
     audioCodec: null,
     offthreadVideoCacheSizeInBytes: null,
     deleteAfter: null,
@@ -229,18 +255,22 @@ export const startLambdaRender = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const env = getEnv();
     const totalFrames = estimateTotalFrames(data.script);
-    const payload = buildStartPayload(env.serveUrl, data.script, totalFrames);
-    const res = await invokeLambda<{ renderId: string; bucketName: string }>(
+    // Pre-generate renderId so we can return it immediately without waiting
+    // for Lambda to finish (avoids Cloudflare's 30s gateway timeout).
+    const renderId = crypto.randomUUID();
+    const payload = buildStartPayload(env.serveUrl, data.script, totalFrames, renderId, env.bucketName);
+    // Fire-and-forget: Lambda accepts the job and returns 202 in ~100ms.
+    await fireLambdaAsync(
       env.functionName,
       env.region,
       env.accessKeyId,
       env.secretAccessKey,
       payload,
     );
-    if (!res?.renderId || !res?.bucketName) {
-      throw new Error(`Render start missing renderId/bucketName: ${JSON.stringify(res)}`);
+    if (!env.bucketName) {
+      throw new Error("REMOTION_LAMBDA_BUCKET env var is required for async rendering");
     }
-    return { renderId: res.renderId, bucketName: res.bucketName };
+    return { renderId, bucketName: env.bucketName };
   });
 
 export const getLambdaRenderProgress = createServerFn({ method: "POST" })
