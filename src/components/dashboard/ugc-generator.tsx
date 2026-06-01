@@ -317,13 +317,17 @@ export function UgcGenerator() {
                 {exporting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {renderStage ? renderStageLabel[renderStage] : "Rendering"}…{" "}
-                    {Math.round(renderPct * 100)}%
+                    {renderMode === "lambda"
+                      ? "Rendering in cloud"
+                      : renderStage
+                        ? renderStageLabel[renderStage]
+                        : "Rendering"}
+                    … {Math.round(renderPct * 100)}%
                   </>
                 ) : (
                   <>
                     <Video className="mr-2 h-4 w-4" />
-                    Render & Download MP4
+                    Render & Download
                   </>
                 )}
               </Button>
