@@ -15,7 +15,12 @@ import { generateReelScript } from "@/lib/reel-voiceover.functions";
 import { saveVideoRecord } from "@/lib/user-videos.functions";
 import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
-import { renderAndSaveReel, downloadBlob, slugify } from "@/lib/reel-pipeline";
+import {
+  renderAndSaveReel,
+  renderAndSaveReelViaLambda,
+  downloadBlob,
+  slugify,
+} from "@/lib/reel-pipeline";
 import type { RenderProgress } from "@/lib/render-reel";
 
 import {
