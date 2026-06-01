@@ -289,7 +289,11 @@ export const getLambdaRenderProgress = createServerFn({ method: "POST" })
           outputFile: string | null;
           errors?: Array<{ message: string }>;
           fatalErrorEncountered: boolean;
-        }>(env.functionName, env.region, env.accessKeyId, env.secretAccessKey, payload);
+        } | null>(env.functionName, env.region, env.accessKeyId, env.secretAccessKey, payload);
+        // Empty/null response = render hasn't initialized in S3 yet; report 0% progress.
+        if (!progress) {
+          return { done: false, overallProgress: 0, outputFile: null, errors: [], fatalErrorEncountered: false };
+        }
         return {
           done: progress.done,
           overallProgress: progress.overallProgress,
@@ -303,6 +307,10 @@ export const getLambdaRenderProgress = createServerFn({ method: "POST" })
         const msg = e instanceof Error ? e.message : String(e);
         const throttled =
           name === "TooManyRequestsException" || /rate exceeded|throttl/i.test(msg);
+        const notReady = /Invalid Lambda JSON|NoSuchKey|does not exist|not found/i.test(msg);
+        if (notReady) {
+          return { done: false, overallProgress: 0, outputFile: null, errors: [], fatalErrorEncountered: false };
+        }
         if (!throttled) throw e;
         const jitter = Math.random() * delay * 0.5;
         await new Promise((r) => setTimeout(r, delay + jitter));
