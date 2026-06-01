@@ -59,6 +59,7 @@ export function UgcGenerator() {
   const [renderPct, setRenderPct] = useState(0);
   const [renderedBlob, setRenderedBlob] = useState<Blob | null>(null);
   const [renderedName, setRenderedName] = useState<string>("");
+  const [renderMode, setRenderMode] = useState<"lambda" | "browser">("lambda");
 
   const playerRef = useRef<PlayerRef | null>(null);
   const captureRef = useRef<HTMLDivElement | null>(null);
