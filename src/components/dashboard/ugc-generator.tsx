@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
 import { generateReelScript } from "@/lib/reel-voiceover.functions";
 import { saveVideoRecord } from "@/lib/user-videos.functions";
+import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
 import { renderAndSaveReel, downloadBlob, slugify } from "@/lib/reel-pipeline";
 import type { RenderProgress } from "@/lib/render-reel";
@@ -41,6 +42,7 @@ export function UgcGenerator() {
   const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
+  const proxyImage = useServerFn(fetchImageAsDataUrl);
 
   const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
@@ -73,7 +75,26 @@ export function UgcGenerator() {
     setPairs(null);
     try {
       setStage("picking");
-      const newPairs = await pickPairs({ data: { count: 4 } });
+      const rawPairs = await pickPairs({ data: { count: 4 } });
+
+      // Proxy product images → data URLs so frame capture (html-to-image /
+      // modern-screenshot) never hits CORS-blocked CDNs mid-render.
+      const inlineOne = async (url: string): Promise<string> => {
+        if (!url || url.startsWith("data:")) return url;
+        try {
+          const r = await proxyImage({ data: { url } });
+          return r.dataUrl ?? url;
+        } catch {
+          return url;
+        }
+      };
+      const newPairs: DupePair[] = await Promise.all(
+        rawPairs.map(async (p) => ({
+          ...p,
+          original: { ...p.original, imageUrl: await inlineOne(p.original.imageUrl) },
+          dupe: { ...p.dupe, imageUrl: await inlineOne(p.dupe.imageUrl) },
+        })),
+      );
       setPairs(newPairs);
       setStage("scripting");
       setStage("voicing");
