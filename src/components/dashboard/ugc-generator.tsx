@@ -42,6 +42,7 @@ export function UgcGenerator() {
   const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
+  const proxyImage = useServerFn(fetchImageAsDataUrl);
 
   const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
