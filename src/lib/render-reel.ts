@@ -500,10 +500,25 @@ async function renderWithWebCodecs(
       timestamp: Math.round((f / fps) * 1_000_000),
       duration: frameDuration,
     });
-    videoEncoder.encode(videoFrame, {
-      keyFrame: f % keyframeInterval === 0,
-    });
-    videoFrame.close();
+    const isKeyFrame = f % keyframeInterval === 0;
+    try {
+      try {
+        videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
+      } catch (encErr) {
+        // Encoder was reclaimed (QuotaExceededError) or otherwise closed.
+        // Reconfigure once and re-emit this frame as a keyframe.
+        if (encErr instanceof DOMException && encErr.name === "InvalidStateError") {
+          console.warn("[render-reel] encoder closed mid-render, reconfiguring");
+          videoError = null;
+          videoEncoder.configure(videoEncoderConfig);
+          videoEncoder.encode(videoFrame, { keyFrame: true });
+        } else {
+          throw encErr;
+        }
+      }
+    } finally {
+      videoFrame.close();
+    }
 
     if (f % 3 === 0 || f === totalFrames - 1) {
       onProgress?.({ stage: "frames", pct: (f + 1) / totalFrames });
