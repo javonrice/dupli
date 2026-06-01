@@ -113,6 +113,66 @@ export type RenderAndSaveLambdaArgs = {
   onProgress?: (p: RenderProgress) => void;
 };
 
+// Upload one data: URL to user-videos storage and return a signed URL.
+// Lambda's headless Chrome fetches over HTTPS so a signed URL works fine,
+// and we avoid blowing past Lambda's 256 KB inputProps limit.
+async function uploadDataUrl(
+  dataUrl: string,
+  userId: string,
+  ext: string,
+  contentType: string,
+): Promise<string> {
+  const res = await fetch(dataUrl);
+  const blob = await res.blob();
+  const path = `${userId}/render-tmp/${crypto.randomUUID()}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from("user-videos")
+    .upload(path, blob, { contentType, upsert: false });
+  if (upErr) throw new Error(`asset upload failed: ${upErr.message}`);
+  const { data, error: signErr } = await supabase.storage
+    .from("user-videos")
+    .createSignedUrl(path, 60 * 60); // 1h
+  if (signErr || !data?.signedUrl) {
+    throw new Error(`sign url failed: ${signErr?.message ?? "unknown"}`);
+  }
+  return data.signedUrl;
+}
+
+async function externalizeScriptAssets(
+  script: ReelScript,
+  userId: string,
+): Promise<ReelScript> {
+  const swap = async (url: string): Promise<string> => {
+    if (!url.startsWith("data:")) return url;
+    const mimeMatch = url.match(/^data:([^;,]+)/);
+    const mime = mimeMatch?.[1] ?? "application/octet-stream";
+    const ext =
+      mime === "image/webp" ? "webp"
+      : mime === "image/png" ? "png"
+      : mime === "image/jpeg" ? "jpg"
+      : mime === "audio/mpeg" ? "mp3"
+      : mime === "audio/mp3" ? "mp3"
+      : mime === "audio/wav" ? "wav"
+      : "bin";
+    return uploadDataUrl(url, userId, ext, mime);
+  };
+
+  const newPairs = await Promise.all(
+    script.pairs.map(async (p) => ({
+      ...p,
+      original: { ...p.original, imageUrl: await swap(p.original.imageUrl) },
+      dupe: { ...p.dupe, imageUrl: await swap(p.dupe.imageUrl) },
+    })),
+  );
+  const newSegments = await Promise.all(
+    script.segments.map(async (s) => ({
+      ...s,
+      audioDataUrl: await swap(s.audioDataUrl),
+    })),
+  );
+  return { pairs: newPairs, segments: newSegments };
+}
+
 export async function renderAndSaveReelViaLambda({
   script,
   pairs,
@@ -121,8 +181,18 @@ export async function renderAndSaveReelViaLambda({
 }: RenderAndSaveLambdaArgs): Promise<RenderAndSaveResult> {
   const totalFrames = totalDurationInFrames(script);
 
+  // 0. Externalize all data: URLs (images + audio) to signed Storage URLs
+  //    so the Lambda inputProps payload stays well under the 256 KB cap.
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
+  if (!userId) throw new Error("Not signed in");
+  onProgress?.({ stage: "audio", pct: 0.02 });
+  const lambdaScript = await externalizeScriptAssets(script, userId);
+
   // 1. Kick off Lambda render.
-  const { renderId, bucketName } = await startLambdaRender({ data: { script } });
+  const { renderId, bucketName } = await startLambdaRender({
+    data: { script: lambdaScript },
+  });
 
   // 2. Poll progress every 2s.
   let outputFile: string | null = null;
