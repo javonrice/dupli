@@ -100,72 +100,52 @@ export function UgcGenerator() {
     return `dupli-${slug}-${ts}.mp4`;
   }
 
-  async function downloadFromUrl(url: string, filename: string) {
-    const downloadUrl = `/api/download-video?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-
   async function handleRender() {
     if (!script || !pairs || pairs.length === 0) return;
+    if (!playerRef.current || !captureRef.current) {
+      setError("Preview not ready — wait a moment and try again.");
+      return;
+    }
     setError(null);
     setExporting(true);
     setRenderPct(0);
+    setRenderStage("audio");
     try {
-      const { renderId, bucketName } = await startRender({
-        data: { script },
+      const { blob } = await renderAndSaveReel({
+        script,
+        pairs,
+        playerRef,
+        captureEl: captureRef.current,
+        saveRecord,
+        onProgress: (p) => {
+          setRenderStage(p.stage);
+          setRenderPct(p.pct);
+        },
       });
-
-      // Poll progress without hammering the Lambda progress endpoint.
-      let outputFile: string | null = null;
-      while (true) {
-        await new Promise((r) => setTimeout(r, 4000));
-        const p = await getProgress({
-          data: { renderId, bucketName },
-        });
-        setRenderPct(p.overallProgress);
-        if (p.fatalErrorEncountered) {
-          throw new Error(p.errors[0] ?? "Lambda render failed");
-        }
-        if (p.done && p.outputFile) {
-          outputFile = p.outputFile;
-          break;
-        }
-      }
-
       const filename = buildFilename();
-      setRenderedUrl(outputFile);
+      setRenderedBlob(blob);
       setRenderedName(filename);
-      await downloadFromUrl(outputFile, filename);
-
-      // Best-effort save to library (store S3 URL as storage_path)
-      try {
-        await saveRecord({
-          data: {
-            storagePath: outputFile,
-            thumbnailUrl: pairs[0]?.original.imageUrl ?? null,
-            pairs,
-            durationSec: totalFrames / FPS,
-          },
-        });
-      } catch (e) {
-        console.warn("save record failed", e);
-      }
+      downloadBlob(blob, filename);
     } catch (e) {
       setError(e instanceof Error ? e.message : "MP4 export failed");
     } finally {
       setExporting(false);
+      setRenderStage(null);
     }
   }
 
-  async function handleRedownload() {
-    if (renderedUrl && renderedName) {
-      await downloadFromUrl(renderedUrl, renderedName);
+  function handleRedownload() {
+    if (renderedBlob && renderedName) {
+      downloadBlob(renderedBlob, renderedName);
     }
   }
+
+  const renderStageLabel: Record<RenderProgress["stage"], string> = {
+    audio: "Mixing voiceover",
+    frames: "Capturing frames",
+    encode: "Encoding MP4",
+    finalize: "Finalizing",
+  };
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
