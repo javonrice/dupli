@@ -65,27 +65,66 @@ export function PhotoCarouselGenerator() {
   const allFilled = slots.every((s) => s !== null);
   const filledCount = slots.filter((s) => s !== null).length;
 
+  const processFile = useCallback(async (file: File): Promise<PhotoSlot> => {
+    const raw = await fileToDataUrl(file);
+    const small = await downscaleImage(raw, 1280);
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      previewUrl: small,
+    };
+  }, []);
+
   const handlePick = useCallback(
     async (idx: number, file: File | null) => {
       if (!file) return;
       setError(null);
       try {
-        const raw = await fileToDataUrl(file);
-        const small = await downscaleImage(raw, 1280);
+        const slot = await processFile(file);
         setSlots((prev) => {
           const next = [...prev];
-          next[idx] = {
-            id: `${Date.now()}-${idx}`,
-            file,
-            previewUrl: small,
-          };
+          next[idx] = slot;
           return next;
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't read file");
       }
     },
-    [],
+    [processFile],
+  );
+
+  const handleBulkPick = useCallback(
+    async (files: FileList | File[] | null) => {
+      if (!files || files.length === 0) return;
+      setError(null);
+      const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+      try {
+        // Find empty slot indices in order, fill up to available.
+        setSlots((prev) => prev); // no-op; we'll snapshot below
+        const current = slotsRef.current;
+        const emptyIdx: number[] = [];
+        current.forEach((s, i) => {
+          if (!s) emptyIdx.push(i);
+        });
+        const take = list.slice(0, emptyIdx.length);
+        const processed = await Promise.all(take.map((f) => processFile(f)));
+        setSlots((prev) => {
+          const next = [...prev];
+          processed.forEach((slot, i) => {
+            next[emptyIdx[i]] = slot;
+          });
+          return next;
+        });
+        if (list.length > emptyIdx.length) {
+          setError(
+            `Only ${emptyIdx.length} empty slot${emptyIdx.length === 1 ? "" : "s"} — extra files ignored.`,
+          );
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't read files");
+      }
+    },
+    [processFile],
   );
 
   const clearSlot = useCallback((idx: number) => {
