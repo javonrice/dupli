@@ -20,7 +20,7 @@ import {
   getDupeOfTheDayBlended,
   getTrendingOriginalsBlended,
   type TrendingSource,
-} from "@/server/trending.functions";
+} from "@/lib/trending.functions";
 import type { ScanRow } from "@/lib/scans.functions";
 import wordmark from "@/assets/dupli-wordmark.png";
 

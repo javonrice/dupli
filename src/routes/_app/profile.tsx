@@ -10,7 +10,7 @@ import {
   HelpCircle,
   LogOut,
 } from "lucide-react";
-import { getMyProfile, type ProfileRow } from "@/server/profile.functions";
+import { getMyProfile, type ProfileRow } from "@/lib/profile.functions";
 import { TabBarSpacer } from "@/components/tab-bar";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
