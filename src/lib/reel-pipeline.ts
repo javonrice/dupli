@@ -18,12 +18,7 @@ import {
   audioStartFrames,
 } from "@/remotion/DupeReel";
 
-  FPS,
-  WIDTH,
-  HEIGHT,
-  totalDurationInFrames,
-  audioStartFrames,
-} from "@/remotion/DupeReel";
+
 
 export type RenderAndSaveArgs = {
   script: ReelScript;
