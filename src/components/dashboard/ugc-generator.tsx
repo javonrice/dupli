@@ -41,8 +41,6 @@ export function UgcGenerator() {
   const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
-  const startRender = useServerFn(startLambdaRender);
-  const getProgress = useServerFn(getLambdaRenderProgress);
 
   const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
@@ -50,15 +48,20 @@ export function UgcGenerator() {
   const [error, setError] = useState<string | null>(null);
 
   const [exporting, setExporting] = useState(false);
+  const [renderStage, setRenderStage] = useState<RenderProgress["stage"] | null>(null);
   const [renderPct, setRenderPct] = useState(0);
-  const [renderedUrl, setRenderedUrl] = useState<string | null>(null);
+  const [renderedBlob, setRenderedBlob] = useState<Blob | null>(null);
   const [renderedName, setRenderedName] = useState<string>("");
 
-  // Clear cached url when the script changes (new generation)
+  const playerRef = useRef<PlayerRef | null>(null);
+  const captureRef = useRef<HTMLDivElement | null>(null);
+
+  // Clear cached blob when the script changes (new generation)
   useEffect(() => {
-    setRenderedUrl(null);
+    setRenderedBlob(null);
     setRenderedName("");
     setRenderPct(0);
+    setRenderStage(null);
   }, [script]);
 
   const loading =
