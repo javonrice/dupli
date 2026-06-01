@@ -226,8 +226,8 @@ export async function renderAndSaveReelViaLambda({
   let storagePath: string | null = null;
   let saved = false;
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
     if (userId) {
       const fileId = crypto.randomUUID();
       storagePath = `${userId}/${fileId}.mp4`;
