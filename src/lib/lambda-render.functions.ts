@@ -33,11 +33,11 @@ function getEnv() {
 }
 
 // AWS Signature V4 using Web Crypto — works in Cloudflare Workers (no Node.js SDK needed).
-async function hmacSha256(key: ArrayBuffer | CryptoKey, data: string): Promise<ArrayBuffer> {
+async function hmacSha256(key: BufferSource | CryptoKey, data: string): Promise<ArrayBuffer> {
   const cryptoKey =
-    key instanceof ArrayBuffer
-      ? await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
-      : key;
+    key instanceof CryptoKey
+      ? key
+      : await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(data));
 }
 
