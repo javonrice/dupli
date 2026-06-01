@@ -15,7 +15,12 @@ import { generateReelScript } from "@/lib/reel-voiceover.functions";
 import { saveVideoRecord } from "@/lib/user-videos.functions";
 import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
-import { renderAndSaveReel, downloadBlob, slugify } from "@/lib/reel-pipeline";
+import {
+  renderAndSaveReel,
+  renderAndSaveReelViaLambda,
+  downloadBlob,
+  slugify,
+} from "@/lib/reel-pipeline";
 import type { RenderProgress } from "@/lib/render-reel";
 
 import {
@@ -54,6 +59,7 @@ export function UgcGenerator() {
   const [renderPct, setRenderPct] = useState(0);
   const [renderedBlob, setRenderedBlob] = useState<Blob | null>(null);
   const [renderedName, setRenderedName] = useState<string>("");
+  const [renderMode, setRenderMode] = useState<"lambda" | "browser">("lambda");
 
   const playerRef = useRef<PlayerRef | null>(null);
   const captureRef = useRef<HTMLDivElement | null>(null);
@@ -123,26 +129,47 @@ export function UgcGenerator() {
 
   async function handleRender() {
     if (!script || !pairs || pairs.length === 0) return;
-    if (!playerRef.current || !captureRef.current) {
-      setError("Preview not ready — wait a moment and try again.");
-      return;
-    }
     setError(null);
     setExporting(true);
     setRenderPct(0);
-    setRenderStage("audio");
+    setRenderStage("frames");
+    setRenderMode("lambda");
+
+    const onProgress = (p: RenderProgress) => {
+      setRenderStage(p.stage);
+      setRenderPct(p.pct);
+    };
+
     try {
-      const { blob } = await renderAndSaveReel({
-        script,
-        pairs,
-        playerRef,
-        captureEl: captureRef.current,
-        saveRecord,
-        onProgress: (p) => {
-          setRenderStage(p.stage);
-          setRenderPct(p.pct);
-        },
-      });
+      let blob: Blob;
+      try {
+        // Try cloud (Lambda) path first.
+        const result = await renderAndSaveReelViaLambda({
+          script,
+          pairs,
+          saveRecord,
+          onProgress,
+        });
+        blob = result.blob;
+      } catch (lambdaErr) {
+        console.warn("Lambda render failed, falling back to browser:", lambdaErr);
+        if (!playerRef.current || !captureRef.current) {
+          throw lambdaErr;
+        }
+        setRenderMode("browser");
+        setRenderPct(0);
+        setRenderStage("audio");
+        const result = await renderAndSaveReel({
+          script,
+          pairs,
+          playerRef,
+          captureEl: captureRef.current,
+          saveRecord,
+          onProgress,
+        });
+        blob = result.blob;
+      }
+
       const filename = buildFilename();
       setRenderedBlob(blob);
       setRenderedName(filename);
@@ -290,13 +317,17 @@ export function UgcGenerator() {
                 {exporting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {renderStage ? renderStageLabel[renderStage] : "Rendering"}…{" "}
-                    {Math.round(renderPct * 100)}%
+                    {renderMode === "lambda"
+                      ? "Rendering in cloud"
+                      : renderStage
+                        ? renderStageLabel[renderStage]
+                        : "Rendering"}
+                    … {Math.round(renderPct * 100)}%
                   </>
                 ) : (
                   <>
                     <Video className="mr-2 h-4 w-4" />
-                    Render & Download MP4
+                    Render & Download
                   </>
                 )}
               </Button>
@@ -323,8 +354,9 @@ export function UgcGenerator() {
             )}
 
             <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
-              Rendered right in your browser with hardware-accelerated WebCodecs
-              — typically 10–30s for a full reel. No upload, no Lambda.
+              Rendered on Remotion Lambda for speed and reliability — typically
+              20–60s for a full reel. Falls back to in-browser render if the
+              cloud path is unavailable.
             </p>
           </div>
         </div>

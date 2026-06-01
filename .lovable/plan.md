@@ -1,40 +1,65 @@
+# Switch UGC Generator to Remotion Lambda Rendering
+
 ## Goal
 
-Stop the WebCodecs hardware encoder from being reclaimed mid-render (the `QuotaExceededError: Codec reclaimed due to inactivity` you saw), and stop leaking `VideoFrame`s. Result: the fast path actually completes and we don't silently fall back to the slow ffmpeg.wasm path.
+Replace the slow, flaky in-browser render (WebCodecs → ffmpeg.wasm) with the existing Remotion Lambda integration. Keep the browser path as an automatic fallback if Lambda isn't configured or fails to start.
 
-## Why it's happening
+## Why now
 
-In `src/lib/render-reel.ts` → `renderWithWebCodecs`, the per-frame loop does:
+The Lambda code path (`src/lib/lambda-render.functions.ts`) is fully built — `startLambdaRender` + `getLambdaRenderProgress` server fns, AWS SDK wiring, and the `/api/download-video` proxy for streaming the S3 MP4 — and all required secrets are already set (`REMOTION_LAMBDA_FUNCTION_NAME`, `REMOTION_SERVE_URL`, `REMOTION_AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). The original blocker (image fetches failing inside Lambda's headless Chrome) is no longer an issue because the UGC generator already proxies every product image to a data URL before sending the script.
 
-1. `domToCanvas(captureEl)` — this can take 100–500ms per frame (DOM clone + image decode).
-2. `videoEncoder.encode(frame)`.
+## Step 1 — Add `renderAndSaveReelViaLambda` in `src/lib/reel-pipeline.ts`
 
-Chrome's **hardware** H.264 encoder is reclaimed if it sits idle too long between `encode()` calls. The big gap is step 1, not the encoder itself. Once reclaimed, the next `encode()` throws `InvalidStateError: closed codec`, and we drop into the ffmpeg.wasm fallback — which works but is much slower (what you're feeling as "still slow").
+New exported async function, sibling to `renderAndSaveReel`. Signature:
 
-The `VideoFrame was garbage collected` warning is the same incident: when `encode()` throws, the `videoFrame.close()` line is never reached for that frame.
+```text
+renderAndSaveReelViaLambda({
+  script,
+  pairs,
+  saveRecord,
+  onProgress,
+})
+```
 
-## Fix (in `src/lib/render-reel.ts`)
+Behavior:
+1. Call `startLambdaRender({ data: { script } })` → `{ renderId, bucketName }`.
+2. Poll `getLambdaRenderProgress({ data: { renderId, bucketName } })` every 2s.
+3. On each tick, call `onProgress({ stage: "frames", pct: overallProgress })` so the existing bar moves.
+4. If `fatalErrorEncountered` or `errors.length > 0` → throw with the joined messages.
+5. When `done`, fetch the MP4 via `/api/download-video?url=<outputFile>&filename=<slug>.mp4` to get a Blob.
+6. Upload the Blob to `user-videos` and call `saveRecord(...)` — identical to the existing pipeline.
+7. Return `{ blob, storagePath, saved }` so the caller can reuse `downloadBlob`.
 
-Four small, surgical changes — no architectural rewrite:
+## Step 2 — Wire it into `src/components/dashboard/ugc-generator.tsx`
 
-1. **Prefer software encoder.** Change `hardwareAcceleration: "prefer-hardware"` to `"prefer-software"` in `videoEncoder.configure(...)`. Software encoders aren't reclaimed for inactivity. On a 540×960 reel at 30fps with 10Mbps bitrate, software H.264 is plenty fast — the bottleneck is `domToCanvas`, not the encoder. Update `supportsWebCodecs` to probe with the same flag so we don't pick a codec the software encoder can't do.
+- Import `renderAndSaveReelViaLambda` from `reel-pipeline`.
+- Add `renderMode` state: `"lambda" | "browser"`, default `"lambda"`.
+- In the existing "Render & Download" handler:
+  1. `try` Lambda path first. On the first await (start call), if it throws, log and fall through to browser path with a toast/inline note ("Cloud render unavailable, rendering locally").
+  2. Keep the rest of the flow (set blob, autodownload, surface "saved to My Videos") identical.
+- Leave the hidden `<Player>` and `captureRef` in the DOM untouched — the browser fallback still needs them.
+- Update the button label (currently mentions "No upload, no Lambda") to "Render & Download".
 
-2. **Guarantee `frame.close()`.** Wrap the frame in `try { encode } finally { close }` so a thrown `encode()` still releases GPU memory. Kills the "VideoFrame was garbage collected" warning.
+## Step 3 — Progress label tweak
 
-3. **Recover from a reclaimed encoder instead of bailing.** If `encode()` throws `InvalidStateError` (or the `error` callback fires with `QuotaExceededError`), reconfigure the encoder once and re-emit the current frame as a keyframe, rather than throwing out of the whole WebCodecs path. Only fall through to ffmpeg.wasm if reconfigure also fails.
+In the progress section, when `renderMode === "lambda"` show a single label "Rendering in cloud…" + percentage instead of the per-stage frame labels. Browser path keeps current stage labels.
 
-4. **Keep the pipeline tighter while capture runs.** Drop the `await new Promise(r => setTimeout(r, 150))` warmup before the loop and the `setTimeout(r, 80)` retry sleeps down to a microtask (`await Promise.resolve()`) — these add cumulative idle time. Keep the existing `encodeQueueSize > 4` back-pressure check.
+## Step 4 — Verification (after build mode)
 
-## Out of scope (not changing now)
+1. Generate a script, click Render & Download — confirm progress climbs and the MP4 downloads in ~20–60s.
+2. Confirm new entry shows up in My Videos.
+3. Temporarily simulate Lambda failure (e.g. invoke with bad input via dev tools) → browser path takes over without a crash.
+4. Check `server-function-logs` for any `startLambdaRender` / `getLambdaRenderProgress` errors.
 
-- The `postMessage` origin warning — that's Lovable's preview shell, not our app.
-- The image-proxy round-trip — that already happens once upfront in `ugc-generator.tsx` before render starts, so it's not contributing to per-frame gaps.
-- Pre-rendering all canvases into memory before encoding — would help further but uses a lot of RAM for a 30s reel; revisit only if (1)–(4) aren't enough.
+## Explicitly out of scope
 
-## How we'll verify
+- Do **not** delete `render-reel.ts` or any browser-render code — it's the fallback.
+- Do **not** re-deploy the Remotion site bundle (`deploy-lambda.mjs`) unless the first Lambda render fails because the deployed site is stale. If it does fail with image-load errors, that step gets added.
+- Do **not** touch `/api/download-video`, image proxy, or the Supabase upload path — they already work.
+- Do **not** change `MyVideos` or the photo carousel generator.
 
-After the change, render a reel and confirm in the console:
-- No `Codec reclaimed due to inactivity`.
-- No `VideoFrame was garbage collected`.
-- No `WebCodecs path failed, falling back to ffmpeg.wasm`.
-- Render completes noticeably faster (fast path, not ffmpeg.wasm).
+## Technical notes
+
+- `getLambdaRenderProgress` already handles AWS throttling with exponential backoff internally, so a flat 2s poll on the client is fine.
+- `startLambdaRender` reads env at call time inside the handler — if any of the 4 AWS/Remotion env vars are missing it throws a clear "Lambda env not configured" error, which is exactly the signal the fallback uses.
+- The S3 output URL returned by Lambda matches the `isAllowedRemotionUrl` allowlist in the download proxy (`remotionlambda-*.amazonaws.com/*.mp4`), so no proxy changes are needed.
