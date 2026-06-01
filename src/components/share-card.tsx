@@ -1,5 +1,5 @@
 import { forwardRef } from "react";
-import type { DupeAnalysis } from "@/server/scan.functions";
+import type { DupeAnalysis } from "@/lib/scan.functions";
 import wordmark from "@/assets/dupli-wordmark.png";
 
 type Props = {

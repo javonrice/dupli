@@ -3,13 +3,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { Loader2, Share2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getScan } from "@/server/scans.functions";
-import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
+import { getScan } from "@/lib/scans.functions";
+import { fetchImageAsDataUrl } from "@/lib/image-proxy.functions";
 import { ShareCard } from "@/components/share-card";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
 import { selectDupe } from "@/lib/select-dupe";
-import type { DupeAnalysis } from "@/server/scan.functions";
+import type { DupeAnalysis } from "@/lib/scan.functions";
 
 export const Route = createFileRoute("/_app/scan/$id/share")({
   component: SharePage,

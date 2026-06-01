@@ -1,4 +1,4 @@
-import type { ScanRow } from "@/server/scans.functions";
+import type { ScanRow } from "@/lib/scans.functions";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 

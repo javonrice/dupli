@@ -2,9 +2,9 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getScan, getPublicScan, setSaved } from "@/server/scans.functions";
+import { getScan, getPublicScan, setSaved } from "@/lib/scans.functions";
 import { ResultsScreen } from "@/components/scanner";
-import type { DupeAnalysis } from "@/server/scan.functions";
+import type { DupeAnalysis } from "@/lib/scan.functions";
 
 export const Route = createFileRoute("/_app/scan/$id/")({
   component: ScanDetailPage,

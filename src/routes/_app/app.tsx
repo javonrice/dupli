@@ -21,7 +21,7 @@ import {
   getTrendingOriginalsBlended,
   type TrendingSource,
 } from "@/server/trending.functions";
-import type { ScanRow } from "@/server/scans.functions";
+import type { ScanRow } from "@/lib/scans.functions";
 import wordmark from "@/assets/dupli-wordmark.png";
 
 export const Route = createFileRoute("/_app/app")({
