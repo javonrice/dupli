@@ -354,8 +354,9 @@ export function UgcGenerator() {
             )}
 
             <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
-              Rendered right in your browser with hardware-accelerated WebCodecs
-              — typically 10–30s for a full reel. No upload, no Lambda.
+              Rendered on Remotion Lambda for speed and reliability — typically
+              20–60s for a full reel. Falls back to in-browser render if the
+              cloud path is unavailable.
             </p>
           </div>
         </div>
