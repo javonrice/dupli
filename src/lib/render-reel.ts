@@ -352,6 +352,15 @@ async function renderWithWebCodecs(
   });
 
   let videoError: unknown = null;
+  const videoEncoderConfig: VideoEncoderConfig = {
+    codec: videoCodec,
+    width,
+    height,
+    bitrate: 10_000_000,
+    framerate: fps,
+    hardwareAcceleration: "prefer-software",
+    avc: { format: "avc" },
+  };
   const videoEncoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     error: (e) => {
@@ -359,15 +368,7 @@ async function renderWithWebCodecs(
       console.error("[render-reel] video encoder error", e);
     },
   });
-  videoEncoder.configure({
-    codec: videoCodec,
-    width,
-    height,
-    bitrate: 10_000_000,
-    framerate: fps,
-    hardwareAcceleration: "prefer-hardware",
-    avc: { format: "avc" },
-  });
+  videoEncoder.configure(videoEncoderConfig);
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
