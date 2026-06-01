@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Sparkles, Layers } from "lucide-react";
-import type { TrendingOriginal } from "@/server/discover.functions";
+import type { TrendingOriginal } from "@/lib/discover.functions";
 
 type Variant = "card" | "tile";
 

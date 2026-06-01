@@ -1,4 +1,4 @@
-import type { TrendingOriginal } from "@/server/discover.functions";
+import type { TrendingOriginal } from "@/lib/discover.functions";
 import { CommunityOriginalCard } from "./community-original-card";
 
 /** Horizontal swipeable rail of trending originals (each shows N dupes summary). */

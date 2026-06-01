@@ -10,7 +10,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getProductDetail, type ProductDetail } from "@/server/discover.functions";
+import { getProductDetail, type ProductDetail } from "@/lib/discover.functions";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
 

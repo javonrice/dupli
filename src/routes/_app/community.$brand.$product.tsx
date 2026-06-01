@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, ShoppingBag, ArrowRight, TrendingDown } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getCommunityDupe, type CommunityDupe } from "@/server/discover.functions";
+import { getCommunityDupe, type CommunityDupe } from "@/lib/discover.functions";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";
 
