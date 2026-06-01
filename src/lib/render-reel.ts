@@ -448,8 +448,8 @@ async function renderWithWebCodecs(
         break;
       } catch (err) {
         lastErr = err;
-        // modern-screenshot occasionally fails on transient decode; retry.
-        await new Promise((r) => setTimeout(r, 80));
+        // modern-screenshot occasionally fails on transient decode; retry on next microtask.
+        await Promise.resolve();
         // Last-ditch: try html-to-image, which has different cloning.
         if (attempt === 2) {
           try {
