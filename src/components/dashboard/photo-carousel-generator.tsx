@@ -61,6 +61,9 @@ export function PhotoCarouselGenerator() {
   // refs keyed by slide key, set by render container
   const slideRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const fileInputs = useRef<(HTMLInputElement | null)[]>([]);
+  const bulkInputRef = useRef<HTMLInputElement | null>(null);
+  const slotsRef = useRef<(PhotoSlot | null)[]>(slots);
+  slotsRef.current = slots;
 
   const allFilled = slots.every((s) => s !== null);
   const filledCount = slots.filter((s) => s !== null).length;
