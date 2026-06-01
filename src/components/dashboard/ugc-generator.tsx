@@ -129,26 +129,47 @@ export function UgcGenerator() {
 
   async function handleRender() {
     if (!script || !pairs || pairs.length === 0) return;
-    if (!playerRef.current || !captureRef.current) {
-      setError("Preview not ready — wait a moment and try again.");
-      return;
-    }
     setError(null);
     setExporting(true);
     setRenderPct(0);
-    setRenderStage("audio");
+    setRenderStage("frames");
+    setRenderMode("lambda");
+
+    const onProgress = (p: RenderProgress) => {
+      setRenderStage(p.stage);
+      setRenderPct(p.pct);
+    };
+
     try {
-      const { blob } = await renderAndSaveReel({
-        script,
-        pairs,
-        playerRef,
-        captureEl: captureRef.current,
-        saveRecord,
-        onProgress: (p) => {
-          setRenderStage(p.stage);
-          setRenderPct(p.pct);
-        },
-      });
+      let blob: Blob;
+      try {
+        // Try cloud (Lambda) path first.
+        const result = await renderAndSaveReelViaLambda({
+          script,
+          pairs,
+          saveRecord,
+          onProgress,
+        });
+        blob = result.blob;
+      } catch (lambdaErr) {
+        console.warn("Lambda render failed, falling back to browser:", lambdaErr);
+        if (!playerRef.current || !captureRef.current) {
+          throw lambdaErr;
+        }
+        setRenderMode("browser");
+        setRenderPct(0);
+        setRenderStage("audio");
+        const result = await renderAndSaveReel({
+          script,
+          pairs,
+          playerRef,
+          captureEl: captureRef.current,
+          saveRecord,
+          onProgress,
+        });
+        blob = result.blob;
+      }
+
       const filename = buildFilename();
       setRenderedBlob(blob);
       setRenderedName(filename);
