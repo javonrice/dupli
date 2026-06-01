@@ -75,7 +75,26 @@ export function UgcGenerator() {
     setPairs(null);
     try {
       setStage("picking");
-      const newPairs = await pickPairs({ data: { count: 4 } });
+      const rawPairs = await pickPairs({ data: { count: 4 } });
+
+      // Proxy product images → data URLs so frame capture (html-to-image /
+      // modern-screenshot) never hits CORS-blocked CDNs mid-render.
+      const inlineOne = async (url: string): Promise<string> => {
+        if (!url || url.startsWith("data:")) return url;
+        try {
+          const r = await proxyImage({ data: { url } });
+          return r.dataUrl ?? url;
+        } catch {
+          return url;
+        }
+      };
+      const newPairs: DupePair[] = await Promise.all(
+        rawPairs.map(async (p) => ({
+          ...p,
+          original: { ...p.original, imageUrl: await inlineOne(p.original.imageUrl) },
+          dupe: { ...p.dupe, imageUrl: await inlineOne(p.dupe.imageUrl) },
+        })),
+      );
       setPairs(newPairs);
       setStage("scripting");
       setStage("voicing");
