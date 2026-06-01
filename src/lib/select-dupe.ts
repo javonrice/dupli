@@ -1,4 +1,4 @@
-import type { DupeAnalysis } from "@/server/scan.functions";
+import type { DupeAnalysis } from "@/lib/scan.functions";
 
 /**
  * Returns a copy of the analysis with the selected candidate promoted to the

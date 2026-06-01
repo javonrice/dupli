@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Loader2, ShoppingBag, ExternalLink, RotateCw, Bookmark, Share2, X } from "lucide-react";
-import type { DupeAnalysis, DupeSuggestion } from "@/server/scan.functions";
+import type { DupeAnalysis, DupeSuggestion } from "@/lib/scan.functions";
 import { DupeCard } from "@/components/dupe-card";
 import { IOSScreen } from "@/components/ios-screen";
 import { useHideTabBar } from "@/lib/tab-bar-visibility";

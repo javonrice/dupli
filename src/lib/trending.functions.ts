@@ -14,7 +14,7 @@ import {
   type CommunityDupe,
   type TrendingOriginal,
 } from "@/lib/discover.functions";
-import { slugify } from "@/server/skinsort-slugs";
+import { slugify } from "@/lib/skinsort-slugs";
 
 // --- Tunables (no migration needed to change) -----------------------------
 const MIN_SAVES = 2;

@@ -6,7 +6,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { ScanRow } from "@/server/scans.functions";
+import type { ScanRow } from "@/lib/scans.functions";
 
 export type CommunityDupe = {
   /** Stable string id for React keys + share URLs (we use the dupe row id). */

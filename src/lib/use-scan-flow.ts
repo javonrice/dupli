@@ -5,8 +5,8 @@
 import { useCallback, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { useNavigate } from "@tanstack/react-router";
-import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
-import { saveScan, setSaved } from "@/server/scans.functions";
+import { scanProduct, type DupeAnalysis } from "@/lib/scan.functions";
+import { saveScan, setSaved } from "@/lib/scans.functions";
 
 export type ScanStage = "idle" | "scanning" | "results";
 

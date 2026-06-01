@@ -1,4 +1,4 @@
-import type { DupeAnalysis } from "@/server/scan.functions";
+import type { DupeAnalysis } from "@/lib/scan.functions";
 import { Check, AlertCircle, Sparkles, AlertTriangle, ShieldCheck, Eye } from "lucide-react";
 import wordmark from "@/assets/dupli-wordmark.png";
 

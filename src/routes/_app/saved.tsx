@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2, Bookmark } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { listSaved, type ScanRow } from "@/server/scans.functions";
+import { listSaved, type ScanRow } from "@/lib/scans.functions";
 import { ScanListItem } from "@/components/scan-list-item";
 import { TabBarSpacer } from "@/components/tab-bar";
 

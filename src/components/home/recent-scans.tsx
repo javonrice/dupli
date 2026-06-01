@@ -1,4 +1,4 @@
-import type { ScanRow } from "@/server/scans.functions";
+import type { ScanRow } from "@/lib/scans.functions";
 import { ScanListItem } from "@/components/scan-list-item";
 
 /** "Pick up where you left off" — last few scans from the user's history. */

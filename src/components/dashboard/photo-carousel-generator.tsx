@@ -11,8 +11,8 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { scanProduct, type DupeAnalysis } from "@/server/scan.functions";
-import { fetchImageAsDataUrl } from "@/server/image-proxy.functions";
+import { scanProduct, type DupeAnalysis } from "@/lib/scan.functions";
+import { fetchImageAsDataUrl } from "@/lib/image-proxy.functions";
 import { ShareCard } from "@/components/share-card";
 import { CarouselPhotoSlide } from "./carousel-photo-slide";
 import { AppStoreCtaCard } from "./app-store-cta-card";
