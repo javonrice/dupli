@@ -13,7 +13,7 @@ import {
   getTrendingOriginals,
   type CommunityDupe,
   type TrendingOriginal,
-} from "@/server/discover.functions";
+} from "@/lib/discover.functions";
 import { slugify } from "@/server/skinsort-slugs";
 
 // --- Tunables (no migration needed to change) -----------------------------

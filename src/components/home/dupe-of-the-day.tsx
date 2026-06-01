@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ArrowRight, Sparkles, ShoppingBag } from "lucide-react";
-import type { CommunityDupe } from "@/server/discover.functions";
+import type { CommunityDupe } from "@/lib/discover.functions";
 
 function heroLinkProps(dupe: CommunityDupe) {
   if (dupe.original.id) {

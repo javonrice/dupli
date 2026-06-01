@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { ShoppingBag, Sparkles } from "lucide-react";
-import type { CommunityDupe } from "@/server/discover.functions";
+import type { CommunityDupe } from "@/lib/discover.functions";
 
 type Variant = "card" | "tile";
 

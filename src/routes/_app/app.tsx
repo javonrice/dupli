@@ -15,7 +15,7 @@ import {
   getRecentScans,
   type CommunityDupe,
   type TrendingOriginal,
-} from "@/server/discover.functions";
+} from "@/lib/discover.functions";
 import {
   getDupeOfTheDayBlended,
   getTrendingOriginalsBlended,
