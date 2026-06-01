@@ -24,7 +24,7 @@ function getEnv() {
   const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
   const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
   const region = process.env.REMOTION_AWS_REGION || REGION;
-  const bucketName = process.env.REMOTION_LAMBDA_BUCKET ?? null;
+  const bucketName = process.env.REMOTION_AWS_S3_BUCKET ?? process.env.REMOTION_LAMBDA_BUCKET ?? null;
   if (!functionName || !serveUrl || !accessKeyId || !secretAccessKey) {
     throw new Error(
       `Lambda env not configured (fn=${!!functionName}, serveUrl=${!!serveUrl}, key=${!!accessKeyId}, secret=${!!secretAccessKey})`,
