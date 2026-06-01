@@ -155,12 +155,12 @@ export function UgcGenerator() {
             AI UGC
           </p>
           <h2 className="font-display text-2xl font-bold tracking-tight">
-            Dupe Reel (Remotion + ElevenLabs)
+            Dupe Reel (Browser Render)
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Picks 4 random dupe pairs, writes a hook + 4 reveals + CTA,
             voices each line with ElevenLabs, and renders a vertical reel
-            timed to the voiceover — rendered on AWS Lambda in seconds.
+            right in your browser — hardware-accelerated, no upload.
           </p>
         </div>
         <Button onClick={run} disabled={loading || exporting} size="lg">
