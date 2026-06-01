@@ -61,31 +61,73 @@ export function PhotoCarouselGenerator() {
   // refs keyed by slide key, set by render container
   const slideRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const fileInputs = useRef<(HTMLInputElement | null)[]>([]);
+  const bulkInputRef = useRef<HTMLInputElement | null>(null);
+  const slotsRef = useRef<(PhotoSlot | null)[]>(slots);
+  slotsRef.current = slots;
 
   const allFilled = slots.every((s) => s !== null);
   const filledCount = slots.filter((s) => s !== null).length;
+
+  const processFile = useCallback(async (file: File): Promise<PhotoSlot> => {
+    const raw = await fileToDataUrl(file);
+    const small = await downscaleImage(raw, 1280);
+    return {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+      previewUrl: small,
+    };
+  }, []);
 
   const handlePick = useCallback(
     async (idx: number, file: File | null) => {
       if (!file) return;
       setError(null);
       try {
-        const raw = await fileToDataUrl(file);
-        const small = await downscaleImage(raw, 1280);
+        const slot = await processFile(file);
         setSlots((prev) => {
           const next = [...prev];
-          next[idx] = {
-            id: `${Date.now()}-${idx}`,
-            file,
-            previewUrl: small,
-          };
+          next[idx] = slot;
           return next;
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't read file");
       }
     },
-    [],
+    [processFile],
+  );
+
+  const handleBulkPick = useCallback(
+    async (files: FileList | File[] | null) => {
+      if (!files || files.length === 0) return;
+      setError(null);
+      const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+      try {
+        // Find empty slot indices in order, fill up to available.
+        setSlots((prev) => prev); // no-op; we'll snapshot below
+        const current = slotsRef.current;
+        const emptyIdx: number[] = [];
+        current.forEach((s, i) => {
+          if (!s) emptyIdx.push(i);
+        });
+        const take = list.slice(0, emptyIdx.length);
+        const processed = await Promise.all(take.map((f) => processFile(f)));
+        setSlots((prev) => {
+          const next = [...prev];
+          processed.forEach((slot, i) => {
+            next[emptyIdx[i]] = slot;
+          });
+          return next;
+        });
+        if (list.length > emptyIdx.length) {
+          setError(
+            `Only ${emptyIdx.length} empty slot${emptyIdx.length === 1 ? "" : "s"} — extra files ignored.`,
+          );
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Couldn't read files");
+      }
+    },
+    [processFile],
   );
 
   const clearSlot = useCallback((idx: number) => {
@@ -296,61 +338,104 @@ export function PhotoCarouselGenerator() {
         </div>
       </div>
 
-      {/* Upload slots */}
-      <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-5">
-        {slots.map((slot, i) => (
-          <div
-            key={i}
-            className="relative aspect-[4/5] overflow-hidden rounded-xl border border-dashed border-border bg-muted/30"
-          >
-            <input
-              ref={(el) => {
-                fileInputs.current[i] = el;
-              }}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={(e) => handlePick(i, e.target.files?.[0] ?? null)}
-            />
-            {slot ? (
-              <>
-                <img
-                  src={slot.previewUrl}
-                  alt={`Photo ${i + 1}`}
-                  className="h-full w-full object-cover"
-                />
-                <button
-                  onClick={() => clearSlot(i)}
-                  disabled={busy}
-                  className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white hover:bg-black disabled:opacity-50"
-                  aria-label="Remove photo"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-                <div className="absolute bottom-1.5 left-1.5 rounded-md bg-black/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                  #{i + 1}
-                </div>
-              </>
-            ) : (
-              <button
-                onClick={() => fileInputs.current[i]?.click()}
-                disabled={busy}
-                className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
-              >
-                <Upload className="h-5 w-5" />
-                <span className="text-xs font-semibold">Photo #{i + 1}</span>
-              </button>
-            )}
+      {/* Bulk dropzone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (busy) return;
+          handleBulkPick(e.dataTransfer.files);
+        }}
+        className="mt-5 rounded-xl border border-dashed border-border bg-muted/20 p-4"
+      >
+        <input
+          ref={bulkInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          className="hidden"
+          onChange={(e) => {
+            handleBulkPick(e.target.files);
+            if (bulkInputRef.current) bulkInputRef.current.value = "";
+          }}
+        />
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Upload className="h-4 w-4" />
+            <span>
+              Drop up to {SLOTS} photos here, or pick them all at once.
+            </span>
           </div>
-        ))}
-      </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => bulkInputRef.current?.click()}
+            disabled={busy || allFilled}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Upload photos
+          </Button>
+        </div>
 
-      {!allFilled && (
-        <p className="mt-3 text-xs text-muted-foreground">
-          {filledCount}/{SLOTS} photos uploaded. Add{" "}
-          {SLOTS - filledCount} more to enable generation.
-        </p>
-      )}
+        {/* Upload slots */}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
+          {slots.map((slot, i) => (
+            <div
+              key={i}
+              className="relative aspect-[4/5] overflow-hidden rounded-xl border border-dashed border-border bg-muted/30"
+            >
+              <input
+                ref={(el) => {
+                  fileInputs.current[i] = el;
+                }}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => handlePick(i, e.target.files?.[0] ?? null)}
+              />
+              {slot ? (
+                <>
+                  <img
+                    src={slot.previewUrl}
+                    alt={`Photo ${i + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    onClick={() => clearSlot(i)}
+                    disabled={busy}
+                    className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white hover:bg-black disabled:opacity-50"
+                    aria-label="Remove photo"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                  <div className="absolute bottom-1.5 left-1.5 rounded-md bg-black/70 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                    #{i + 1}
+                  </div>
+                </>
+              ) : (
+                <button
+                  onClick={() => fileInputs.current[i]?.click()}
+                  disabled={busy}
+                  className="flex h-full w-full flex-col items-center justify-center gap-1.5 text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+                >
+                  <Upload className="h-5 w-5" />
+                  <span className="text-xs font-semibold">Photo #{i + 1}</span>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {!allFilled && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {filledCount}/{SLOTS} photos uploaded. Add{" "}
+            {SLOTS - filledCount} more to enable generation.
+          </p>
+        )}
+      </div>
 
       {error && (
         <div className="mt-5 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
