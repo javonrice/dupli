@@ -106,6 +106,90 @@ export async function renderAndSaveReel({
   return { blob, storagePath, saved };
 }
 
+export type RenderAndSaveLambdaArgs = {
+  script: ReelScript;
+  pairs: DupePair[];
+  saveRecord: RenderAndSaveArgs["saveRecord"];
+  onProgress?: (p: RenderProgress) => void;
+};
+
+export async function renderAndSaveReelViaLambda({
+  script,
+  pairs,
+  saveRecord,
+  onProgress,
+}: RenderAndSaveLambdaArgs): Promise<RenderAndSaveResult> {
+  const totalFrames = totalDurationInFrames(script);
+
+  // 1. Kick off Lambda render.
+  const { renderId, bucketName } = await startLambdaRender({ data: { script } });
+
+  // 2. Poll progress every 2s.
+  let outputFile: string | null = null;
+  while (true) {
+    const progress = await getLambdaRenderProgress({
+      data: { renderId, bucketName },
+    });
+    onProgress?.({ stage: "frames", pct: progress.overallProgress });
+    if (progress.fatalErrorEncountered || (progress.errors?.length ?? 0) > 0) {
+      throw new Error(
+        progress.errors?.join("; ") || "Lambda render failed",
+      );
+    }
+    if (progress.done && progress.outputFile) {
+      outputFile = progress.outputFile;
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+
+  // 3. Fetch MP4 via download proxy → Blob.
+  onProgress?.({ stage: "finalize", pct: 0.95 });
+  const proxyUrl = `/api/download-video?url=${encodeURIComponent(outputFile)}&filename=reel.mp4`;
+  const res = await fetch(proxyUrl);
+  if (!res.ok) {
+    throw new Error(`Failed to download rendered video (${res.status})`);
+  }
+  const blob = await res.blob();
+
+  // 4. Upload to user-videos + saveRecord.
+  let storagePath: string | null = null;
+  let saved = false;
+  try {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (userId) {
+      const fileId = crypto.randomUUID();
+      storagePath = `${userId}/${fileId}.mp4`;
+      const { error: upErr } = await supabase.storage
+        .from("user-videos")
+        .upload(storagePath, blob, {
+          contentType: "video/mp4",
+          upsert: false,
+        });
+      if (upErr) {
+        console.warn("upload failed:", upErr.message);
+        storagePath = null;
+      } else {
+        await saveRecord({
+          data: {
+            storagePath,
+            thumbnailUrl: pairs[0]?.original.imageUrl ?? null,
+            pairs,
+            durationSec: totalFrames / FPS,
+          },
+        });
+        saved = true;
+      }
+    }
+  } catch (e) {
+    console.warn("save record failed:", e);
+  }
+
+  onProgress?.({ stage: "finalize", pct: 1 });
+  return { blob, storagePath, saved };
+}
+
 export function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
