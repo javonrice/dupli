@@ -234,8 +234,12 @@ export function UgcGenerator() {
 
       {script && totalFrames > 0 && (
         <div className="mt-5">
-          <div className="mx-auto aspect-[9/16] max-h-[640px] w-auto overflow-hidden rounded-xl border border-border bg-black">
+          <div
+            ref={captureRef}
+            className="mx-auto aspect-[9/16] max-h-[640px] w-auto overflow-hidden rounded-xl border border-border bg-black"
+          >
             <Player
+              ref={playerRef}
               component={DupeReel}
               inputProps={{ script }}
               durationInFrames={totalFrames}
@@ -255,7 +259,7 @@ export function UgcGenerator() {
           </p>
 
           <div className="mt-4 flex flex-col items-center gap-3">
-            {!renderedUrl ? (
+            {!renderedBlob ? (
               <Button
                 onClick={handleRender}
                 disabled={exporting}
@@ -265,7 +269,8 @@ export function UgcGenerator() {
                 {exporting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Rendering on Lambda… {Math.round(renderPct * 100)}%
+                    {renderStage ? renderStageLabel[renderStage] : "Rendering"}…{" "}
+                    {Math.round(renderPct * 100)}%
                   </>
                 ) : (
                   <>
@@ -297,7 +302,9 @@ export function UgcGenerator() {
             )}
 
             <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
-              Rendered on AWS Lambda — typically 20-60s for a full reel.
+              Rendered right in your browser with hardware-accelerated WebCodecs
+              — typically 10–30s for a full reel. No upload, no Lambda.
+            </p>
             </p>
           </div>
         </div>
