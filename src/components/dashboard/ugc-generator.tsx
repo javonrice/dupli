@@ -1,17 +1,21 @@
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
-import { Loader2, RefreshCw, Video, AlertCircle, Download, CheckCircle2 } from "lucide-react";
-import { Player } from "@remotion/player";
+import { useEffect, useRef, useState } from "react";
+import {
+  Loader2,
+  RefreshCw,
+  Video,
+  AlertCircle,
+  Download,
+  CheckCircle2,
+} from "lucide-react";
+import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
 import { generateReelScript } from "@/lib/reel-voiceover.functions";
 import { saveVideoRecord } from "@/lib/user-videos.functions";
-import {
-  startLambdaRender,
-  getLambdaRenderProgress,
-} from "@/lib/lambda-render.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
-import { slugify } from "@/lib/reel-pipeline";
+import { renderAndSaveReel, downloadBlob, slugify } from "@/lib/reel-pipeline";
+import type { RenderProgress } from "@/lib/render-reel";
 
 import {
   DupeReel,
