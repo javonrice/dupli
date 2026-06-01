@@ -1,65 +1,24 @@
-# Switch UGC Generator to Remotion Lambda Rendering
+# Fix: "Not signed in" error in Lambda render path
 
-## Goal
+## Root cause
 
-Replace the slow, flaky in-browser render (WebCodecs → ffmpeg.wasm) with the existing Remotion Lambda integration. Keep the browser path as an automatic fallback if Lambda isn't configured or fails to start.
+`renderAndSaveReelViaLambda` calls `supabase.auth.getUser()` (line 186-188 of `src/lib/reel-pipeline.ts`) to grab the user id for the temp-asset storage path. `getUser()` makes a network round-trip to `/auth/v1/user` to revalidate the JWT. If that call returns no user (cold session, network blip, or it races with session hydration after the page first lands on `/dashboard`), we throw "Not signed in" and fall back to the slow browser render — even though the user is clearly signed in (they're on a guarded route).
 
-## Why now
+We don't actually need to *authenticate* here. We just need the user's id to build the storage key `${userId}/render-tmp/...`. RLS on the `user-videos` bucket will enforce auth on the upload itself.
 
-The Lambda code path (`src/lib/lambda-render.functions.ts`) is fully built — `startLambdaRender` + `getLambdaRenderProgress` server fns, AWS SDK wiring, and the `/api/download-video` proxy for streaming the S3 MP4 — and all required secrets are already set (`REMOTION_LAMBDA_FUNCTION_NAME`, `REMOTION_SERVE_URL`, `REMOTION_AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`). The original blocker (image fetches failing inside Lambda's headless Chrome) is no longer an issue because the UGC generator already proxies every product image to a data URL before sending the script.
+## Change
 
-## Step 1 — Add `renderAndSaveReelViaLambda` in `src/lib/reel-pipeline.ts`
+In `src/lib/reel-pipeline.ts` `renderAndSaveReelViaLambda`:
 
-New exported async function, sibling to `renderAndSaveReel`. Signature:
+- Replace `supabase.auth.getUser()` with `supabase.auth.getSession()` (reads from local storage, no network, no race).
+- Pull `userId` from `session.user.id`.
+- Keep the `if (!userId) throw new Error("Not signed in")` guard (now only fires for genuinely-unsigned users).
 
-```text
-renderAndSaveReelViaLambda({
-  script,
-  pairs,
-  saveRecord,
-  onProgress,
-})
-```
+Also mirror the same change in the existing browser-fallback path further down (lines 76 + 229) for consistency, since they have the same theoretical race even though they haven't been reported failing.
 
-Behavior:
-1. Call `startLambdaRender({ data: { script } })` → `{ renderId, bucketName }`.
-2. Poll `getLambdaRenderProgress({ data: { renderId, bucketName } })` every 2s.
-3. On each tick, call `onProgress({ stage: "frames", pct: overallProgress })` so the existing bar moves.
-4. If `fatalErrorEncountered` or `errors.length > 0` → throw with the joined messages.
-5. When `done`, fetch the MP4 via `/api/download-video?url=<outputFile>&filename=<slug>.mp4` to get a Blob.
-6. Upload the Blob to `user-videos` and call `saveRecord(...)` — identical to the existing pipeline.
-7. Return `{ blob, storagePath, saved }` so the caller can reuse `downloadBlob`.
+No other files change. Lambda flow, externalization, polling, and download proxy stay as-is.
 
-## Step 2 — Wire it into `src/components/dashboard/ugc-generator.tsx`
+## Verification
 
-- Import `renderAndSaveReelViaLambda` from `reel-pipeline`.
-- Add `renderMode` state: `"lambda" | "browser"`, default `"lambda"`.
-- In the existing "Render & Download" handler:
-  1. `try` Lambda path first. On the first await (start call), if it throws, log and fall through to browser path with a toast/inline note ("Cloud render unavailable, rendering locally").
-  2. Keep the rest of the flow (set blob, autodownload, surface "saved to My Videos") identical.
-- Leave the hidden `<Player>` and `captureRef` in the DOM untouched — the browser fallback still needs them.
-- Update the button label (currently mentions "No upload, no Lambda") to "Render & Download".
-
-## Step 3 — Progress label tweak
-
-In the progress section, when `renderMode === "lambda"` show a single label "Rendering in cloud…" + percentage instead of the per-stage frame labels. Browser path keeps current stage labels.
-
-## Step 4 — Verification (after build mode)
-
-1. Generate a script, click Render & Download — confirm progress climbs and the MP4 downloads in ~20–60s.
-2. Confirm new entry shows up in My Videos.
-3. Temporarily simulate Lambda failure (e.g. invoke with bad input via dev tools) → browser path takes over without a crash.
-4. Check `server-function-logs` for any `startLambdaRender` / `getLambdaRenderProgress` errors.
-
-## Explicitly out of scope
-
-- Do **not** delete `render-reel.ts` or any browser-render code — it's the fallback.
-- Do **not** re-deploy the Remotion site bundle (`deploy-lambda.mjs`) unless the first Lambda render fails because the deployed site is stale. If it does fail with image-load errors, that step gets added.
-- Do **not** touch `/api/download-video`, image proxy, or the Supabase upload path — they already work.
-- Do **not** change `MyVideos` or the photo carousel generator.
-
-## Technical notes
-
-- `getLambdaRenderProgress` already handles AWS throttling with exponential backoff internally, so a flat 2s poll on the client is fine.
-- `startLambdaRender` reads env at call time inside the handler — if any of the 4 AWS/Remotion env vars are missing it throws a clear "Lambda env not configured" error, which is exactly the signal the fallback uses.
-- The S3 output URL returned by Lambda matches the `isAllowedRemotionUrl` allowlist in the download proxy (`remotionlambda-*.amazonaws.com/*.mp4`), so no proxy changes are needed.
+- Trigger a UGC reel render from `/dashboard` — Lambda path runs end to end, no "falling back to browser" log.
+- Sign out, then call the same path manually → still throws "Not signed in" (guard still works).

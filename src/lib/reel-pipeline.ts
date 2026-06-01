@@ -73,8 +73,8 @@ export async function renderAndSaveReel({
   let storagePath: string | null = null;
   let saved = false;
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
     if (userId) {
       const fileId = crypto.randomUUID();
       storagePath = `${userId}/${fileId}.mp4`;
@@ -183,8 +183,8 @@ export async function renderAndSaveReelViaLambda({
 
   // 0. Externalize all data: URLs (images + audio) to signed Storage URLs
   //    so the Lambda inputProps payload stays well under the 256 KB cap.
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
+  const { data: sessionData } = await supabase.auth.getSession();
+  const userId = sessionData.session?.user?.id;
   if (!userId) throw new Error("Not signed in");
   onProgress?.({ stage: "audio", pct: 0.02 });
   const lambdaScript = await externalizeScriptAssets(script, userId);
@@ -226,8 +226,8 @@ export async function renderAndSaveReelViaLambda({
   let storagePath: string | null = null;
   let saved = false;
   try {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData.user?.id;
+    const { data: sessionData } = await supabase.auth.getSession();
+    const userId = sessionData.session?.user?.id;
     if (userId) {
       const fileId = crypto.randomUUID();
       storagePath = `${userId}/${fileId}.mp4`;
