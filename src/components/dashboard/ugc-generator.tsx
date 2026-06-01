@@ -1,17 +1,21 @@
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useState } from "react";
-import { Loader2, RefreshCw, Video, AlertCircle, Download, CheckCircle2 } from "lucide-react";
-import { Player } from "@remotion/player";
+import { useEffect, useRef, useState } from "react";
+import {
+  Loader2,
+  RefreshCw,
+  Video,
+  AlertCircle,
+  Download,
+  CheckCircle2,
+} from "lucide-react";
+import { Player, type PlayerRef } from "@remotion/player";
 import { Button } from "@/components/ui/button";
 import { pickRandomDupePairs } from "@/lib/dashboard.functions";
 import { generateReelScript } from "@/lib/reel-voiceover.functions";
 import { saveVideoRecord } from "@/lib/user-videos.functions";
-import {
-  startLambdaRender,
-  getLambdaRenderProgress,
-} from "@/lib/lambda-render.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
-import { slugify } from "@/lib/reel-pipeline";
+import { renderAndSaveReel, downloadBlob, slugify } from "@/lib/reel-pipeline";
+import type { RenderProgress } from "@/lib/render-reel";
 
 import {
   DupeReel,
@@ -37,8 +41,6 @@ export function UgcGenerator() {
   const pickPairs = useServerFn(pickRandomDupePairs);
   const writeScript = useServerFn(generateReelScript);
   const saveRecord = useServerFn(saveVideoRecord);
-  const startRender = useServerFn(startLambdaRender);
-  const getProgress = useServerFn(getLambdaRenderProgress);
 
   const [pairs, setPairs] = useState<DupePair[] | null>(null);
   const [script, setScript] = useState<ReelScript | null>(null);
@@ -46,15 +48,20 @@ export function UgcGenerator() {
   const [error, setError] = useState<string | null>(null);
 
   const [exporting, setExporting] = useState(false);
+  const [renderStage, setRenderStage] = useState<RenderProgress["stage"] | null>(null);
   const [renderPct, setRenderPct] = useState(0);
-  const [renderedUrl, setRenderedUrl] = useState<string | null>(null);
+  const [renderedBlob, setRenderedBlob] = useState<Blob | null>(null);
   const [renderedName, setRenderedName] = useState<string>("");
 
-  // Clear cached url when the script changes (new generation)
+  const playerRef = useRef<PlayerRef | null>(null);
+  const captureRef = useRef<HTMLDivElement | null>(null);
+
+  // Clear cached blob when the script changes (new generation)
   useEffect(() => {
-    setRenderedUrl(null);
+    setRenderedBlob(null);
     setRenderedName("");
     setRenderPct(0);
+    setRenderStage(null);
   }, [script]);
 
   const loading =
@@ -93,72 +100,52 @@ export function UgcGenerator() {
     return `dupli-${slug}-${ts}.mp4`;
   }
 
-  async function downloadFromUrl(url: string, filename: string) {
-    const downloadUrl = `/api/download-video?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`;
-    const a = document.createElement("a");
-    a.href = downloadUrl;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  }
-
   async function handleRender() {
     if (!script || !pairs || pairs.length === 0) return;
+    if (!playerRef.current || !captureRef.current) {
+      setError("Preview not ready — wait a moment and try again.");
+      return;
+    }
     setError(null);
     setExporting(true);
     setRenderPct(0);
+    setRenderStage("audio");
     try {
-      const { renderId, bucketName } = await startRender({
-        data: { script },
+      const { blob } = await renderAndSaveReel({
+        script,
+        pairs,
+        playerRef,
+        captureEl: captureRef.current,
+        saveRecord,
+        onProgress: (p) => {
+          setRenderStage(p.stage);
+          setRenderPct(p.pct);
+        },
       });
-
-      // Poll progress without hammering the Lambda progress endpoint.
-      let outputFile: string | null = null;
-      while (true) {
-        await new Promise((r) => setTimeout(r, 4000));
-        const p = await getProgress({
-          data: { renderId, bucketName },
-        });
-        setRenderPct(p.overallProgress);
-        if (p.fatalErrorEncountered) {
-          throw new Error(p.errors[0] ?? "Lambda render failed");
-        }
-        if (p.done && p.outputFile) {
-          outputFile = p.outputFile;
-          break;
-        }
-      }
-
       const filename = buildFilename();
-      setRenderedUrl(outputFile);
+      setRenderedBlob(blob);
       setRenderedName(filename);
-      await downloadFromUrl(outputFile, filename);
-
-      // Best-effort save to library (store S3 URL as storage_path)
-      try {
-        await saveRecord({
-          data: {
-            storagePath: outputFile,
-            thumbnailUrl: pairs[0]?.original.imageUrl ?? null,
-            pairs,
-            durationSec: totalFrames / FPS,
-          },
-        });
-      } catch (e) {
-        console.warn("save record failed", e);
-      }
+      downloadBlob(blob, filename);
     } catch (e) {
       setError(e instanceof Error ? e.message : "MP4 export failed");
     } finally {
       setExporting(false);
+      setRenderStage(null);
     }
   }
 
-  async function handleRedownload() {
-    if (renderedUrl && renderedName) {
-      await downloadFromUrl(renderedUrl, renderedName);
+  function handleRedownload() {
+    if (renderedBlob && renderedName) {
+      downloadBlob(renderedBlob, renderedName);
     }
   }
+
+  const renderStageLabel: Record<RenderProgress["stage"], string> = {
+    audio: "Mixing voiceover",
+    frames: "Capturing frames",
+    encode: "Encoding MP4",
+    finalize: "Finalizing",
+  };
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
@@ -168,12 +155,12 @@ export function UgcGenerator() {
             AI UGC
           </p>
           <h2 className="font-display text-2xl font-bold tracking-tight">
-            Dupe Reel (Remotion + ElevenLabs)
+            Dupe Reel (Browser Render)
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             Picks 4 random dupe pairs, writes a hook + 4 reveals + CTA,
             voices each line with ElevenLabs, and renders a vertical reel
-            timed to the voiceover — rendered on AWS Lambda in seconds.
+            right in your browser — hardware-accelerated, no upload.
           </p>
         </div>
         <Button onClick={run} disabled={loading || exporting} size="lg">
@@ -247,8 +234,12 @@ export function UgcGenerator() {
 
       {script && totalFrames > 0 && (
         <div className="mt-5">
-          <div className="mx-auto aspect-[9/16] max-h-[640px] w-auto overflow-hidden rounded-xl border border-border bg-black">
+          <div
+            ref={captureRef}
+            className="mx-auto aspect-[9/16] max-h-[640px] w-auto overflow-hidden rounded-xl border border-border bg-black"
+          >
             <Player
+              ref={playerRef}
               component={DupeReel}
               inputProps={{ script }}
               durationInFrames={totalFrames}
@@ -268,7 +259,7 @@ export function UgcGenerator() {
           </p>
 
           <div className="mt-4 flex flex-col items-center gap-3">
-            {!renderedUrl ? (
+            {!renderedBlob ? (
               <Button
                 onClick={handleRender}
                 disabled={exporting}
@@ -278,7 +269,8 @@ export function UgcGenerator() {
                 {exporting ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Rendering on Lambda… {Math.round(renderPct * 100)}%
+                    {renderStage ? renderStageLabel[renderStage] : "Rendering"}…{" "}
+                    {Math.round(renderPct * 100)}%
                   </>
                 ) : (
                   <>
@@ -310,7 +302,8 @@ export function UgcGenerator() {
             )}
 
             <p className="max-w-md text-center text-[11px] leading-relaxed text-muted-foreground">
-              Rendered on AWS Lambda — typically 20-60s for a full reel.
+              Rendered right in your browser with hardware-accelerated WebCodecs
+              — typically 10–30s for a full reel. No upload, no Lambda.
             </p>
           </div>
         </div>
