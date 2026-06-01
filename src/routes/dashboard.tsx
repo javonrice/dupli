@@ -12,6 +12,7 @@ import type { DupePair, SlideResult } from "@/lib/dupe-types";
 
 import { UgcGenerator } from "@/components/dashboard/ugc-generator";
 import { MyVideos } from "@/components/dashboard/my-videos";
+import { PhotoCarouselGenerator } from "@/components/dashboard/photo-carousel-generator";
 
 
 export const Route = createFileRoute("/dashboard")({
@@ -245,6 +246,7 @@ function DashboardPage() {
         <div className="mt-12 space-y-8">
 
           <UgcGenerator />
+          <PhotoCarouselGenerator />
           <MyVideos />
         </div>
 
