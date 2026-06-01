@@ -32,6 +32,92 @@ function getEnv() {
   return { functionName, serveUrl, accessKeyId, secretAccessKey, region };
 }
 
+// AWS Signature V4 using Web Crypto — works in Cloudflare Workers (no Node.js SDK needed).
+async function hmacSha256(key: ArrayBuffer | CryptoKey, data: string): Promise<ArrayBuffer> {
+  const cryptoKey =
+    key instanceof ArrayBuffer
+      ? await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"])
+      : key;
+  return crypto.subtle.sign("HMAC", cryptoKey, new TextEncoder().encode(data));
+}
+
+async function sha256Hex(data: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function toHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function signedLambdaRequest(
+  functionName: string,
+  region: string,
+  accessKeyId: string,
+  secretAccessKey: string,
+  body: string,
+): Promise<Response> {
+  const host = `lambda.${region}.amazonaws.com`;
+  const url = `https://${host}/2015-03-31/functions/${encodeURIComponent(functionName)}/invocations?InvocationType=RequestResponse`;
+
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "").slice(0, 15) + "Z"; // 20240101T120000Z
+  const dateStamp = amzDate.slice(0, 8); // 20240101
+
+  const payloadHash = await sha256Hex(body);
+
+  const canonicalHeaders =
+    `content-type:application/json\n` +
+    `host:${host}\n` +
+    `x-amz-date:${amzDate}\n` +
+    `x-amz-invocation-type:RequestResponse\n`;
+
+  const signedHeaders = "content-type;host;x-amz-date;x-amz-invocation-type";
+
+  const canonicalRequest = [
+    "POST",
+    `/2015-03-31/functions/${encodeURIComponent(functionName)}/invocations`,
+    "InvocationType=RequestResponse",
+    canonicalHeaders,
+    signedHeaders,
+    payloadHash,
+  ].join("\n");
+
+  const credentialScope = `${dateStamp}/${region}/lambda/aws4_request`;
+  const stringToSign = [
+    "AWS4-HMAC-SHA256",
+    amzDate,
+    credentialScope,
+    await sha256Hex(canonicalRequest),
+  ].join("\n");
+
+  const kDate = await hmacSha256(new TextEncoder().encode(`AWS4${secretAccessKey}`), dateStamp);
+  const kRegion = await hmacSha256(kDate, region);
+  const kService = await hmacSha256(kRegion, "lambda");
+  const kSigning = await hmacSha256(kService, "aws4_request");
+  const signature = toHex(await hmacSha256(kSigning, stringToSign));
+
+  const authHeader =
+    `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope}, ` +
+    `SignedHeaders=${signedHeaders}, Signature=${signature}`;
+
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Host": host,
+      "X-Amz-Date": amzDate,
+      "X-Amz-Invocation-Type": "RequestResponse",
+      "Authorization": authHeader,
+    },
+    body,
+  });
+}
+
 async function invokeLambda<T>(
   functionName: string,
   region: string,
@@ -39,26 +125,19 @@ async function invokeLambda<T>(
   secretAccessKey: string,
   payload: unknown,
 ): Promise<T> {
-  const { LambdaClient, InvokeCommand } = await import("@aws-sdk/client-lambda");
-  const client = new LambdaClient({
-    region,
-    credentials: { accessKeyId, secretAccessKey },
-  });
-  const res = await client.send(
-    new InvokeCommand({
-      FunctionName: functionName,
-      Payload: new TextEncoder().encode(JSON.stringify(payload)),
-      InvocationType: "RequestResponse",
-    }),
-  );
-  if (res.FunctionError) {
-    const body = res.Payload ? new TextDecoder().decode(res.Payload) : "";
-    throw new Error(`Lambda error: ${res.FunctionError} ${body}`);
+  const body = JSON.stringify(payload);
+  const res = await signedLambdaRequest(functionName, region, accessKeyId, secretAccessKey, body);
+
+  const functionError = res.headers.get("X-Amz-Function-Error");
+  const decoded = await res.text();
+
+  if (functionError) {
+    throw new Error(`Lambda error: ${functionError} ${decoded.slice(0, 500)}`);
   }
-  if (!res.Payload) {
-    throw new Error(`Lambda returned no payload (status ${res.StatusCode})`);
+  if (!res.ok) {
+    throw new Error(`Lambda HTTP ${res.status}: ${decoded.slice(0, 500)}`);
   }
-  const decoded = new TextDecoder("utf-8").decode(res.Payload);
+
   let parsed: unknown;
   try {
     parsed = JSON.parse(decoded);
@@ -66,7 +145,7 @@ async function invokeLambda<T>(
     throw new Error(`Invalid Lambda JSON: ${decoded.slice(0, 500)}`);
   }
   if (parsed && typeof parsed === "object" && (parsed as { type?: string }).type === "error") {
-    const e = parsed as { message?: string; stack?: string };
+    const e = parsed as { message?: string };
     throw new Error(`Remotion render error: ${e.message ?? "unknown"}`);
   }
   return parsed as T;
