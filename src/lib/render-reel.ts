@@ -292,6 +292,7 @@ async function supportsWebCodecs(width: number, height: number): Promise<{
         height,
         bitrate: 10_000_000,
         framerate: 30,
+        hardwareAcceleration: "prefer-software",
       });
       if (support.supported) return { ok: true, videoCodec: codec };
     } catch {
@@ -351,6 +352,15 @@ async function renderWithWebCodecs(
   });
 
   let videoError: unknown = null;
+  const videoEncoderConfig: VideoEncoderConfig = {
+    codec: videoCodec,
+    width,
+    height,
+    bitrate: 10_000_000,
+    framerate: fps,
+    hardwareAcceleration: "prefer-software",
+    avc: { format: "avc" },
+  };
   const videoEncoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
     error: (e) => {
@@ -358,15 +368,7 @@ async function renderWithWebCodecs(
       console.error("[render-reel] video encoder error", e);
     },
   });
-  videoEncoder.configure({
-    codec: videoCodec,
-    width,
-    height,
-    bitrate: 10_000_000,
-    framerate: fps,
-    hardwareAcceleration: "prefer-hardware",
-    avc: { format: "avc" },
-  });
+  videoEncoder.configure(videoEncoderConfig);
 
   const audioEncoder = new AudioEncoder({
     output: (chunk, meta) => muxer.addAudioChunk(chunk, meta),
@@ -417,7 +419,7 @@ async function renderWithWebCodecs(
     segmentStartFrames,
     onDebug,
   );
-  await new Promise((r) => setTimeout(r, 150));
+  await nextFrame();
   onProgress?.({ stage: "frames", pct: 0 });
 
   const captureOpts = {
@@ -446,8 +448,8 @@ async function renderWithWebCodecs(
         break;
       } catch (err) {
         lastErr = err;
-        // modern-screenshot occasionally fails on transient decode; retry.
-        await new Promise((r) => setTimeout(r, 80));
+        // modern-screenshot occasionally fails on transient decode; retry on next microtask.
+        await Promise.resolve();
         // Last-ditch: try html-to-image, which has different cloning.
         if (attempt === 2) {
           try {
@@ -498,10 +500,25 @@ async function renderWithWebCodecs(
       timestamp: Math.round((f / fps) * 1_000_000),
       duration: frameDuration,
     });
-    videoEncoder.encode(videoFrame, {
-      keyFrame: f % keyframeInterval === 0,
-    });
-    videoFrame.close();
+    const isKeyFrame = f % keyframeInterval === 0;
+    try {
+      try {
+        videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
+      } catch (encErr) {
+        // Encoder was reclaimed (QuotaExceededError) or otherwise closed.
+        // Reconfigure once and re-emit this frame as a keyframe.
+        if (encErr instanceof DOMException && encErr.name === "InvalidStateError") {
+          console.warn("[render-reel] encoder closed mid-render, reconfiguring");
+          videoError = null;
+          videoEncoder.configure(videoEncoderConfig);
+          videoEncoder.encode(videoFrame, { keyFrame: true });
+        } else {
+          throw encErr;
+        }
+      }
+    } finally {
+      videoFrame.close();
+    }
 
     if (f % 3 === 0 || f === totalFrames - 1) {
       onProgress?.({ stage: "frames", pct: (f + 1) / totalFrames });
