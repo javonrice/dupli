@@ -419,7 +419,7 @@ async function renderWithWebCodecs(
     segmentStartFrames,
     onDebug,
   );
-  await new Promise((r) => setTimeout(r, 150));
+  await nextFrame();
   onProgress?.({ stage: "frames", pct: 0 });
 
   const captureOpts = {
