@@ -292,6 +292,7 @@ async function supportsWebCodecs(width: number, height: number): Promise<{
         height,
         bitrate: 10_000_000,
         framerate: 30,
+        hardwareAcceleration: "prefer-software",
       });
       if (support.supported) return { ok: true, videoCodec: codec };
     } catch {
