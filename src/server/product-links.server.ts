@@ -10,7 +10,7 @@
 // Latency is hard-capped per call so a slow retailer never blocks the scan.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
-import { slugify } from "@/server/skinsort-slugs";
+import { slugify } from "@/lib/skinsort-slugs";
 
 export type ProductLink = {
   merchant: string;
