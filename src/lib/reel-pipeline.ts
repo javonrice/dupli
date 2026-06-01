@@ -5,20 +5,9 @@ import type { PlayerRef } from "@remotion/player";
 import type { RefObject } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { renderReelToMp4, type RenderProgress, type FrameFailure } from "@/lib/render-reel";
-import {
-  startLambdaRender,
-  getLambdaRenderProgress,
-} from "@/lib/lambda-render.functions";
+import { startLambdaRender, getLambdaRenderProgress } from "@/lib/lambda-render.functions";
 import type { DupePair, ReelScript } from "@/lib/dupe-types";
-import {
-  FPS,
-  WIDTH,
-  HEIGHT,
-  totalDurationInFrames,
-  audioStartFrames,
-} from "@/remotion/DupeReel";
-
-
+import { FPS, WIDTH, HEIGHT, totalDurationInFrames, audioStartFrames } from "@/remotion/DupeReel";
 
 export type RenderAndSaveArgs = {
   script: ReelScript;
@@ -34,9 +23,7 @@ export type RenderAndSaveArgs = {
     };
   }) => Promise<unknown>;
   onProgress?: (p: RenderProgress) => void;
-  onDebug?: (
-    entry: FrameFailure | { type: "image"; src: string; reason: string },
-  ) => void;
+  onDebug?: (entry: FrameFailure | { type: "image"; src: string; reason: string }) => void;
 };
 
 export type RenderAndSaveResult = {
@@ -44,6 +31,19 @@ export type RenderAndSaveResult = {
   storagePath: string | null;
   saved: boolean;
 };
+
+async function getCurrentUserIdFromSession(timeoutMs = 5000): Promise<string | null> {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    const { data } = await supabase.auth.getSession();
+    const userId = data.session?.user?.id;
+    if (userId) return userId;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  const { data } = await supabase.auth.getSession();
+  return data.session?.user?.id ?? null;
+}
 
 export async function renderAndSaveReel({
   script,
@@ -73,8 +73,7 @@ export async function renderAndSaveReel({
   let storagePath: string | null = null;
   let saved = false;
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user?.id;
+    const userId = await getCurrentUserIdFromSession();
     if (userId) {
       const fileId = crypto.randomUUID();
       storagePath = `${userId}/${fileId}.mp4`;
@@ -138,22 +137,25 @@ async function uploadDataUrl(
   return data.signedUrl;
 }
 
-async function externalizeScriptAssets(
-  script: ReelScript,
-  userId: string,
-): Promise<ReelScript> {
+async function externalizeScriptAssets(script: ReelScript, userId: string): Promise<ReelScript> {
   const swap = async (url: string): Promise<string> => {
     if (!url.startsWith("data:")) return url;
     const mimeMatch = url.match(/^data:([^;,]+)/);
     const mime = mimeMatch?.[1] ?? "application/octet-stream";
     const ext =
-      mime === "image/webp" ? "webp"
-      : mime === "image/png" ? "png"
-      : mime === "image/jpeg" ? "jpg"
-      : mime === "audio/mpeg" ? "mp3"
-      : mime === "audio/mp3" ? "mp3"
-      : mime === "audio/wav" ? "wav"
-      : "bin";
+      mime === "image/webp"
+        ? "webp"
+        : mime === "image/png"
+          ? "png"
+          : mime === "image/jpeg"
+            ? "jpg"
+            : mime === "audio/mpeg"
+              ? "mp3"
+              : mime === "audio/mp3"
+                ? "mp3"
+                : mime === "audio/wav"
+                  ? "wav"
+                  : "bin";
     return uploadDataUrl(url, userId, ext, mime);
   };
 
@@ -183,8 +185,7 @@ export async function renderAndSaveReelViaLambda({
 
   // 0. Externalize all data: URLs (images + audio) to signed Storage URLs
   //    so the Lambda inputProps payload stays well under the 256 KB cap.
-  const { data: sessionData } = await supabase.auth.getSession();
-  const userId = sessionData.session?.user?.id;
+  const userId = await getCurrentUserIdFromSession();
   if (!userId) throw new Error("Not signed in");
   onProgress?.({ stage: "audio", pct: 0.02 });
   const lambdaScript = await externalizeScriptAssets(script, userId);
@@ -202,9 +203,7 @@ export async function renderAndSaveReelViaLambda({
     });
     onProgress?.({ stage: "frames", pct: progress.overallProgress });
     if (progress.fatalErrorEncountered || (progress.errors?.length ?? 0) > 0) {
-      throw new Error(
-        progress.errors?.join("; ") || "Lambda render failed",
-      );
+      throw new Error(progress.errors?.join("; ") || "Lambda render failed");
     }
     if (progress.done && progress.outputFile) {
       outputFile = progress.outputFile;
@@ -226,8 +225,7 @@ export async function renderAndSaveReelViaLambda({
   let storagePath: string | null = null;
   let saved = false;
   try {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const userId = sessionData.session?.user?.id;
+    const userId = await getCurrentUserIdFromSession();
     if (userId) {
       const fileId = crypto.randomUUID();
       storagePath = `${userId}/${fileId}.mp4`;
