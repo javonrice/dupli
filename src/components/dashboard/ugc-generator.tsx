@@ -305,7 +305,6 @@ export function UgcGenerator() {
               Rendered right in your browser with hardware-accelerated WebCodecs
               — typically 10–30s for a full reel. No upload, no Lambda.
             </p>
-            </p>
           </div>
         </div>
       )}
