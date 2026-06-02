@@ -200,9 +200,11 @@ export function PhotoCarouselGenerator() {
           continue;
         }
 
-        // Pre-fetch product images as data URLs so the off-screen ShareCard
-        // can rasterize without CORS / decode timing issues.
-        setProgress(`Loading product images ${i + 1}/${photos.length}…`);
+        // Always use the user's uploaded photo as the "original" image on the
+        // share card so it visually matches the photo slide that precedes it.
+        // The scanner's `result.original.imageUrl` is a stock lookup that can
+        // be a generic/wrong product shot. Only the dupe image is fetched.
+        setProgress(`Loading dupe image ${i + 1}/${photos.length}…`);
         const loadOne = async (url?: string | null): Promise<string | null> => {
           if (!url) return null;
           if (url.startsWith("data:")) return url;
@@ -213,13 +215,10 @@ export function PhotoCarouselGenerator() {
             return null;
           }
         };
-        const [originalImg, dupeImg] = await Promise.all([
-          loadOne(result.original.imageUrl ?? photos[i].previewUrl),
-          loadOne(result.dupe?.imageUrl),
-        ]);
+        const dupeImg = await loadOne(result.dupe?.imageUrl);
         scans.push({
           analysis: result,
-          originalImg: originalImg ?? photos[i].previewUrl,
+          originalImg: photos[i].previewUrl,
           dupeImg,
         });
       }
