@@ -35,8 +35,18 @@ export const Route = createFileRoute("/_onboarding/complete")({
 function Complete() {
   const navigate = useNavigate();
   const search = Route.useSearch();
-  const answers = useOnboarding();
-  const reset = useOnboarding((s) => s.reset);
+  const store = useOnboarding();
+  const reset = store.reset;
+  const answers = {
+    goals: store.goals,
+    ageBand: store.ageBand,
+    monthlySpend: store.monthlySpend,
+    painPoint: store.painPoint,
+    categories: store.categories,
+    brands: store.brands,
+    committed: store.committed,
+  };
+
 
   const [mode, setMode] = useState<"signup" | "signin">("signup");
   const [email, setEmail] = useState("");
