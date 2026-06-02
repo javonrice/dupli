@@ -13,9 +13,25 @@ import { Route as TermsRouteImport } from './routes/terms'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as OnboardingRouteImport } from './routes/_onboarding'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiDownloadVideoRouteImport } from './routes/api/download-video'
+import { Route as OnboardingWelcomeRouteImport } from './routes/_onboarding/welcome'
+import { Route as OnboardingSpendingRouteImport } from './routes/_onboarding/spending'
+import { Route as OnboardingSocialRouteImport } from './routes/_onboarding/social'
+import { Route as OnboardingRevealRouteImport } from './routes/_onboarding/reveal'
+import { Route as OnboardingPsychRouteImport } from './routes/_onboarding/psych'
+import { Route as OnboardingPaywallRouteImport } from './routes/_onboarding/paywall'
+import { Route as OnboardingPainRouteImport } from './routes/_onboarding/pain'
+import { Route as OnboardingGoalsRouteImport } from './routes/_onboarding/goals'
+import { Route as OnboardingDownsellRouteImport } from './routes/_onboarding/downsell'
+import { Route as OnboardingCompleteRouteImport } from './routes/_onboarding/complete'
+import { Route as OnboardingCommitRouteImport } from './routes/_onboarding/commit'
+import { Route as OnboardingCategoriesRouteImport } from './routes/_onboarding/categories'
+import { Route as OnboardingBrandsRouteImport } from './routes/_onboarding/brands'
+import { Route as OnboardingAnalyzingRouteImport } from './routes/_onboarding/analyzing'
+import { Route as OnboardingAgeRouteImport } from './routes/_onboarding/age'
 import { Route as AppSavedRouteImport } from './routes/_app/saved'
 import { Route as AppProfileRouteImport } from './routes/_app/profile'
 import { Route as AppHistoryRouteImport } from './routes/_app/history'
@@ -46,6 +62,10 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OnboardingRoute = OnboardingRouteImport.update({
+  id: '/_onboarding',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppRoute = AppRouteImport.update({
   id: '/_app',
   getParentRoute: () => rootRouteImport,
@@ -59,6 +79,81 @@ const ApiDownloadVideoRoute = ApiDownloadVideoRouteImport.update({
   id: '/api/download-video',
   path: '/api/download-video',
   getParentRoute: () => rootRouteImport,
+} as any)
+const OnboardingWelcomeRoute = OnboardingWelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingSpendingRoute = OnboardingSpendingRouteImport.update({
+  id: '/spending',
+  path: '/spending',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingSocialRoute = OnboardingSocialRouteImport.update({
+  id: '/social',
+  path: '/social',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingRevealRoute = OnboardingRevealRouteImport.update({
+  id: '/reveal',
+  path: '/reveal',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingPsychRoute = OnboardingPsychRouteImport.update({
+  id: '/psych',
+  path: '/psych',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingPaywallRoute = OnboardingPaywallRouteImport.update({
+  id: '/paywall',
+  path: '/paywall',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingPainRoute = OnboardingPainRouteImport.update({
+  id: '/pain',
+  path: '/pain',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingGoalsRoute = OnboardingGoalsRouteImport.update({
+  id: '/goals',
+  path: '/goals',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingDownsellRoute = OnboardingDownsellRouteImport.update({
+  id: '/downsell',
+  path: '/downsell',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingCompleteRoute = OnboardingCompleteRouteImport.update({
+  id: '/complete',
+  path: '/complete',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingCommitRoute = OnboardingCommitRouteImport.update({
+  id: '/commit',
+  path: '/commit',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingCategoriesRoute = OnboardingCategoriesRouteImport.update({
+  id: '/categories',
+  path: '/categories',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingBrandsRoute = OnboardingBrandsRouteImport.update({
+  id: '/brands',
+  path: '/brands',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingAnalyzingRoute = OnboardingAnalyzingRouteImport.update({
+  id: '/analyzing',
+  path: '/analyzing',
+  getParentRoute: () => OnboardingRoute,
+} as any)
+const OnboardingAgeRoute = OnboardingAgeRouteImport.update({
+  id: '/age',
+  path: '/age',
+  getParentRoute: () => OnboardingRoute,
 } as any)
 const AppSavedRoute = AppSavedRouteImport.update({
   id: '/saved',
@@ -117,6 +212,21 @@ export interface FileRoutesByFullPath {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
+  '/age': typeof OnboardingAgeRoute
+  '/analyzing': typeof OnboardingAnalyzingRoute
+  '/brands': typeof OnboardingBrandsRoute
+  '/categories': typeof OnboardingCategoriesRoute
+  '/commit': typeof OnboardingCommitRoute
+  '/complete': typeof OnboardingCompleteRoute
+  '/downsell': typeof OnboardingDownsellRoute
+  '/goals': typeof OnboardingGoalsRoute
+  '/pain': typeof OnboardingPainRoute
+  '/paywall': typeof OnboardingPaywallRoute
+  '/psych': typeof OnboardingPsychRoute
+  '/reveal': typeof OnboardingRevealRoute
+  '/social': typeof OnboardingSocialRoute
+  '/spending': typeof OnboardingSpendingRoute
+  '/welcome': typeof OnboardingWelcomeRoute
   '/api/download-video': typeof ApiDownloadVideoRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/scan/$id': typeof AppScanIdRouteWithChildren
@@ -134,6 +244,21 @@ export interface FileRoutesByTo {
   '/history': typeof AppHistoryRoute
   '/profile': typeof AppProfileRoute
   '/saved': typeof AppSavedRoute
+  '/age': typeof OnboardingAgeRoute
+  '/analyzing': typeof OnboardingAnalyzingRoute
+  '/brands': typeof OnboardingBrandsRoute
+  '/categories': typeof OnboardingCategoriesRoute
+  '/commit': typeof OnboardingCommitRoute
+  '/complete': typeof OnboardingCompleteRoute
+  '/downsell': typeof OnboardingDownsellRoute
+  '/goals': typeof OnboardingGoalsRoute
+  '/pain': typeof OnboardingPainRoute
+  '/paywall': typeof OnboardingPaywallRoute
+  '/psych': typeof OnboardingPsychRoute
+  '/reveal': typeof OnboardingRevealRoute
+  '/social': typeof OnboardingSocialRoute
+  '/spending': typeof OnboardingSpendingRoute
+  '/welcome': typeof OnboardingWelcomeRoute
   '/api/download-video': typeof ApiDownloadVideoRoute
   '/p/$productId': typeof AppPProductIdRoute
   '/community/$brand/$product': typeof AppCommunityBrandProductRoute
@@ -144,6 +269,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_app': typeof AppRouteWithChildren
+  '/_onboarding': typeof OnboardingRouteWithChildren
   '/dashboard': typeof DashboardRoute
   '/login': typeof LoginRoute
   '/privacy': typeof PrivacyRoute
@@ -152,6 +278,21 @@ export interface FileRoutesById {
   '/_app/history': typeof AppHistoryRoute
   '/_app/profile': typeof AppProfileRoute
   '/_app/saved': typeof AppSavedRoute
+  '/_onboarding/age': typeof OnboardingAgeRoute
+  '/_onboarding/analyzing': typeof OnboardingAnalyzingRoute
+  '/_onboarding/brands': typeof OnboardingBrandsRoute
+  '/_onboarding/categories': typeof OnboardingCategoriesRoute
+  '/_onboarding/commit': typeof OnboardingCommitRoute
+  '/_onboarding/complete': typeof OnboardingCompleteRoute
+  '/_onboarding/downsell': typeof OnboardingDownsellRoute
+  '/_onboarding/goals': typeof OnboardingGoalsRoute
+  '/_onboarding/pain': typeof OnboardingPainRoute
+  '/_onboarding/paywall': typeof OnboardingPaywallRoute
+  '/_onboarding/psych': typeof OnboardingPsychRoute
+  '/_onboarding/reveal': typeof OnboardingRevealRoute
+  '/_onboarding/social': typeof OnboardingSocialRoute
+  '/_onboarding/spending': typeof OnboardingSpendingRoute
+  '/_onboarding/welcome': typeof OnboardingWelcomeRoute
   '/api/download-video': typeof ApiDownloadVideoRoute
   '/_app/p/$productId': typeof AppPProductIdRoute
   '/_app/scan/$id': typeof AppScanIdRouteWithChildren
@@ -171,6 +312,21 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
+    | '/age'
+    | '/analyzing'
+    | '/brands'
+    | '/categories'
+    | '/commit'
+    | '/complete'
+    | '/downsell'
+    | '/goals'
+    | '/pain'
+    | '/paywall'
+    | '/psych'
+    | '/reveal'
+    | '/social'
+    | '/spending'
+    | '/welcome'
     | '/api/download-video'
     | '/p/$productId'
     | '/scan/$id'
@@ -188,6 +344,21 @@ export interface FileRouteTypes {
     | '/history'
     | '/profile'
     | '/saved'
+    | '/age'
+    | '/analyzing'
+    | '/brands'
+    | '/categories'
+    | '/commit'
+    | '/complete'
+    | '/downsell'
+    | '/goals'
+    | '/pain'
+    | '/paywall'
+    | '/psych'
+    | '/reveal'
+    | '/social'
+    | '/spending'
+    | '/welcome'
     | '/api/download-video'
     | '/p/$productId'
     | '/community/$brand/$product'
@@ -197,6 +368,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/_app'
+    | '/_onboarding'
     | '/dashboard'
     | '/login'
     | '/privacy'
@@ -205,6 +377,21 @@ export interface FileRouteTypes {
     | '/_app/history'
     | '/_app/profile'
     | '/_app/saved'
+    | '/_onboarding/age'
+    | '/_onboarding/analyzing'
+    | '/_onboarding/brands'
+    | '/_onboarding/categories'
+    | '/_onboarding/commit'
+    | '/_onboarding/complete'
+    | '/_onboarding/downsell'
+    | '/_onboarding/goals'
+    | '/_onboarding/pain'
+    | '/_onboarding/paywall'
+    | '/_onboarding/psych'
+    | '/_onboarding/reveal'
+    | '/_onboarding/social'
+    | '/_onboarding/spending'
+    | '/_onboarding/welcome'
     | '/api/download-video'
     | '/_app/p/$productId'
     | '/_app/scan/$id'
@@ -216,6 +403,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AppRoute: typeof AppRouteWithChildren
+  OnboardingRoute: typeof OnboardingRouteWithChildren
   DashboardRoute: typeof DashboardRoute
   LoginRoute: typeof LoginRoute
   PrivacyRoute: typeof PrivacyRoute
@@ -253,6 +441,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_onboarding': {
+      id: '/_onboarding'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof OnboardingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app': {
       id: '/_app'
       path: ''
@@ -273,6 +468,111 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/download-video'
       preLoaderRoute: typeof ApiDownloadVideoRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_onboarding/welcome': {
+      id: '/_onboarding/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof OnboardingWelcomeRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/spending': {
+      id: '/_onboarding/spending'
+      path: '/spending'
+      fullPath: '/spending'
+      preLoaderRoute: typeof OnboardingSpendingRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/social': {
+      id: '/_onboarding/social'
+      path: '/social'
+      fullPath: '/social'
+      preLoaderRoute: typeof OnboardingSocialRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/reveal': {
+      id: '/_onboarding/reveal'
+      path: '/reveal'
+      fullPath: '/reveal'
+      preLoaderRoute: typeof OnboardingRevealRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/psych': {
+      id: '/_onboarding/psych'
+      path: '/psych'
+      fullPath: '/psych'
+      preLoaderRoute: typeof OnboardingPsychRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/paywall': {
+      id: '/_onboarding/paywall'
+      path: '/paywall'
+      fullPath: '/paywall'
+      preLoaderRoute: typeof OnboardingPaywallRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/pain': {
+      id: '/_onboarding/pain'
+      path: '/pain'
+      fullPath: '/pain'
+      preLoaderRoute: typeof OnboardingPainRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/goals': {
+      id: '/_onboarding/goals'
+      path: '/goals'
+      fullPath: '/goals'
+      preLoaderRoute: typeof OnboardingGoalsRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/downsell': {
+      id: '/_onboarding/downsell'
+      path: '/downsell'
+      fullPath: '/downsell'
+      preLoaderRoute: typeof OnboardingDownsellRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/complete': {
+      id: '/_onboarding/complete'
+      path: '/complete'
+      fullPath: '/complete'
+      preLoaderRoute: typeof OnboardingCompleteRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/commit': {
+      id: '/_onboarding/commit'
+      path: '/commit'
+      fullPath: '/commit'
+      preLoaderRoute: typeof OnboardingCommitRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/categories': {
+      id: '/_onboarding/categories'
+      path: '/categories'
+      fullPath: '/categories'
+      preLoaderRoute: typeof OnboardingCategoriesRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/brands': {
+      id: '/_onboarding/brands'
+      path: '/brands'
+      fullPath: '/brands'
+      preLoaderRoute: typeof OnboardingBrandsRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/analyzing': {
+      id: '/_onboarding/analyzing'
+      path: '/analyzing'
+      fullPath: '/analyzing'
+      preLoaderRoute: typeof OnboardingAnalyzingRouteImport
+      parentRoute: typeof OnboardingRoute
+    }
+    '/_onboarding/age': {
+      id: '/_onboarding/age'
+      path: '/age'
+      fullPath: '/age'
+      preLoaderRoute: typeof OnboardingAgeRouteImport
+      parentRoute: typeof OnboardingRoute
     }
     '/_app/saved': {
       id: '/_app/saved'
@@ -376,9 +676,50 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
 
+interface OnboardingRouteChildren {
+  OnboardingAgeRoute: typeof OnboardingAgeRoute
+  OnboardingAnalyzingRoute: typeof OnboardingAnalyzingRoute
+  OnboardingBrandsRoute: typeof OnboardingBrandsRoute
+  OnboardingCategoriesRoute: typeof OnboardingCategoriesRoute
+  OnboardingCommitRoute: typeof OnboardingCommitRoute
+  OnboardingCompleteRoute: typeof OnboardingCompleteRoute
+  OnboardingDownsellRoute: typeof OnboardingDownsellRoute
+  OnboardingGoalsRoute: typeof OnboardingGoalsRoute
+  OnboardingPainRoute: typeof OnboardingPainRoute
+  OnboardingPaywallRoute: typeof OnboardingPaywallRoute
+  OnboardingPsychRoute: typeof OnboardingPsychRoute
+  OnboardingRevealRoute: typeof OnboardingRevealRoute
+  OnboardingSocialRoute: typeof OnboardingSocialRoute
+  OnboardingSpendingRoute: typeof OnboardingSpendingRoute
+  OnboardingWelcomeRoute: typeof OnboardingWelcomeRoute
+}
+
+const OnboardingRouteChildren: OnboardingRouteChildren = {
+  OnboardingAgeRoute: OnboardingAgeRoute,
+  OnboardingAnalyzingRoute: OnboardingAnalyzingRoute,
+  OnboardingBrandsRoute: OnboardingBrandsRoute,
+  OnboardingCategoriesRoute: OnboardingCategoriesRoute,
+  OnboardingCommitRoute: OnboardingCommitRoute,
+  OnboardingCompleteRoute: OnboardingCompleteRoute,
+  OnboardingDownsellRoute: OnboardingDownsellRoute,
+  OnboardingGoalsRoute: OnboardingGoalsRoute,
+  OnboardingPainRoute: OnboardingPainRoute,
+  OnboardingPaywallRoute: OnboardingPaywallRoute,
+  OnboardingPsychRoute: OnboardingPsychRoute,
+  OnboardingRevealRoute: OnboardingRevealRoute,
+  OnboardingSocialRoute: OnboardingSocialRoute,
+  OnboardingSpendingRoute: OnboardingSpendingRoute,
+  OnboardingWelcomeRoute: OnboardingWelcomeRoute,
+}
+
+const OnboardingRouteWithChildren = OnboardingRoute._addFileChildren(
+  OnboardingRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AppRoute: AppRouteWithChildren,
+  OnboardingRoute: OnboardingRouteWithChildren,
   DashboardRoute: DashboardRoute,
   LoginRoute: LoginRoute,
   PrivacyRoute: PrivacyRoute,
@@ -388,3 +729,12 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+  }
+}
