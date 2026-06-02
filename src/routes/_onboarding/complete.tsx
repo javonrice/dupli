@@ -203,12 +203,15 @@ function Complete() {
             onChange={(e) => setPassword(e.target.value)}
             className="h-[48px] w-full rounded-[14px] border border-border bg-card px-4 text-[15px] outline-none focus:border-foreground/40"
           />
-          <PrimaryCTA onClick={() => {}} disabled={working}>
-            <button type="submit" disabled={working} className="flex items-center gap-2">
-              {working && <Loader2 className="h-4 w-4 animate-spin" />}
-              {mode === "signup" ? "Create account" : "Sign in"}
-            </button>
-          </PrimaryCTA>
+          <button
+            type="submit"
+            disabled={working}
+            className="tap flex h-[56px] w-full items-center justify-center gap-2 rounded-[16px] bg-foreground text-[16px] font-semibold text-background disabled:opacity-40"
+          >
+            {working && <Loader2 className="h-4 w-4 animate-spin" />}
+            {mode === "signup" ? "Create account" : "Sign in"}
+          </button>
+
         </form>
 
         <button
