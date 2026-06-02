@@ -297,10 +297,13 @@ export type Database = {
           avatar_url: string | null
           created_at: string
           display_name: string | null
+          dupe_style: string | null
           email: string | null
+          free_scans_used: number
           id: string
           onboarding_answers: Json
           onboarding_completed: boolean
+          projected_annual_savings: number | null
           updated_at: string
           user_id: string
         }
@@ -308,10 +311,13 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          dupe_style?: string | null
           email?: string | null
+          free_scans_used?: number
           id?: string
           onboarding_answers?: Json
           onboarding_completed?: boolean
+          projected_annual_savings?: number | null
           updated_at?: string
           user_id: string
         }
@@ -319,10 +325,13 @@ export type Database = {
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
+          dupe_style?: string | null
           email?: string | null
+          free_scans_used?: number
           id?: string
           onboarding_answers?: Json
           onboarding_completed?: boolean
+          projected_annual_savings?: number | null
           updated_at?: string
           user_id?: string
         }
