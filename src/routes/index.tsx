@@ -53,6 +53,14 @@ async function waitForOAuthSession(timeoutMs = 4000) {
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
     const session = await waitForOAuthSession();
-    throw redirect({ to: session ? "/app" : "/login" });
+    if (!session) throw redirect({ to: "/welcome" });
+    // Check onboarding status; new users sent to /welcome, returning users to /app.
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("onboarding_completed")
+      .eq("user_id", session.user.id)
+      .maybeSingle();
+    throw redirect({ to: profile?.onboarding_completed === false ? "/welcome" : "/app" });
   },
 });
+
