@@ -9,7 +9,7 @@ import {
   projectedAnnualSavings,
   dupeStyleFor,
 } from "@/lib/onboarding-store";
-import { PrimaryCTA, Eyebrow } from "@/components/onboarding/shell";
+import { Eyebrow } from "@/components/onboarding/shell";
 import wordmark from "@/assets/dupli-wordmark.png";
 
 const searchSchema = z.object({
